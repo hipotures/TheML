@@ -1,14 +1,44 @@
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import signal
 import traceback
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from tml.core.config import active_profile_id, load_project_config
 from tml.utils.atomic import atomic_write_text
 from tml.utils.yaml_io import write_yaml
 
 from .result import ExecutionResult
+
+
+CLASS_WEIGHT_COL = "__tml_sample_weight"
+
+RESERVED_PROFILE_KEYS = {
+    "schema_version",
+    "profile_id",
+    "source_profile",
+    "mode",
+    "preprocess_timeout",
+    "validation_strategy",
+    "validation_fraction",
+    "seed",
+    "use_gpu",
+    "class_balance",
+    "fit_args",
+    "predictor_args",
+}
+
+
+@dataclass(frozen=True)
+class TrainingPlan:
+    train_data: Any
+    valid_data: Any | None
+    fit_args: dict[str, object]
+    defer_save_space: bool
 
 
 def run_autogluon_materialization(
@@ -105,7 +135,8 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
 
     train_features = train.drop(columns=[target_col])
     combined = pd.concat([train_features, test], ignore_index=True, sort=False)
-    transformed = preprocess(combined.copy())
+    with _preprocess_timeout(int(profile.get("preprocess_timeout", 180))):
+        transformed = preprocess(combined.copy())
     if not isinstance(transformed, pd.DataFrame):
         raise TypeError("preprocess(df) must return a pandas DataFrame")
     if len(transformed) != len(combined):
@@ -115,13 +146,22 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
     test_out = transformed.iloc[len(train) :].reset_index(drop=True)
     train_out[target_col] = train[target_col].reset_index(drop=True)
 
+    training_plan = _training_plan_from_profile(train_out, target_col, profile)
     predictor = TabularPredictor(
-        label=target_col,
-        eval_metric=metric,
-        path=str(work_dir / "tml-autogluon-workdir" / "AutoGluonModels"),
+        **_predictor_kwargs_from_profile(
+            label=target_col,
+            eval_metric=metric,
+            model_path=work_dir / "tml-autogluon-workdir" / "AutoGluonModels",
+            profile=profile,
+        )
     )
-    fit_kwargs = _fit_kwargs_from_profile(profile)
-    predictor.fit(train_out, **fit_kwargs)
+    fit_kwargs = _fit_kwargs_from_profile(
+        profile,
+        train_data=training_plan.train_data,
+        valid_data=training_plan.valid_data,
+        fit_args=training_plan.fit_args,
+    )
+    predictor.fit(**fit_kwargs)
 
     predictions = predictor.predict(test_out)
     submission = sample.copy()
@@ -134,10 +174,36 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
     submission.to_csv(artifacts / "submission.csv", index=False)
 
     leaderboard = predictor.leaderboard(silent=True)
+    if training_plan.defer_save_space:
+        try:
+            predictor.save_space(remove_data=True, remove_fit_stack=True)
+        except Exception:
+            pass
     if "score_val" in leaderboard.columns and not leaderboard.empty:
         value = leaderboard.iloc[0]["score_val"]
         return float(value) if pd.notna(value) else None
     return None
+
+
+def _predictor_kwargs_from_profile(
+    *,
+    label: str,
+    eval_metric: str,
+    model_path: Path,
+    profile: dict[str, object],
+) -> dict[str, object]:
+    predictor_kwargs: dict[str, object] = {
+        "label": label,
+        "eval_metric": eval_metric,
+        "path": str(model_path),
+    }
+    predictor_args = profile.get("predictor_args")
+    if isinstance(predictor_args, dict):
+        predictor_kwargs.update(predictor_args)
+    if profile.get("class_balance") == "balanced":
+        predictor_kwargs["sample_weight"] = CLASS_WEIGHT_COL
+        predictor_kwargs["weight_evaluation"] = False
+    return predictor_kwargs
 
 
 def _load_profile(project_dir: Path, profile_id: str) -> dict[str, object]:
@@ -146,21 +212,105 @@ def _load_profile(project_dir: Path, profile_id: str) -> dict[str, object]:
     return read_yaml(project_dir / "profiles" / "root" / f"{profile_id}.yaml")
 
 
-def _fit_kwargs_from_profile(profile: dict[str, object]) -> dict[str, object]:
-    fit_kwargs: dict[str, object] = {
-        "time_limit": int(profile.get("time_limit", 60)),
-        "presets": profile.get("presets", "medium_quality"),
-    }
-    for key in ("included_model_types", "hyperparameters"):
-        value = profile.get(key)
-        if value is not None:
-            fit_kwargs[key] = value
-    if profile.get("validation_strategy") == "holdout" and profile.get("validation_fraction") is not None:
-        fit_kwargs["holdout_frac"] = float(profile["validation_fraction"])
-    fit_args = profile.get("fit_args")
-    if isinstance(fit_args, dict):
-        fit_kwargs.update(fit_args)
+def _training_plan_from_profile(train_model, target_col: str, profile: dict[str, object]) -> TrainingPlan:
+    train_model = train_model.copy()
+    if profile.get("class_balance") == "balanced":
+        train_model[CLASS_WEIGHT_COL] = _balanced_sample_weight(train_model[target_col])
+
+    fit_args = dict(profile.get("fit_args") or {}) if isinstance(profile.get("fit_args"), dict) else {}
+    bagged_mode = int(fit_args.get("num_bag_folds") or 0) > 0 or bool(fit_args.get("auto_stack"))
+    defer_save_space = bool(bagged_mode and fit_args.pop("save_space", False))
+    if bagged_mode:
+        return TrainingPlan(train_data=train_model, valid_data=None, fit_args=fit_args, defer_save_space=defer_save_space)
+
+    if profile.get("validation_strategy") == "holdout":
+        from sklearn.model_selection import train_test_split
+
+        stratify = train_model[target_col] if _should_stratify_holdout(train_model[target_col]) else None
+        train_data, valid_data = train_test_split(
+            train_model,
+            test_size=float(profile.get("validation_fraction", 0.2)),
+            random_state=int(profile.get("seed", 42)),
+            stratify=stratify,
+        )
+        return TrainingPlan(
+            train_data=train_data,
+            valid_data=valid_data,
+            fit_args=fit_args,
+            defer_save_space=defer_save_space,
+        )
+
+    return TrainingPlan(train_data=train_model, valid_data=None, fit_args=fit_args, defer_save_space=defer_save_space)
+
+
+def _fit_kwargs_from_profile(
+    profile: dict[str, object],
+    *,
+    train_data: Any | None = None,
+    valid_data: Any | None = None,
+    fit_args: dict[str, object] | None = None,
+) -> dict[str, object]:
+    fit_kwargs: dict[str, object] = {}
+    if train_data is not None:
+        fit_kwargs["train_data"] = train_data
+    if valid_data is not None:
+        fit_kwargs["tuning_data"] = valid_data
+
+    for key, value in profile.items():
+        if key in RESERVED_PROFILE_KEYS or value is None:
+            continue
+        fit_kwargs[key] = value
+
+    if profile.get("use_gpu") is not None:
+        fit_kwargs["num_gpus"] = 1 if profile.get("use_gpu") else 0
+    if fit_args is None:
+        raw_fit_args = profile.get("fit_args")
+        fit_args = dict(raw_fit_args) if isinstance(raw_fit_args, dict) else {}
+    fit_kwargs.update(fit_args)
     return fit_kwargs
+
+
+def _balanced_sample_weight(labels):
+    import pandas as pd
+
+    labels = pd.Series(labels).reset_index(drop=True)
+    counts = labels.value_counts(dropna=False)
+    if counts.empty:
+        raise ValueError("Cannot compute class weights for empty labels")
+    weights_by_class = len(labels) / (len(counts) * counts.astype(float))
+    return labels.map(weights_by_class).astype(float).to_numpy()
+
+
+def _should_stratify_holdout(target) -> bool:
+    import pandas as pd
+
+    unique_count = target.nunique(dropna=True)
+    if unique_count == 2:
+        return True
+    if pd.api.types.is_object_dtype(target) or pd.api.types.is_categorical_dtype(target):
+        return True
+    return False
+
+
+@contextlib.contextmanager
+def _preprocess_timeout(seconds: int):
+    if seconds <= 0 or not hasattr(signal, "SIGALRM"):
+        yield
+        return
+
+    def _raise_preprocess_timeout(_signum, _frame):
+        raise TimeoutError(
+            "AutoGluon preprocess exceeded the dedicated timeout of "
+            f"{seconds} seconds. This timeout is separate from AutoGluon training time_limit."
+        )
+
+    previous = signal.signal(signal.SIGALRM, _raise_preprocess_timeout)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 def _project_path(project_dir: Path, path: Path) -> str:

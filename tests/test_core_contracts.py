@@ -5,11 +5,19 @@ import re
 import sys
 from pathlib import Path
 
+import pandas as pd
+
 from tml.core.ids import node_id, run_id
 from tml.core.kaggle import download_competition_data
 from tml.core.errors import TmlError
 from tml.db.reindex import classify_node
-from tml.execution.autogluon_wrapper import _fit_kwargs_from_profile, run_autogluon_materialization
+from tml.execution.autogluon_wrapper import (
+    CLASS_WEIGHT_COL,
+    _fit_kwargs_from_profile,
+    _predictor_kwargs_from_profile,
+    _training_plan_from_profile,
+    run_autogluon_materialization,
+)
 
 
 def test_run_and_node_ids_are_timestamp_random_and_step_based():
@@ -60,12 +68,20 @@ def test_autogluon_wrapper_fails_clearly_when_required_data_is_missing(tmp_path:
 def test_autogluon_profile_is_mapped_to_fit_kwargs():
     fit_kwargs = _fit_kwargs_from_profile(
         {
+            "schema_version": 1,
+            "profile_id": "ag-test-v1",
+            "mode": "autogluon",
             "time_limit": 600,
             "presets": "medium_quality",
             "included_model_types": ["XGB", "GBM", "CAT"],
             "hyperparameters": {"XGB": [{"device": "cuda"}]},
+            "use_gpu": True,
             "validation_strategy": "holdout",
             "validation_fraction": 0.2,
+            "class_balance": "balanced",
+            "memory_limit": 12,
+            "calibrate_decision_threshold": False,
+            "future_autogluon_kwarg": "kept",
             "fit_args": {"save_space": True, "fit_weighted_ensemble": False},
         }
     )
@@ -74,9 +90,66 @@ def test_autogluon_profile_is_mapped_to_fit_kwargs():
     assert fit_kwargs["presets"] == "medium_quality"
     assert fit_kwargs["included_model_types"] == ["XGB", "GBM", "CAT"]
     assert fit_kwargs["hyperparameters"] == {"XGB": [{"device": "cuda"}]}
-    assert fit_kwargs["holdout_frac"] == 0.2
+    assert fit_kwargs["num_gpus"] == 1
+    assert fit_kwargs["memory_limit"] == 12
+    assert fit_kwargs["calibrate_decision_threshold"] is False
+    assert fit_kwargs["future_autogluon_kwarg"] == "kept"
     assert fit_kwargs["save_space"] is True
     assert fit_kwargs["fit_weighted_ensemble"] is False
+    for reserved in ("schema_version", "profile_id", "mode", "validation_strategy", "validation_fraction", "class_balance", "use_gpu"):
+        assert reserved not in fit_kwargs
+
+
+def test_autogluon_profile_handles_class_balance_holdout_and_bagging():
+    train_model = pd.DataFrame(
+        {
+            "feature": [1, 2, 3, 4, 5, 6],
+            "target": [0, 0, 0, 1, 1, 1],
+        }
+    )
+    holdout_profile = {
+        "class_balance": "balanced",
+        "validation_strategy": "holdout",
+        "validation_fraction": 0.33,
+        "seed": 7,
+        "use_gpu": False,
+    }
+
+    predictor_kwargs = _predictor_kwargs_from_profile(
+        label="target",
+        eval_metric="accuracy",
+        model_path=Path("model"),
+        profile=holdout_profile,
+    )
+    plan = _training_plan_from_profile(train_model, "target", holdout_profile)
+    fit_kwargs = _fit_kwargs_from_profile(holdout_profile, train_data=plan.train_data, valid_data=plan.valid_data)
+
+    assert predictor_kwargs["sample_weight"] == CLASS_WEIGHT_COL
+    assert predictor_kwargs["weight_evaluation"] is False
+    assert CLASS_WEIGHT_COL in plan.train_data.columns
+    assert plan.valid_data is not None
+    assert CLASS_WEIGHT_COL in plan.valid_data.columns
+    assert fit_kwargs["train_data"] is plan.train_data
+    assert fit_kwargs["tuning_data"] is plan.valid_data
+    assert fit_kwargs["num_gpus"] == 0
+
+    bagged_profile = {
+        "validation_strategy": "holdout",
+        "fit_args": {"save_space": True, "num_bag_folds": 3, "auto_stack": False},
+    }
+    bagged_plan = _training_plan_from_profile(train_model, "target", bagged_profile)
+    bagged_fit_kwargs = _fit_kwargs_from_profile(
+        bagged_profile,
+        train_data=bagged_plan.train_data,
+        valid_data=bagged_plan.valid_data,
+        fit_args=bagged_plan.fit_args,
+    )
+
+    assert bagged_plan.valid_data is None
+    assert bagged_plan.defer_save_space is True
+    assert "tuning_data" not in bagged_fit_kwargs
+    assert "save_space" not in bagged_fit_kwargs
+    assert bagged_fit_kwargs["num_bag_folds"] == 3
 
 
 def test_kaggle_download_fails_clearly_when_cli_is_missing(tmp_path: Path, monkeypatch):
