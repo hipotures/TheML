@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import gzip
+import json
 import re
 import sys
 from pathlib import Path
 
 import pandas as pd
 
+from tml.ai import AiRequest
+from tml.ai.mock import MockAiClient
 from tml.core.ids import node_id, run_id
 from tml.core.kaggle import download_competition_data
 from tml.core.metadata import normalize_metric
@@ -249,3 +252,29 @@ def test_project_metadata_metric_normalization_supports_sklearn_and_custom():
     assert custom_metric["metric_source"] == "custom"
     assert custom_metric["sklearn_metric"] is None
     assert custom_metric["metric_description"] == "Competition-specific grouped concordance metric."
+
+
+def test_mock_metadata_parser_is_not_tied_to_one_competition():
+    prompt = """
+Competition slug: tabular-price
+Sample submission header: ['id', 'price']
+
+## Kaggle page: abstract
+**Your Goal:** Predict the sale price.
+
+## Kaggle page: Evaluation
+Submissions are evaluated using Root Mean Squared Error between the predicted price and observed target.
+For each id in the test set, you must predict a numeric price value.
+
+## Kaggle page: data-description
+**train.csv** - the training set, with `price` as target
+**test.csv** - the test set, used to predict `price`
+"""
+    response = MockAiClient().call(AiRequest(role="metadata", model="mock", prompt=prompt))
+    payload = json.loads(response.text)
+
+    assert payload["goal"] == "Predict the sale price."
+    assert payload["target"]["target_column"] == "price"
+    assert payload["target"]["problem_type"] == "regression"
+    assert payload["target"]["metric"] == "sklearn.metrics.root_mean_squared_error"
+    assert payload["target"]["submission_kind"] == "numeric"
