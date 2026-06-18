@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+.env
+
+# TheML local DB/cache
+tml.db
+tml.db-wal
+tml.db-shm
+*.tmp
+*.partial
+
+# Local worktrees
+.worktrees/
+worktrees/
+
+# Runtime workdirs / heavy ML products
+projects/**/workspaces/
+projects/**/runs/**/artifacts/**/work/
+**/AutoGluonModels/
+*.csv.gz
+*.parquet
+*.pkl
+*.pickle
+*.joblib
+*.model
+
+# Large generated prediction artifacts
+projects/**/runs/**/artifacts/**/artifacts/oof_predictions*
+projects/**/runs/**/artifacts/**/artifacts/test_predictions*

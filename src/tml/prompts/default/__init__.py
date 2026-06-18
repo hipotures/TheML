@@ -1,0 +1,1 @@
+"""Bundled default prompt pack."""
