@@ -28,7 +28,7 @@ def reindex_project(project_dir: Path, db_path: Path) -> dict[str, int]:
             conn.execute(f"DELETE FROM {table}")
         conn.execute(
             "INSERT INTO projects(project_id, kind, path) VALUES (?, ?, ?)",
-            (config["project_id"], config.get("kind", "kaggle"), str(project_dir)),
+            (config["project_id"], config.get("kind", "kaggle"), "."),
         )
         _index_profiles(conn, project_dir)
         _index_hypotheses(conn, project_dir)
@@ -48,7 +48,7 @@ def _index_profiles(conn, project_dir: Path) -> None:
         profile_id = str(payload.get("profile_id") or path.stem)
         conn.execute(
             "INSERT INTO profiles(profile_id, mode, path, profile_hash) VALUES (?, ?, ?, ?)",
-            (profile_id, str(payload.get("mode") or "unknown"), str(path), sha256_file(path)),
+            (profile_id, str(payload.get("mode") or "unknown"), _project_path(project_dir, path), sha256_file(path)),
         )
 
 
@@ -58,7 +58,7 @@ def _index_hypotheses(conn, project_dir: Path) -> None:
         hid = str(payload.get("hypothesis_id") or path.parent.name)
         conn.execute(
             "INSERT INTO hypotheses(hypothesis_id, title, enabled, path) VALUES (?, ?, ?, ?)",
-            (hid, payload.get("title"), 1 if payload.get("enabled", True) else 0, str(path)),
+            (hid, payload.get("title"), 1 if payload.get("enabled", True) else 0, _project_path(project_dir, path)),
         )
         for code in sorted((path.parent / "materializations").glob("*.py")):
             mode = code.name.split("-", 1)[0]
@@ -72,7 +72,7 @@ def _index_runs(conn, project_dir: Path) -> None:
     for run_yaml in sorted((project_dir / "runs").glob("*/run.yaml")):
         run_dir = run_yaml.parent
         run_id = run_dir.name
-        conn.execute("INSERT INTO runs(run_id, path) VALUES (?, ?)", (run_id, str(run_dir)))
+        conn.execute("INSERT INTO runs(run_id, path) VALUES (?, ?)", (run_id, _project_path(project_dir, run_dir)))
         for node_dir in sorted((run_dir / "artifacts").glob("*")):
             if not node_dir.is_dir():
                 continue
@@ -95,7 +95,7 @@ def _index_runs(conn, project_dir: Path) -> None:
                     start.get("mode") or done.get("mode"),
                     start.get("profile_id") or done.get("profile_id"),
                     status,
-                    str(node_dir),
+                    _project_path(project_dir, node_dir),
                 ),
             )
             if manifest or done or failed:
@@ -137,3 +137,7 @@ def classify_node(node_dir: Path) -> str:
     if attempts:
         return "execution_interrupted"
     return "aborted"
+
+
+def _project_path(project_dir: Path, path: Path) -> str:
+    return path.relative_to(project_dir).as_posix()

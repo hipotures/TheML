@@ -42,6 +42,26 @@ if sample is not None:
     return {"PATH": str(bin_dir)}
 
 
+def test_init_project_reports_paths_and_downloaded_data(tmp_path: Path):
+    env = fake_kaggle_cli(
+        tmp_path,
+        sample_submission="id,target\n1,0\n",
+    )
+
+    result = invoke(tmp_path, "init", "project", "playground-series-s6e6", env=env)
+
+    assert result.exit_code == 0, result.output
+    project_dir = "projects/kaggle/playground-series-s6e6"
+    assert f"Initialized project: {project_dir}" in result.output
+    assert f"Project config: {project_dir}/project.yaml" in result.output
+    assert f"Task file: {project_dir}/task.md" in result.output
+    assert f"Data dir: {project_dir}/data" in result.output
+    assert "Kaggle data: downloaded" in result.output
+    assert "sample_submission.csv" in result.output
+    assert "Next: uv run tml project use playground-series-s6e6" in result.output
+    assert str(tmp_path) not in result.output
+
+
 def test_init_project_defaults_to_kaggle_and_writes_root_config(tmp_path: Path):
     env = fake_kaggle_cli(tmp_path)
 
@@ -185,6 +205,13 @@ def test_root_mock_workflow_reindexes_and_records_node_artifacts(tmp_path: Path)
         assert conn.execute("select count(*) from hypotheses").fetchone()[0] == 1
         assert conn.execute("select count(*) from materializations").fetchone()[0] == 1
         assert conn.execute("select status from nodes").fetchone()[0] == "complete"
+        stored_paths = [
+            row[0]
+            for table in ("projects", "profiles", "hypotheses", "runs", "nodes", "artifacts")
+            for row in conn.execute(f"select path from {table}").fetchall()
+        ]
+        assert stored_paths
+        assert all(not Path(path).is_absolute() for path in stored_paths)
 
     result = invoke(tmp_path, "root", "status")
     assert result.exit_code == 0, result.output
@@ -220,6 +247,10 @@ def test_prompt_render_probe_and_diff_do_not_create_nodes(tmp_path: Path):
     probe_path = Path(probe.output.strip().splitlines()[-1])
     assert (probe_path / "request.md").exists()
     assert (probe_path / "response.json").exists()
+    request_json = yaml.safe_load((probe_path / "request.json").read_text(encoding="utf-8"))
+    assert request_json["project_dir"] == "."
+    assert not Path(request_json["template_path"]).is_absolute()
+    assert str(tmp_path) not in (probe_path / "request.md").read_text(encoding="utf-8")
 
     assert not list((tmp_path / "projects" / "kaggle" / "playground-series-s6e6" / "runs").glob("*"))
 
@@ -240,6 +271,9 @@ def test_root_ensure_is_idempotent_for_failed_autogluon_attempt(tmp_path: Path):
     node_dirs = list((project_dir / "runs").glob("*/artifacts/*"))
     assert len(node_dirs) == 1
     assert (node_dirs[0] / "failed.yaml").exists()
+    failed_text = (node_dirs[0] / "failed.yaml").read_text(encoding="utf-8")
+    assert "data/train.csv" in failed_text
+    assert str(tmp_path) not in failed_text
 
     second = invoke(tmp_path, "root", "ensure", "count=1")
     assert second.exit_code == 0, second.output

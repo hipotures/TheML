@@ -46,7 +46,7 @@ def init_project_cmd(ctx: typer.Context, slug: str) -> None:
         kind = str(overrides.get("kind") or default_project_kind(root) or "kaggle")
         download = _bool(overrides["download"]) if "download" in overrides else default_download_data(root)
         ref = init_project(root, slug, kind, download=download)
-        console.print(f"Initialized project: {ref.path}")
+        _print_init_project_summary(root, ref.path, slug, download=download)
     except Exception as exc:
         _abort(exc)
 
@@ -159,8 +159,13 @@ def kaggle_download_cmd() -> None:
         ref = active_project_ref()
         config = load_project_config(ref.path)
         slug = str(config.get("kaggle_slug") or ref.slug)
-        download_competition_data(slug, ref.path / str(config.get("data_dir") or "data"))
-        console.print(f"Downloaded Kaggle data for {slug}")
+        data_dir = ref.path / str(config.get("data_dir") or "data")
+        download_competition_data(slug, data_dir)
+        typer.echo(f"Kaggle data: downloaded for {slug}")
+        typer.echo(f"Data dir: {_repo_path(data_dir, ref.root)}")
+        files = _data_files(data_dir)
+        if files:
+            typer.echo("Data files: " + ", ".join(files))
     except Exception as exc:
         _abort(exc)
 
@@ -251,6 +256,34 @@ def _bool(value: object) -> bool:
 
 def _tmp_root() -> Path:
     return Path("/tmp")
+
+
+def _print_init_project_summary(root: Path, project_dir: Path, slug: str, *, download: bool) -> None:
+    data_dir = project_dir / "data"
+    typer.echo(f"Initialized project: {_repo_path(project_dir, root)}")
+    typer.echo(f"Project config: {_repo_path(project_dir / 'project.yaml', root)}")
+    typer.echo(f"Task file: {_repo_path(project_dir / 'task.md', root)}")
+    typer.echo(f"Data dir: {_repo_path(data_dir, root)}")
+    if download:
+        files = _data_files(data_dir)
+        suffix = f" ({', '.join(files)})" if files else ""
+        typer.echo(f"Kaggle data: downloaded{suffix}")
+    else:
+        typer.echo("Kaggle data: skipped (download=false)")
+    typer.echo(f"Next: uv run tml project use {slug}")
+
+
+def _repo_path(path: Path, root: Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _data_files(data_dir: Path) -> list[str]:
+    if not data_dir.exists():
+        return []
+    return sorted(path.name for path in data_dir.iterdir() if path.is_file())
 
 
 def _best_score(project_dir: Path) -> float | None:

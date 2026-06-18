@@ -8,9 +8,9 @@ def template_text(project_dir: Path, template_id: str) -> tuple[str, str]:
     rel = _template_relpath(template_id)
     override = project_dir / "prompts" / rel
     if override.exists():
-        return override.read_text(encoding="utf-8"), str(override)
+        return override.read_text(encoding="utf-8"), str(override.relative_to(project_dir))
     package = resources.files("tml.prompts.default").joinpath(rel)
-    return package.read_text(encoding="utf-8"), str(package)
+    return package.read_text(encoding="utf-8"), f"default/{rel}"
 
 
 def _template_relpath(template_id: str) -> str:

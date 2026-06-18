@@ -19,7 +19,7 @@ def run_autogluon_materialization(
 ) -> ExecutionResult:
     data_dir = project_dir / "data"
     required = [data_dir / "train.csv", data_dir / "test.csv", data_dir / "sample_submission.csv"]
-    missing = [str(path) for path in required if not path.exists()]
+    missing = [path.relative_to(project_dir).as_posix() for path in required if not path.exists()]
     if missing:
         return ExecutionResult(
             status="failed",
@@ -91,7 +91,7 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
 
     module_spec = importlib.util.spec_from_file_location("tml_materialization", code_path)
     if module_spec is None or module_spec.loader is None:
-        raise ValueError(f"Cannot import materialization: {code_path}")
+        raise ValueError(f"Cannot import materialization: {_project_path(project_dir, code_path)}")
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)
     preprocess = getattr(module, "preprocess", None)
@@ -142,3 +142,10 @@ def _load_profile(project_dir: Path, profile_id: str) -> dict[str, object]:
     from tml.utils.yaml_io import read_yaml
 
     return read_yaml(project_dir / "profiles" / "root" / f"{profile_id}.yaml")
+
+
+def _project_path(project_dir: Path, path: Path) -> str:
+    try:
+        return path.relative_to(project_dir).as_posix()
+    except ValueError:
+        return path.name

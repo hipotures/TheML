@@ -13,6 +13,6 @@ def project_prompt_context(project_dir: Path, **extra: Any) -> dict[str, Any]:
     return {
         "project": project,
         "task_text": task_text,
-        "data_dir": project_dir / str(project.get("data_dir", "data")),
+        "data_dir": str(project.get("data_dir", "data")),
         **extra,
     }

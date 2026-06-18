@@ -84,7 +84,7 @@ def _request_json(project_dir: Path, rendered: dict[str, str], kind: str, model:
         "template_hash": rendered["template_hash"],
         "context_hash": rendered["rendered_hash"],
         "rendered_prompt_hash": rendered["rendered_hash"],
-        "project_dir": str(project_dir),
+        "project_dir": ".",
         "created_at": datetime.now().isoformat(timespec="seconds"),
     }
 
