@@ -52,6 +52,7 @@ def detect_project_metadata(
     model: str,
     sample_submission_header: list[str],
     progress: Callable[[str], None] | None = None,
+    providers: dict[str, object] | None = None,
 ) -> dict[str, Any] | None:
     try:
         pages = fetch_competition_pages(slug, progress=progress)
@@ -83,7 +84,7 @@ def detect_project_metadata(
             "created_at": datetime.now().isoformat(timespec="seconds"),
         },
     )
-    response = client_for_model(model).call(
+    response = client_for_model(model, providers).call(
         AiRequest(role="metadata", model=model, prompt=rendered["rendered"])
     )
     atomic_write_text(out_dir / "response.md", response.text)

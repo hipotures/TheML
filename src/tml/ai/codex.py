@@ -4,13 +4,21 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from .client import AiRequest, AiResponse
+from .client import AiRequest, AiResponse, ModelSpec
 
 
 class CodexAiClient:
     """Small Codex CLI adapter; future app-server clients can implement AiClient."""
 
+    def __init__(self, spec: ModelSpec | None = None) -> None:
+        self.spec = spec
+
     def call(self, request: AiRequest) -> AiResponse:
+        if self.spec is not None and self.spec.provider == "codex" and self.spec.raw != (self.spec.model or ""):
+            raise RuntimeError(
+                "Codex provider config is parsed, but the new codex provider execution path is not finalized yet. "
+                "Use mock providers for now; codex CLI behavior will be tested next."
+            )
         with tempfile.TemporaryDirectory(prefix="tml-codex-") as tmp:
             response_path = Path(tmp) / "response.txt"
             result = subprocess.run(

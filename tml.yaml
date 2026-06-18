@@ -10,7 +10,30 @@ active_project:
   slug: playground-series-s6e6
 active_run: null
 models:
+  metadata: mock
   hypothesis: mock
   code: mock
   review: mock
   bugfix: mock
+providers:
+  mock:
+    kind: mock
+  openai:
+    kind: openai
+    api_key_env: OPENAI_API_KEY
+    base_url_env: OPENAI_BASE_URL
+  ollama:
+    kind: openai_compatible
+    api_key_env: OLLAMA_API_KEY
+    base_url_env: OLLAMA_BASE_URL
+    default_base_url: http://127.0.0.1:11434/v1
+  vllm:
+    kind: openai_compatible
+    api_key_env: VLLM_API_KEY
+    base_url_env: VLLM_BASE_URL
+  llama_cpp:
+    kind: openai_compatible
+    api_key_env: LLAMA_CPP_API_KEY
+    base_url_env: LLAMA_CPP_BASE_URL
+  codex:
+    kind: codex_cli

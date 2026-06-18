@@ -24,10 +24,36 @@ ROOT_CONFIG_DEFAULTS: dict[str, Any] = {
     "active_project": None,
     "active_run": None,
     "models": {
+        "metadata": "mock",
         "hypothesis": "mock",
         "code": "mock",
         "review": "mock",
         "bugfix": "mock",
+    },
+    "providers": {
+        "mock": {"kind": "mock"},
+        "openai": {
+            "kind": "openai",
+            "api_key_env": "OPENAI_API_KEY",
+            "base_url_env": "OPENAI_BASE_URL",
+        },
+        "ollama": {
+            "kind": "openai_compatible",
+            "api_key_env": "OLLAMA_API_KEY",
+            "base_url_env": "OLLAMA_BASE_URL",
+            "default_base_url": "http://127.0.0.1:11434/v1",
+        },
+        "vllm": {
+            "kind": "openai_compatible",
+            "api_key_env": "VLLM_API_KEY",
+            "base_url_env": "VLLM_BASE_URL",
+        },
+        "llama_cpp": {
+            "kind": "openai_compatible",
+            "api_key_env": "LLAMA_CPP_API_KEY",
+            "base_url_env": "LLAMA_CPP_BASE_URL",
+        },
+        "codex": {"kind": "codex_cli"},
     },
 }
 
@@ -128,6 +154,7 @@ def init_project(
         download_competition_data(slug, project_dir / "data", progress=progress)
     inferred_target = _infer_target(project_dir)
     models = root_config.get("models") if isinstance(root_config.get("models"), dict) else {}
+    providers = root_config.get("providers") if isinstance(root_config.get("providers"), dict) else {}
     metadata = None
     if kind == "kaggle":
         metadata = detect_project_metadata(
@@ -139,6 +166,7 @@ def init_project(
                 *([str(inferred_target["target_column"])] if inferred_target.get("target_column") else []),
             ],
             progress=progress,
+            providers=providers,
         )
     if not (project_dir / "task.md").exists():
         if metadata is not None:
@@ -166,6 +194,7 @@ def init_project(
                     },
                 },
                 "models": {
+                    "metadata": str(models.get("metadata") or "mock"),
                     "hypothesis": str(models.get("hypothesis") or "mock"),
                     "code": str(models.get("code") or "mock"),
                     "review": str(models.get("review") or "mock"),
@@ -208,6 +237,10 @@ def _merge_root_config(existing: dict[str, Any]) -> dict[str, Any]:
         "models": {
             **ROOT_CONFIG_DEFAULTS["models"],
             **(existing.get("models") if isinstance(existing.get("models"), dict) else {}),
+        },
+        "providers": {
+            **ROOT_CONFIG_DEFAULTS["providers"],
+            **(existing.get("providers") if isinstance(existing.get("providers"), dict) else {}),
         },
     }
     return merged

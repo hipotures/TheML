@@ -17,6 +17,15 @@ class AiResponse:
     metadata: dict[str, object]
 
 
+@dataclass(frozen=True)
+class ModelSpec:
+    raw: str
+    provider: str
+    model: str | None = None
+    reasoning_effort: str | None = None
+    provider_config: dict[str, object] | None = None
+
+
 class AiClient(Protocol):
     def call(self, request: AiRequest) -> AiResponse:
         """Return a model response for an archived request."""
