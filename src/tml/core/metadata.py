@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import csv
+import gzip
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -57,14 +59,11 @@ def detect_project_metadata(
         return None
     if not pages:
         return None
-    rendered = render_template(
+    rendered = render_project_metadata_prompt(
         project_dir,
-        "project.metadata",
-        {
-            "slug": slug,
-            "pages": pages,
-            "sample_submission_header": sample_submission_header,
-        },
+        slug=slug,
+        pages=pages,
+        sample_submission_header=sample_submission_header,
     )
     out_dir = project_dir / "logs" / "project-metadata"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -94,6 +93,26 @@ def detect_project_metadata(
         return None
     payload["pages"] = pages
     return normalize_project_metadata(payload)
+
+
+def render_project_metadata_prompt(
+    project_dir: Path,
+    *,
+    slug: str,
+    pages: dict[str, str] | None = None,
+    sample_submission_header: list[str] | None = None,
+    progress: Callable[[str], None] | None = None,
+) -> dict[str, str]:
+    resolved_pages = pages if pages is not None else fetch_competition_pages(slug, progress=progress)
+    return render_template(
+        project_dir,
+        "project.metadata",
+        {
+            "slug": slug,
+            "pages": resolved_pages,
+            "sample_submission_header": sample_submission_header or _sample_submission_header(project_dir),
+        },
+    )
 
 
 def normalize_project_metadata(payload: dict[str, Any]) -> dict[str, Any]:
@@ -186,6 +205,36 @@ def _parse_json_object(text: str) -> dict[str, Any] | None:
     except json.JSONDecodeError:
         return None
     return value if isinstance(value, dict) else None
+
+
+def _sample_submission_header(project_dir: Path) -> list[str]:
+    config_path = project_dir / "project.yaml"
+    data_dir = project_dir / "data"
+    if config_path.exists():
+        from tml.utils.yaml_io import read_yaml
+
+        config = read_yaml(config_path)
+        data_dir = project_dir / str(config.get("data_dir") or "data")
+    sample = _data_file(data_dir, "sample_submission.csv")
+    if sample.exists():
+        opener = gzip.open if sample.suffix == ".gz" else Path.open
+        with opener(sample, mode="rt", newline="", encoding="utf-8") as handle:
+            return next(csv.reader(handle), [])
+    if config_path.exists():
+        from tml.utils.yaml_io import read_yaml
+
+        target = read_yaml(config_path).get("target", {})
+        if isinstance(target, dict):
+            columns = [target.get("id_column"), target.get("target_column")]
+            return [str(column) for column in columns if column]
+    return []
+
+
+def _data_file(data_dir: Path, name: str) -> Path:
+    plain = data_dir / name
+    if plain.exists():
+        return plain
+    return plain.with_name(plain.name + ".gz")
 
 
 def _optional_string(value: Any) -> str | None:

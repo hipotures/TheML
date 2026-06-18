@@ -6,6 +6,7 @@ from pathlib import Path
 from tml.ai import AiRequest, client_for_model
 from tml.core.config import active_mode, load_project_config
 from tml.core.ids import timestamp_id
+from tml.core.metadata import render_project_metadata_prompt
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
 from tml.utils.atomic import atomic_write_json, atomic_write_text
@@ -39,8 +40,9 @@ def probe_prompt(
     out_dir = _tmp_dir(project_dir, tmp_root) if tmp else project_dir / "prompt-lab" / timestamp_id()
     out_dir.mkdir(parents=True, exist_ok=True)
     config = load_project_config(project_dir)
-    role = "code" if stage == "code" else "hypothesis"
-    model = model_override or str(config.get("models", {}).get(role, "mock"))
+    role = _role_for_target(target, stage)
+    models = config.get("models", {}) if isinstance(config.get("models"), dict) else {}
+    model = model_override or str(models.get(role) or models.get("hypothesis") or "mock")
     rendered = _render_for_target(project_dir, target=target, stage=stage)
     atomic_write_text(out_dir / "request.md", rendered["rendered"])
     atomic_write_json(out_dir / "request.json", _request_json(project_dir, rendered, "probe", model=model))
@@ -52,6 +54,11 @@ def probe_prompt(
 
 def _render_for_target(project_dir: Path, *, target: str | None, stage: str | None) -> dict[str, str]:
     config = load_project_config(project_dir)
+    if target == "project" and stage == "metadata":
+        return render_project_metadata_prompt(
+            project_dir,
+            slug=str(config.get("kaggle_slug") or config.get("project_id") or project_dir.name),
+        )
     if stage == "code":
         mode = active_mode(config)
         hypothesis = _hypothesis_for_target(project_dir, target)
@@ -61,6 +68,14 @@ def _render_for_target(project_dir: Path, *, target: str | None, stage: str | No
             project_prompt_context(project_dir, hypothesis=hypothesis),
         )
     return render_template(project_dir, "root.hypothesis", project_prompt_context(project_dir, count=1))
+
+
+def _role_for_target(target: str | None, stage: str | None) -> str:
+    if target == "project" and stage == "metadata":
+        return "metadata"
+    if stage == "code":
+        return "code"
+    return "hypothesis"
 
 
 def _hypothesis_for_target(project_dir: Path, target: str | None) -> dict[str, object]:

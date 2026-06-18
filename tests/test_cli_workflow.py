@@ -296,6 +296,48 @@ def test_init_project_uses_kaggle_pages_prompt_to_fill_task_and_config(tmp_path:
     assert response["target"]["metric"] == "sklearn.metrics.balanced_accuracy_score"
 
 
+def test_prompt_render_project_metadata_uses_metadata_template(tmp_path: Path):
+    env = fake_kaggle_cli(
+        tmp_path,
+        sample_submission="id,class\n577347,STAR\n",
+    )
+    assert invoke(tmp_path, "init", "project", "playground-series-s6e6", env=env).exit_code == 0
+    assert invoke(tmp_path, "project", "use", "playground-series-s6e6").exit_code == 0
+
+    result = invoke(tmp_path, "prompt", "render", "project", "metadata", env=env)
+    assert result.exit_code == 0, result.output
+
+    request_path = Path(result.output.strip())
+    assert request_path.exists()
+    request_text = request_path.read_text(encoding="utf-8")
+    assert "You are configuring a Kaggle machine learning project." in request_text
+    assert "Competition slug: playground-series-s6e6" in request_text
+    assert "balanced accuracy" in request_text
+    assert "Sample submission header: ['id', 'class']" in request_text
+    assert "Generate ROOT hypotheses" not in request_text
+
+    request_json = yaml.safe_load((request_path.parent / "request.json").read_text(encoding="utf-8"))
+    assert request_json["template_id"] == "project.metadata"
+
+
+def test_prompt_probe_project_metadata_uses_metadata_role(tmp_path: Path):
+    env = fake_kaggle_cli(
+        tmp_path,
+        sample_submission="id,class\n577347,STAR\n",
+    )
+    assert invoke(tmp_path, "init", "project", "playground-series-s6e6", env=env).exit_code == 0
+    assert invoke(tmp_path, "project", "use", "playground-series-s6e6").exit_code == 0
+
+    result = invoke(tmp_path, "prompt", "probe", "project", "metadata", "tmp=true", env=env)
+    assert result.exit_code == 0, result.output
+
+    out_dir = Path(result.output.strip())
+    request_json = yaml.safe_load((out_dir / "request.json").read_text(encoding="utf-8"))
+    response = yaml.safe_load((out_dir / "response.md").read_text(encoding="utf-8"))
+    assert request_json["template_id"] == "project.metadata"
+    assert response["target"]["metric"] == "sklearn.metrics.balanced_accuracy_score"
+
+
 def test_root_mock_workflow_reindexes_and_records_node_artifacts(tmp_path: Path):
     env = fake_kaggle_cli(tmp_path)
     assert invoke(tmp_path, "init", "project", "playground-series-s6e6", env=env).exit_code == 0
