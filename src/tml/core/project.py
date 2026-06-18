@@ -13,6 +13,7 @@ ROOT_CONFIG_DEFAULTS: dict[str, Any] = {
     "schema_version": 1,
     "defaults": {
         "project_kind": "kaggle",
+        "download_data": True,
         "root_mode": "autogluon",
         "prompt_output": "tmp",
         "probe_output": "prompt-lab",
@@ -85,6 +86,13 @@ def default_project_kind(root: Path) -> str:
     config = ensure_root_config(root)
     defaults = config.get("defaults") if isinstance(config.get("defaults"), dict) else {}
     return str(defaults.get("project_kind") or "kaggle")
+
+
+def default_download_data(root: Path) -> bool:
+    config = ensure_root_config(root)
+    defaults = config.get("defaults") if isinstance(config.get("defaults"), dict) else {}
+    value = defaults.get("download_data")
+    return value if isinstance(value, bool) else True
 
 
 def init_project(root: Path, slug: str, kind: str | None = None, *, download: bool = False) -> ProjectRef:

@@ -64,3 +64,27 @@ def test_kaggle_download_fails_clearly_when_cli_is_missing(tmp_path: Path, monke
         assert "Kaggle CLI is not installed" in str(exc)
     else:
         raise AssertionError("Expected TmlError when Kaggle CLI is missing")
+
+
+def test_kaggle_download_fails_clearly_when_cli_script_is_broken(tmp_path: Path, monkeypatch):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    kaggle = bin_dir / "kaggle"
+    kaggle.write_text(
+        "#!/bin/sh\n"
+        "echo 'Traceback (most recent call last):' >&2\n"
+        "echo 'ModuleNotFoundError: No module named '\\''kaggle'\\''' >&2\n"
+        "exit 1\n",
+        encoding="utf-8",
+    )
+    kaggle.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir))
+
+    try:
+        download_competition_data("playground-series-s6e6", tmp_path / "data")
+    except TmlError as exc:
+        message = str(exc)
+        assert "Kaggle CLI is installed but its Python package is not importable" in message
+        assert "Traceback" not in message
+    else:
+        raise AssertionError("Expected TmlError when Kaggle CLI is broken")

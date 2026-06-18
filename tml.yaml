@@ -1,14 +1,12 @@
 schema_version: 1
-
 defaults:
   project_kind: kaggle
+  download_data: true
   root_mode: autogluon
   prompt_output: tmp
   probe_output: prompt-lab
-
 active_project: null
 active_run: null
-
 models:
   hypothesis: mock
   code: mock

@@ -9,7 +9,7 @@ from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.errors import TmlError
 from tml.core.kaggle import download_competition_data
 from tml.core.paths import active_project_ref, workspace_root
-from tml.core.project import default_project_kind, init_project, use_project
+from tml.core.project import default_download_data, default_project_kind, init_project, use_project
 from tml.db.reindex import reindex_project
 from tml.hypotheses.generate import generate_missing_root_hypotheses
 from tml.hypotheses.materialize import materialize_missing
@@ -44,7 +44,8 @@ def init_project_cmd(ctx: typer.Context, slug: str) -> None:
         overrides = _overrides(ctx.args)
         root = workspace_root()
         kind = str(overrides.get("kind") or default_project_kind(root) or "kaggle")
-        ref = init_project(root, slug, kind, download=_bool(overrides.get("download", False)))
+        download = _bool(overrides["download"]) if "download" in overrides else default_download_data(root)
+        ref = init_project(root, slug, kind, download=download)
         console.print(f"Initialized project: {ref.path}")
     except Exception as exc:
         _abort(exc)
