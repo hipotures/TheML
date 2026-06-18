@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -95,12 +96,20 @@ def default_download_data(root: Path) -> bool:
     return value if isinstance(value, bool) else True
 
 
-def init_project(root: Path, slug: str, kind: str | None = None, *, download: bool = False) -> ProjectRef:
+def init_project(
+    root: Path,
+    slug: str,
+    kind: str | None = None,
+    *,
+    download: bool = False,
+    progress: Callable[[str], None] | None = None,
+) -> ProjectRef:
     ensure_gitignore(root)
     root_config = ensure_root_config(root)
     kind = kind or default_project_kind(root)
     ref = ProjectRef(root=root, kind=kind, slug=slug)
     project_dir = ref.path
+    _progress(progress, f"Preparing project directory: {project_dir.relative_to(root).as_posix()}")
     for rel in (
         "data",
         "profiles/root",
@@ -117,7 +126,7 @@ def init_project(root: Path, slug: str, kind: str | None = None, *, download: bo
     if download:
         from tml.core.kaggle import download_competition_data
 
-        download_competition_data(slug, project_dir / "data")
+        download_competition_data(slug, project_dir / "data", progress=progress)
     if not (project_dir / "project.yaml").exists():
         models = root_config.get("models") if isinstance(root_config.get("models"), dict) else {}
         target = _infer_target(project_dir)
@@ -150,6 +159,11 @@ def init_project(root: Path, slug: str, kind: str | None = None, *, download: bo
         )
     _write_default_profiles(project_dir)
     return ref
+
+
+def _progress(progress: Callable[[str], None] | None, message: str) -> None:
+    if progress is not None:
+        progress(message)
 
 
 def use_project(root: Path, slug: str) -> ProjectRef:
@@ -190,11 +204,13 @@ def _infer_target(project_dir: Path) -> dict[str, Any]:
         "maximize": True,
         "submission_kind": None,
     }
-    sample = project_dir / "data" / "sample_submission.csv"
+    sample = _data_file(project_dir, "sample_submission.csv")
     if sample.exists():
         import csv
+        import gzip
 
-        with sample.open(newline="", encoding="utf-8") as handle:
+        opener = gzip.open if sample.suffix == ".gz" else Path.open
+        with opener(sample, mode="rt", newline="", encoding="utf-8") as handle:
             reader = csv.reader(handle)
             header = next(reader, [])
         if header:
@@ -203,6 +219,13 @@ def _infer_target(project_dir: Path) -> dict[str, Any]:
             target["target_column"] = header[1]
             target["submission_kind"] = "labels"
     return target
+
+
+def _data_file(project_dir: Path, name: str) -> Path:
+    plain = project_dir / "data" / name
+    if plain.exists():
+        return plain
+    return plain.with_name(plain.name + ".gz")
 
 
 def _write_default_profiles(project_dir: Path) -> None:

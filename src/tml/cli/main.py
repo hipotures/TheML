@@ -3,7 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
+from rich import box
 from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
+from rich.tree import Tree
 
 from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.errors import TmlError
@@ -21,7 +25,7 @@ from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml
 
 
-console = Console()
+console = Console(highlight=False)
 app = typer.Typer(no_args_is_help=True)
 init_app = typer.Typer(no_args_is_help=True)
 project_app = typer.Typer(no_args_is_help=True)
@@ -45,7 +49,18 @@ def init_project_cmd(ctx: typer.Context, slug: str) -> None:
         root = workspace_root()
         kind = str(overrides.get("kind") or default_project_kind(root) or "kaggle")
         download = _bool(overrides["download"]) if "download" in overrides else default_download_data(root)
-        ref = init_project(root, slug, kind, download=download)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            transient=False,
+        ) as progress:
+            task = progress.add_task("Preparing project...", total=None)
+
+            def report(message: str) -> None:
+                progress.update(task, description=message)
+
+            ref = init_project(root, slug, kind, download=download, progress=report)
         _print_init_project_summary(root, ref.path, slug, download=download)
     except Exception as exc:
         _abort(exc)
@@ -160,12 +175,19 @@ def kaggle_download_cmd() -> None:
         config = load_project_config(ref.path)
         slug = str(config.get("kaggle_slug") or ref.slug)
         data_dir = ref.path / str(config.get("data_dir") or "data")
-        download_competition_data(slug, data_dir)
-        typer.echo(f"Kaggle data: downloaded for {slug}")
-        typer.echo(f"Data dir: {_repo_path(data_dir, ref.root)}")
-        files = _data_files(data_dir)
-        if files:
-            typer.echo("Data files: " + ", ".join(files))
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            transient=False,
+        ) as progress:
+            task = progress.add_task(f"Downloading Kaggle data for {slug}...", total=None)
+
+            def report(message: str) -> None:
+                progress.update(task, description=message)
+
+            download_competition_data(slug, data_dir, progress=report)
+        _print_kaggle_download_summary(ref.root, slug, data_dir)
     except Exception as exc:
         _abort(exc)
 
@@ -260,17 +282,45 @@ def _tmp_root() -> Path:
 
 def _print_init_project_summary(root: Path, project_dir: Path, slug: str, *, download: bool) -> None:
     data_dir = project_dir / "data"
-    typer.echo(f"Initialized project: {_repo_path(project_dir, root)}")
-    typer.echo(f"Project config: {_repo_path(project_dir / 'project.yaml', root)}")
-    typer.echo(f"Task file: {_repo_path(project_dir / 'task.md', root)}")
-    typer.echo(f"Data dir: {_repo_path(data_dir, root)}")
+    table = Table(title="Project initialized", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Field", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Initialized project", _repo_path(project_dir, root))
+    table.add_row("Project config", _repo_path(project_dir / "project.yaml", root))
+    table.add_row("Task file", _repo_path(project_dir / "task.md", root))
+    table.add_row("Data dir", _repo_path(data_dir, root))
     if download:
         files = _data_files(data_dir)
         suffix = f" ({', '.join(files)})" if files else ""
-        typer.echo(f"Kaggle data: downloaded{suffix}")
+        table.add_row("Kaggle data", f"downloaded{suffix}")
     else:
-        typer.echo("Kaggle data: skipped (download=false)")
-    typer.echo(f"Next: uv run tml project use {slug}")
+        table.add_row("Kaggle data", "skipped (download=false)")
+    console.print(table)
+    _print_data_tree(root, project_dir)
+    console.print(f"[bold]Next:[/bold] uv run tml project use {slug}")
+
+
+def _print_kaggle_download_summary(root: Path, slug: str, data_dir: Path) -> None:
+    table = Table(title="Kaggle data downloaded", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Field", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Competition", slug)
+    table.add_row("Data dir", _repo_path(data_dir, root))
+    files = _data_files(data_dir)
+    table.add_row("Files", ", ".join(files) if files else "none")
+    console.print(table)
+
+
+def _print_data_tree(root: Path, project_dir: Path) -> None:
+    data_dir = project_dir / "data"
+    files = _data_files(data_dir)
+    if not files:
+        return
+    tree = Tree(_repo_path(project_dir, root))
+    data = tree.add("data")
+    for filename in files:
+        data.add(filename)
+    console.print(tree)
 
 
 def _repo_path(path: Path, root: Path) -> str:

@@ -18,7 +18,11 @@ def run_autogluon_materialization(
     work_dir: Path,
 ) -> ExecutionResult:
     data_dir = project_dir / "data"
-    required = [data_dir / "train.csv", data_dir / "test.csv", data_dir / "sample_submission.csv"]
+    required = [
+        _data_file(data_dir, "train.csv"),
+        _data_file(data_dir, "test.csv"),
+        _data_file(data_dir, "sample_submission.csv"),
+    ]
     missing = [path.relative_to(project_dir).as_posix() for path in required if not path.exists()]
     if missing:
         return ExecutionResult(
@@ -83,9 +87,10 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
     profile_id = active_profile_id(config, "autogluon")
     profile = _load_profile(project_dir, profile_id)
 
-    train = pd.read_csv(project_dir / "data" / "train.csv")
-    test = pd.read_csv(project_dir / "data" / "test.csv")
-    sample = pd.read_csv(project_dir / "data" / "sample_submission.csv")
+    data_dir = project_dir / "data"
+    train = pd.read_csv(_data_file(data_dir, "train.csv"))
+    test = pd.read_csv(_data_file(data_dir, "test.csv"))
+    sample = pd.read_csv(_data_file(data_dir, "sample_submission.csv"))
     if target_col not in train.columns:
         raise ValueError(f"Target column {target_col!r} not found in train.csv")
 
@@ -149,3 +154,10 @@ def _project_path(project_dir: Path, path: Path) -> str:
         return path.relative_to(project_dir).as_posix()
     except ValueError:
         return path.name
+
+
+def _data_file(data_dir: Path, name: str) -> Path:
+    plain = data_dir / name
+    if plain.exists():
+        return plain
+    return plain.with_name(plain.name + ".gz")

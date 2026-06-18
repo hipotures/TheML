@@ -34,7 +34,9 @@ out = Path(sys.argv[sys.argv.index("-p") + 1])
 out.mkdir(parents=True, exist_ok=True)
 sample = {sample_submission!r}
 if sample is not None:
-    (out / "sample_submission.csv").write_text(sample, encoding="utf-8")
+    import zipfile
+    with zipfile.ZipFile(out / "playground-series-s6e6.zip", "w") as archive:
+        archive.writestr("sample_submission.csv", sample)
 """.format(python=sys.executable, sample_submission=sample_submission),
         encoding="utf-8",
     )
@@ -52,14 +54,26 @@ def test_init_project_reports_paths_and_downloaded_data(tmp_path: Path):
 
     assert result.exit_code == 0, result.output
     project_dir = "projects/kaggle/playground-series-s6e6"
-    assert f"Initialized project: {project_dir}" in result.output
-    assert f"Project config: {project_dir}/project.yaml" in result.output
-    assert f"Task file: {project_dir}/task.md" in result.output
-    assert f"Data dir: {project_dir}/data" in result.output
-    assert "Kaggle data: downloaded" in result.output
+    assert "Project initialized" in result.output
+    assert "Compressing sample_submission.csv -> sample_submission.csv.gz" in result.output
+    assert "Initialized project" in result.output
+    assert project_dir in result.output
+    assert "Project config" in result.output
+    assert f"{project_dir}/project.yaml" in result.output
+    assert "Task file" in result.output
+    assert f"{project_dir}/task.md" in result.output
+    assert "Data dir" in result.output
+    assert f"{project_dir}/data" in result.output
+    assert "Kaggle data" in result.output
+    assert "downloaded" in result.output
     assert "sample_submission.csv" in result.output
     assert "Next: uv run tml project use playground-series-s6e6" in result.output
     assert str(tmp_path) not in result.output
+    project_yaml = tmp_path / "projects" / "kaggle" / "playground-series-s6e6" / "project.yaml"
+    project = yaml.safe_load(project_yaml.read_text(encoding="utf-8"))
+    assert project["target"]["target_column"] == "target"
+    assert not (project_yaml.parent / "data" / "sample_submission.csv").exists()
+    assert (project_yaml.parent / "data" / "sample_submission.csv.gz").exists()
 
 
 def test_init_project_defaults_to_kaggle_and_writes_root_config(tmp_path: Path):

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import gzip
 import re
+import sys
 from pathlib import Path
 
 from tml.core.ids import node_id, run_id
@@ -88,3 +90,38 @@ def test_kaggle_download_fails_clearly_when_cli_script_is_broken(tmp_path: Path,
         assert "Traceback" not in message
     else:
         raise AssertionError("Expected TmlError when Kaggle CLI is broken")
+
+
+def test_kaggle_download_gzips_extracted_files(tmp_path: Path, monkeypatch):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    kaggle = bin_dir / "kaggle"
+    kaggle.write_text(
+        """#!{python}
+from pathlib import Path
+import sys
+import zipfile
+
+out = Path(sys.argv[sys.argv.index("-p") + 1])
+out.mkdir(parents=True, exist_ok=True)
+with zipfile.ZipFile(out / "playground-series-s6e6.zip", "w") as archive:
+    archive.writestr("train.csv", "id,target\\n1,0\\n")
+    archive.writestr("test.csv", "id\\n2\\n")
+    archive.writestr("sample_submission.csv", "id,target\\n2,0\\n")
+""".format(python=sys.executable),
+        encoding="utf-8",
+    )
+    kaggle.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir))
+
+    download_competition_data("playground-series-s6e6", tmp_path / "data")
+
+    assert (tmp_path / "data" / "playground-series-s6e6.zip").exists()
+    assert not (tmp_path / "data" / "train.csv").exists()
+    assert not (tmp_path / "data" / "test.csv").exists()
+    assert not (tmp_path / "data" / "sample_submission.csv").exists()
+    assert (tmp_path / "data" / "train.csv.gz").exists()
+    assert (tmp_path / "data" / "test.csv.gz").exists()
+    assert (tmp_path / "data" / "sample_submission.csv.gz").exists()
+    with gzip.open(tmp_path / "data" / "sample_submission.csv.gz", "rt", encoding="utf-8") as handle:
+        assert handle.readline().strip() == "id,target"

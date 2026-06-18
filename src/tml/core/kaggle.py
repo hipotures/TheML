@@ -1,20 +1,23 @@
 from __future__ import annotations
 
+import gzip
 import shutil
 import subprocess
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
 
 from tml.core.errors import TmlError
 
 
-def download_competition_data(slug: str, data_dir: Path) -> None:
+def download_competition_data(slug: str, data_dir: Path, progress: Callable[[str], None] | None = None) -> None:
     if shutil.which("kaggle") is None:
         raise TmlError(
             "Kaggle CLI is not installed. Install/configure it, then run: "
             f"uv run tml init project {slug} download=true"
         )
     data_dir.mkdir(parents=True, exist_ok=True)
+    _progress(progress, f"Downloading Kaggle data for {slug}...")
     result = subprocess.run(
         ["kaggle", "competitions", "download", "-c", slug, "-p", str(data_dir)],
         text=True,
@@ -35,9 +38,30 @@ def download_competition_data(slug: str, data_dir: Path) -> None:
             f"and competition access. Kaggle CLI said: {_one_line(message)}"
         )
     for archive in data_dir.glob("*.zip"):
+        _progress(progress, f"Unzipping {archive.name}...")
         with zipfile.ZipFile(archive) as zip_file:
             zip_file.extractall(data_dir)
+            extracted = [data_dir / name for name in zip_file.namelist()]
+        for path in extracted:
+            if path.is_file():
+                _progress(progress, f"Compressing {path.name} -> {path.name}.gz...")
+                _gzip_file(path)
 
 
 def _one_line(message: str) -> str:
     return " ".join(line.strip() for line in message.splitlines() if line.strip())
+
+
+def _gzip_file(path: Path) -> Path:
+    if path.suffix == ".gz":
+        return path
+    gz_path = path.with_name(path.name + ".gz")
+    with path.open("rb") as source, gzip.open(gz_path, "wb") as target:
+        shutil.copyfileobj(source, target)
+    path.unlink()
+    return gz_path
+
+
+def _progress(progress: Callable[[str], None] | None, message: str) -> None:
+    if progress is not None:
+        progress(message)

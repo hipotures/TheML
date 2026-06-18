@@ -5,7 +5,9 @@ defaults:
   root_mode: autogluon
   prompt_output: tmp
   probe_output: prompt-lab
-active_project: null
+active_project:
+  kind: kaggle
+  slug: playground-series-s6e6
 active_run: null
 models:
   hypothesis: mock
