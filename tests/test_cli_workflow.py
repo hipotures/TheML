@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import shutil
 import sys
 from pathlib import Path
 
@@ -14,10 +15,19 @@ runner = CliRunner()
 
 
 def invoke(root: Path, *args: str, env: dict[str, str] | None = None):
+    ensure_root_resources(root)
     command_env = {"TML_CWD": str(root)}
     if env:
         command_env.update(env)
     return runner.invoke(app, list(args), env=command_env)
+
+
+def ensure_root_resources(root: Path) -> None:
+    source_root = Path(__file__).resolve().parents[1]
+    for name in ("profiles", "prompts"):
+        target = root / name
+        if not target.exists():
+            shutil.copytree(source_root / name, target)
 
 
 def fake_kaggle_cli(tmp_path: Path, *, sample_submission: str | None = None) -> dict[str, str]:
@@ -144,7 +154,7 @@ models:
     assert project["models"]["code"] == "codex-test"
 
 
-def test_init_project_uses_bundled_autogluon_profiles_without_copying_defaults(tmp_path: Path):
+def test_init_project_uses_root_autogluon_profiles_without_copying_defaults(tmp_path: Path):
     (tmp_path / "tml.yaml").write_text(
         """
 schema_version: 1
@@ -172,15 +182,15 @@ models:
     assert not list((project_dir / "profiles" / "autogluon").glob("*.yaml"))
     assert not list((project_dir / "profiles" / "legacy").glob("*.yaml"))
 
-    bundled_dir = Path("src/tml/profiles/default/autogluon")
-    profile_files = {path.name for path in bundled_dir.glob("*.yaml")}
+    root_profile_dir = Path("profiles/autogluon")
+    profile_files = {path.name for path in root_profile_dir.glob("*.yaml")}
     assert "ag-medium-10m-v1.yaml" in profile_files
     assert "ag-fast-boost-v1.yaml" in profile_files
     assert "ag-s6e6-boost-gpu-ens-cv3-v1.yaml" in profile_files
     assert "ag-full-best-30m-gpu-v1.yaml" in profile_files
-    assert Path("src/tml/profiles/default/legacy/legacy-root-start-v1.yaml").exists()
+    assert Path("profiles/legacy/legacy-root-start-v1.yaml").exists()
 
-    default_profile = yaml.safe_load((bundled_dir / "ag-medium-10m-v1.yaml").read_text(encoding="utf-8"))
+    default_profile = yaml.safe_load((root_profile_dir / "ag-medium-10m-v1.yaml").read_text(encoding="utf-8"))
     assert default_profile["profile_id"] == "ag-medium-10m-v1"
     assert default_profile["mode"] == "autogluon"
     assert default_profile["presets"] == "medium_quality"
@@ -190,18 +200,18 @@ models:
     assert "profiles" not in default_profile
 
     gpu_cv_profile = yaml.safe_load(
-        (bundled_dir / "ag-s6e6-boost-gpu-ens-cv3-v1.yaml").read_text(encoding="utf-8")
+        (root_profile_dir / "ag-s6e6-boost-gpu-ens-cv3-v1.yaml").read_text(encoding="utf-8")
     )
     assert gpu_cv_profile["time_limit"] == 900
     assert gpu_cv_profile["fit_args"]["num_bag_folds"] == 3
     assert gpu_cv_profile["hyperparameters"]["XGB"][0]["device"] == "cuda"
 
 
-def test_autogluon_profiles_are_bundled_yaml_not_project_code():
+def test_autogluon_profiles_are_root_yaml_not_project_code():
     project_source = Path("src/tml/core/project.py").read_text(encoding="utf-8")
     assert "AUTOGLUON_PROFILES" not in project_source
-    assert Path("src/tml/profiles/default/autogluon/ag-medium-10m-v1.yaml").exists()
-    assert Path("src/tml/profiles/default/autogluon/ag-s6e6-boost-gpu-ens-cv3-v1.yaml").exists()
+    assert Path("profiles/autogluon/ag-medium-10m-v1.yaml").exists()
+    assert Path("profiles/autogluon/ag-s6e6-boost-gpu-ens-cv3-v1.yaml").exists()
 
 
 def test_init_project_infers_submission_columns_when_data_exists(tmp_path: Path):

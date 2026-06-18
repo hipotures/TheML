@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from importlib import resources
 from pathlib import Path
 
 
@@ -9,8 +8,10 @@ def template_text(project_dir: Path, template_id: str) -> tuple[str, str]:
     override = project_dir / "prompts" / rel
     if override.exists():
         return override.read_text(encoding="utf-8"), str(override.relative_to(project_dir))
-    package = resources.files("tml.prompts.default").joinpath(rel)
-    return package.read_text(encoding="utf-8"), f"default/{rel}"
+    root_template = _repo_root(project_dir) / "prompts" / rel
+    if root_template.exists():
+        return root_template.read_text(encoding="utf-8"), f"prompts/{rel}"
+    raise FileNotFoundError(f"Missing prompt template {template_id!r}: prompts/{rel}")
 
 
 def _template_relpath(template_id: str) -> str:
@@ -23,3 +24,10 @@ def _template_relpath(template_id: str) -> str:
     if template_id not in mapping:
         raise ValueError(f"Unknown template id {template_id!r}")
     return mapping[template_id]
+
+
+def _repo_root(project_dir: Path) -> Path:
+    try:
+        return project_dir.parents[2]
+    except IndexError:
+        return Path.cwd()

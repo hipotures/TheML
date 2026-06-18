@@ -28,6 +28,3 @@ pythonpath = ["src"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tml"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"src/tml/profiles" = "tml/profiles"
