@@ -24,6 +24,7 @@ tml = "tml.cli.main:app"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tml"]
