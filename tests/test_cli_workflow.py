@@ -39,7 +39,21 @@ def fake_kaggle_cli(tmp_path: Path, *, sample_submission: str | None = None) -> 
 from pathlib import Path
 import sys
 
-Path(sys.argv[0]).with_name("kaggle.args").write_text("\\n".join(sys.argv[1:]))
+args_path = Path(sys.argv[0]).with_name("kaggle.args")
+previous = args_path.read_text() + "\\n---\\n" if args_path.exists() else ""
+args_path.write_text(previous + "\\n".join(sys.argv[1:]))
+if "pages" in sys.argv:
+    import csv
+    page = sys.argv[sys.argv.index("--page-name") + 1]
+    pages = {{
+        "abstract": "**Your Goal:** Predict the stellar class.",
+        "data-description": "**train.csv** - the training set, with `class` as target\\n**test.csv** - predict `class`",
+        "Evaluation": "Submissions are evaluated on balanced accuracy between the predicted class and observed target. Predict a class label (GALAXY, STAR, QSO).",
+    }}
+    writer = csv.DictWriter(sys.stdout, fieldnames=["name", "content"])
+    writer.writeheader()
+    writer.writerow({{"name": page, "content": pages.get(page, "")}})
+    raise SystemExit(0)
 out = Path(sys.argv[sys.argv.index("-p") + 1])
 out.mkdir(parents=True, exist_ok=True)
 sample = {sample_submission!r}
@@ -65,7 +79,6 @@ def test_init_project_reports_paths_and_downloaded_data(tmp_path: Path):
     assert result.exit_code == 0, result.output
     project_dir = "projects/kaggle/playground-series-s6e6"
     assert "Project initialized" in result.output
-    assert "Compressing sample_submission.csv -> sample_submission.csv.gz" in result.output
     assert "Initialized project" in result.output
     assert project_dir in result.output
     assert "Project config" in result.output
@@ -106,10 +119,10 @@ def test_init_project_defaults_to_kaggle_and_writes_root_config(tmp_path: Path):
     project_config = (project_dir / "project.yaml").read_text(encoding="utf-8")
     assert "kind: kaggle" in project_config
     assert "kaggle_slug: playground-series-s6e6" in project_config
-    assert "target_column: null" in project_config
-    assert "metric: null" in project_config
+    assert "target_column: class" in project_config
+    assert "metric: balanced_accuracy" in project_config
     assert (project_dir / "task.md").exists()
-    assert (project_dir / "profiles" / "autogluon").exists()
+    assert not (project_dir / "profiles").exists()
     assert not (project_dir / "code").exists()
 
     result = invoke(tmp_path, "project", "use", "playground-series-s6e6")
@@ -244,6 +257,43 @@ models:
     assert project["target"]["id_column"] == "id"
     assert project["target"]["target_column"] == "class"
     assert project["target"]["submission_kind"] == "labels"
+
+
+def test_init_project_uses_kaggle_pages_prompt_to_fill_task_and_config(tmp_path: Path):
+    env = fake_kaggle_cli(
+        tmp_path,
+        sample_submission="id,class\n577347,STAR\n",
+    )
+
+    result = invoke(tmp_path, "init", "project", "playground-series-s6e6", env=env)
+    assert result.exit_code == 0, result.output
+
+    project_dir = tmp_path / "projects" / "kaggle" / "playground-series-s6e6"
+    task_text = (project_dir / "task.md").read_text(encoding="utf-8")
+    assert "## Goal" in task_text
+    assert "Predict the stellar class" in task_text
+    assert "## Evaluation" in task_text
+    assert "balanced accuracy" in task_text
+    assert "## Data description" in task_text
+
+    project = yaml.safe_load((project_dir / "project.yaml").read_text(encoding="utf-8"))
+    assert project["target"]["id_column"] == "id"
+    assert project["target"]["target_column"] == "class"
+    assert project["target"]["problem_type"] == "multiclass"
+    assert project["target"]["metric"] == "balanced_accuracy"
+    assert project["target"]["metric_source"] == "autogluon"
+    assert project["target"]["sklearn_metric"] == "sklearn.metrics.balanced_accuracy_score"
+    assert project["target"]["maximize"] is True
+    assert project["target"]["submission_kind"] == "labels"
+    assert project["target"]["metric_description"]
+
+    metadata_log = project_dir / "logs" / "project-metadata"
+    assert (metadata_log / "request.md").exists()
+    assert (metadata_log / "request.json").exists()
+    assert (metadata_log / "response.md").exists()
+    assert (metadata_log / "response.json").exists()
+    response = yaml.safe_load((metadata_log / "response.md").read_text(encoding="utf-8"))
+    assert response["target"]["metric"] == "sklearn.metrics.balanced_accuracy_score"
 
 
 def test_root_mock_workflow_reindexes_and_records_node_artifacts(tmp_path: Path):

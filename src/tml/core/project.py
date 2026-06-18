@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from tml.core.paths import ProjectRef, context_path, find_project
-from tml.core.profiles import DEFAULT_AUTOGLUON_PROFILE_ID, LEGACY_PROFILE_ID, ensure_profile_dirs
+from tml.core.metadata import detect_project_metadata, metadata_task_markdown
+from tml.core.profiles import DEFAULT_AUTOGLUON_PROFILE_ID, LEGACY_PROFILE_ID
 from tml.utils.atomic import atomic_write_text
 from tml.utils.yaml_io import read_yaml, write_yaml
 
@@ -113,8 +114,6 @@ def init_project(
     _progress(progress, f"Preparing project directory: {project_dir.relative_to(root).as_posix()}")
     for rel in (
         "data",
-        "profiles/autogluon",
-        "profiles/legacy",
         "hypotheses",
         "runs",
         "prompt-lab",
@@ -123,15 +122,31 @@ def init_project(
         "docs",
     ):
         (project_dir / rel).mkdir(parents=True, exist_ok=True)
-    if not (project_dir / "task.md").exists():
-        atomic_write_text(project_dir / "task.md", f"# {slug}\n\nDescribe the ML task here.\n")
     if download:
         from tml.core.kaggle import download_competition_data
 
         download_competition_data(slug, project_dir / "data", progress=progress)
+    inferred_target = _infer_target(project_dir)
+    models = root_config.get("models") if isinstance(root_config.get("models"), dict) else {}
+    metadata = None
+    if kind == "kaggle":
+        metadata = detect_project_metadata(
+            project_dir,
+            slug=slug,
+            model=str(models.get("metadata") or models.get("hypothesis") or "mock"),
+            sample_submission_header=[
+                str(inferred_target["id_column"]),
+                *([str(inferred_target["target_column"])] if inferred_target.get("target_column") else []),
+            ],
+            progress=progress,
+        )
+    if not (project_dir / "task.md").exists():
+        if metadata is not None:
+            atomic_write_text(project_dir / "task.md", metadata_task_markdown(metadata, slug))
+        else:
+            atomic_write_text(project_dir / "task.md", f"# {slug}\n\nDescribe the ML task here.\n")
     if not (project_dir / "project.yaml").exists():
-        models = root_config.get("models") if isinstance(root_config.get("models"), dict) else {}
-        target = _infer_target(project_dir)
+        target = _merge_target_metadata(inferred_target, metadata)
         write_yaml(
             project_dir / "project.yaml",
             {
@@ -161,7 +176,6 @@ def init_project(
         )
     else:
         _ensure_project_profile_defaults(project_dir / "project.yaml")
-    _write_default_profiles(project_dir)
     return ref
 
 
@@ -232,8 +246,26 @@ def _data_file(project_dir: Path, name: str) -> Path:
     return plain.with_name(plain.name + ".gz")
 
 
-def _write_default_profiles(project_dir: Path) -> None:
-    ensure_profile_dirs(project_dir / "profiles")
+def _merge_target_metadata(target: dict[str, Any], metadata: dict[str, Any] | None) -> dict[str, Any]:
+    if metadata is None:
+        return target
+    meta_target = metadata.get("target") if isinstance(metadata.get("target"), dict) else {}
+    merged = dict(target)
+    for key in (
+        "id_column",
+        "target_column",
+        "problem_type",
+        "metric",
+        "metric_source",
+        "sklearn_metric",
+        "metric_description",
+        "submission_kind",
+    ):
+        if merged.get(key) in {None, ""} and meta_target.get(key) not in {None, ""}:
+            merged[key] = meta_target[key]
+    if isinstance(meta_target.get("maximize"), bool):
+        merged["maximize"] = meta_target["maximize"]
+    return merged
 
 
 def _ensure_project_profile_defaults(project_yaml: Path) -> None:

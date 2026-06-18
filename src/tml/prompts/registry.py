@@ -20,6 +20,7 @@ def _template_relpath(template_id: str) -> str:
         "root.materialize-autogluon": "root/materialize-autogluon.md.j2",
         "root.materialize-legacy": "root/materialize-legacy.md.j2",
         "review.execution": "review/execution-review.md.j2",
+        "project.metadata": "project/metadata.md.j2",
     }
     if template_id not in mapping:
         raise ValueError(f"Unknown template id {template_id!r}")

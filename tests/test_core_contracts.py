@@ -9,6 +9,7 @@ import pandas as pd
 
 from tml.core.ids import node_id, run_id
 from tml.core.kaggle import download_competition_data
+from tml.core.metadata import normalize_metric
 from tml.core.errors import TmlError
 from tml.db.reindex import classify_node
 from tml.execution.autogluon_wrapper import (
@@ -220,3 +221,31 @@ with zipfile.ZipFile(out / "playground-series-s6e6.zip", "w") as archive:
     assert (tmp_path / "data" / "sample_submission.csv.gz").exists()
     with gzip.open(tmp_path / "data" / "sample_submission.csv.gz", "rt", encoding="utf-8") as handle:
         assert handle.readline().strip() == "id,target"
+
+
+def test_project_metadata_metric_normalization_supports_sklearn_and_custom():
+    sklearn_metric = normalize_metric(
+        {
+            "metric": "sklearn.metrics.balanced_accuracy_score",
+            "metric_source": "sklearn",
+            "metric_description": "Balanced accuracy between predicted and observed class.",
+            "maximize": True,
+        }
+    )
+    assert sklearn_metric["metric"] == "balanced_accuracy"
+    assert sklearn_metric["metric_source"] == "autogluon"
+    assert sklearn_metric["sklearn_metric"] == "sklearn.metrics.balanced_accuracy_score"
+    assert sklearn_metric["metric_description"] == "Balanced accuracy between predicted and observed class."
+
+    custom_metric = normalize_metric(
+        {
+            "metric": "custom",
+            "metric_source": "custom",
+            "metric_description": "Competition-specific grouped concordance metric.",
+            "maximize": False,
+        }
+    )
+    assert custom_metric["metric"] == "custom"
+    assert custom_metric["metric_source"] == "custom"
+    assert custom_metric["sklearn_metric"] is None
+    assert custom_metric["metric_description"] == "Competition-specific grouped concordance metric."
