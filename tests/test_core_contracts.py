@@ -4,6 +4,8 @@ import re
 from pathlib import Path
 
 from tml.core.ids import node_id, run_id
+from tml.core.kaggle import download_competition_data
+from tml.core.errors import TmlError
 from tml.db.reindex import classify_node
 from tml.execution.autogluon_wrapper import run_autogluon_materialization
 
@@ -51,3 +53,14 @@ def test_autogluon_wrapper_fails_clearly_when_required_data_is_missing(tmp_path:
     assert result.status == "failed"
     assert result.returncode == 2
     assert "Missing AutoGluon input files" in str(result.error)
+
+
+def test_kaggle_download_fails_clearly_when_cli_is_missing(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("PATH", "")
+
+    try:
+        download_competition_data("playground-series-s6e6", tmp_path / "data")
+    except TmlError as exc:
+        assert "Kaggle CLI is not installed" in str(exc)
+    else:
+        raise AssertionError("Expected TmlError when Kaggle CLI is missing")

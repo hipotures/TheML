@@ -2,10 +2,30 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from tml.core.paths import ProjectRef, context_path, find_project
 from tml.utils.atomic import atomic_write_text
-from tml.utils.yaml_io import write_yaml
+from tml.utils.yaml_io import read_yaml, write_yaml
+
+
+ROOT_CONFIG_DEFAULTS: dict[str, Any] = {
+    "schema_version": 1,
+    "defaults": {
+        "project_kind": "kaggle",
+        "root_mode": "autogluon",
+        "prompt_output": "tmp",
+        "probe_output": "prompt-lab",
+    },
+    "active_project": None,
+    "active_run": None,
+    "models": {
+        "hypothesis": "mock",
+        "code": "mock",
+        "review": "mock",
+        "bugfix": "mock",
+    },
+}
 
 
 GITIGNORE_TEXT = """# Python
@@ -52,8 +72,25 @@ def ensure_gitignore(root: Path) -> None:
         atomic_write_text(path, text.rstrip() + "\n" + "\n".join(missing) + "\n")
 
 
-def init_project(root: Path, slug: str, kind: str) -> ProjectRef:
+def ensure_root_config(root: Path) -> dict[str, Any]:
+    path = context_path(root)
+    existing = read_yaml(path)
+    merged = _merge_root_config(existing)
+    if existing != merged:
+        write_yaml(path, merged)
+    return merged
+
+
+def default_project_kind(root: Path) -> str:
+    config = ensure_root_config(root)
+    defaults = config.get("defaults") if isinstance(config.get("defaults"), dict) else {}
+    return str(defaults.get("project_kind") or "kaggle")
+
+
+def init_project(root: Path, slug: str, kind: str | None = None, *, download: bool = False) -> ProjectRef:
     ensure_gitignore(root)
+    root_config = ensure_root_config(root)
+    kind = kind or default_project_kind(root)
     ref = ProjectRef(root=root, kind=kind, slug=slug)
     project_dir = ref.path
     for rel in (
@@ -69,36 +106,36 @@ def init_project(root: Path, slug: str, kind: str) -> ProjectRef:
         (project_dir / rel).mkdir(parents=True, exist_ok=True)
     if not (project_dir / "task.md").exists():
         atomic_write_text(project_dir / "task.md", f"# {slug}\n\nDescribe the ML task here.\n")
+    if download:
+        from tml.core.kaggle import download_competition_data
+
+        download_competition_data(slug, project_dir / "data")
     if not (project_dir / "project.yaml").exists():
+        models = root_config.get("models") if isinstance(root_config.get("models"), dict) else {}
+        target = _infer_target(project_dir)
         write_yaml(
             project_dir / "project.yaml",
             {
                 "schema_version": 1,
                 "project_id": slug,
                 "kind": kind,
+                "kaggle_slug": slug if kind == "kaggle" else None,
                 "task_file": "task.md",
                 "data_dir": "data",
-                "target": {
-                    "id_column": "id",
-                    "target_column": "target",
-                    "problem_type": "unknown",
-                    "metric": "balanced_accuracy",
-                    "maximize": True,
-                    "submission_kind": "labels",
-                },
+                "target": target,
                 "root": {
                     "target_count": 20,
-                    "active_mode": "autogluon",
+                    "active_mode": str(root_config.get("defaults", {}).get("root_mode") or "autogluon"),
                     "active_profiles": {
                         "autogluon": "autogluon-root-start-v1",
                         "legacy": "legacy-root-start-v1",
                     },
                 },
                 "models": {
-                    "hypothesis": "mock",
-                    "code": "mock",
-                    "review": "mock",
-                    "bugfix": "mock",
+                    "hypothesis": str(models.get("hypothesis") or "mock"),
+                    "code": str(models.get("code") or "mock"),
+                    "review": str(models.get("review") or "mock"),
+                    "bugfix": str(models.get("bugfix") or "mock"),
                 },
                 "created_at": datetime.now().isoformat(timespec="seconds"),
             },
@@ -108,12 +145,56 @@ def init_project(root: Path, slug: str, kind: str) -> ProjectRef:
 
 
 def use_project(root: Path, slug: str) -> ProjectRef:
+    config = ensure_root_config(root)
     ref = find_project(root, slug)
+    config["active_project"] = {"kind": ref.kind, "slug": ref.slug}
+    config.setdefault("active_run", None)
     write_yaml(
         context_path(root),
-        {"schema_version": 1, "active_project": {"kind": ref.kind, "slug": ref.slug}},
+        config,
     )
     return ref
+
+
+def _merge_root_config(existing: dict[str, Any]) -> dict[str, Any]:
+    merged = {
+        "schema_version": existing.get("schema_version", ROOT_CONFIG_DEFAULTS["schema_version"]),
+        "defaults": {
+            **ROOT_CONFIG_DEFAULTS["defaults"],
+            **(existing.get("defaults") if isinstance(existing.get("defaults"), dict) else {}),
+        },
+        "active_project": existing.get("active_project") if "active_project" in existing else None,
+        "active_run": existing.get("active_run") if "active_run" in existing else None,
+        "models": {
+            **ROOT_CONFIG_DEFAULTS["models"],
+            **(existing.get("models") if isinstance(existing.get("models"), dict) else {}),
+        },
+    }
+    return merged
+
+
+def _infer_target(project_dir: Path) -> dict[str, Any]:
+    target = {
+        "id_column": "id",
+        "target_column": None,
+        "problem_type": None,
+        "metric": None,
+        "maximize": True,
+        "submission_kind": None,
+    }
+    sample = project_dir / "data" / "sample_submission.csv"
+    if sample.exists():
+        import csv
+
+        with sample.open(newline="", encoding="utf-8") as handle:
+            reader = csv.reader(handle)
+            header = next(reader, [])
+        if header:
+            target["id_column"] = header[0]
+        if len(header) >= 2:
+            target["target_column"] = header[1]
+            target["submission_kind"] = "labels"
+    return target
 
 
 def _write_default_profiles(project_dir: Path) -> None:

@@ -39,7 +39,7 @@ def active_project_ref(root: Path | None = None) -> ProjectRef:
         raise ContextError("No active project. Example: tml project use demo_project")
     return ProjectRef(
         root=root,
-        kind=str(active.get("kind") or "local"),
+        kind=str(active.get("kind") or "kaggle"),
         slug=str(active.get("slug") or ""),
     )
 
@@ -47,7 +47,10 @@ def active_project_ref(root: Path | None = None) -> ProjectRef:
 def find_project(root: Path, slug: str) -> ProjectRef:
     candidates = sorted((root / "projects").glob(f"*/{slug}"))
     if not candidates:
-        raise ContextError(f"Project {slug!r} not found. Example: tml init project {slug} kind=local")
+        raise ContextError(f"Project {slug!r} not found. Example: tml init project {slug}")
+    kaggle = [path for path in candidates if path.parent.name == "kaggle"]
+    if len(kaggle) == 1:
+        return ProjectRef(root=root, kind="kaggle", slug=slug)
     if len(candidates) > 1:
         kinds = ", ".join(path.parent.name for path in candidates)
         raise ContextError(f"Project {slug!r} is ambiguous across kinds: {kinds}")

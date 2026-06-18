@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import yaml
 from typer.testing import CliRunner
 
 from tml.cli.main import app
@@ -15,38 +16,94 @@ def invoke(root: Path, *args: str):
     return runner.invoke(app, list(args), env={"TML_CWD": str(root)})
 
 
-def test_init_project_use_and_status_create_context_first_project(tmp_path: Path):
-    result = invoke(tmp_path, "init", "project", "demo_project", "kind=local")
+def test_init_project_defaults_to_kaggle_and_writes_root_config(tmp_path: Path):
+    result = invoke(tmp_path, "init", "project", "playground-series-s6e6")
     assert result.exit_code == 0, result.output
 
-    project_dir = tmp_path / "projects" / "local" / "demo_project"
+    project_dir = tmp_path / "projects" / "kaggle" / "playground-series-s6e6"
+    assert not (tmp_path / "projects" / "local").exists()
     assert (tmp_path / ".gitignore").exists()
+    assert (tmp_path / "tml.yaml").exists()
+    root_config = (tmp_path / "tml.yaml").read_text(encoding="utf-8")
+    assert "project_kind: kaggle" in root_config
+    assert "active_project: null" in root_config
     assert (project_dir / "project.yaml").exists()
+    project_config = (project_dir / "project.yaml").read_text(encoding="utf-8")
+    assert "kind: kaggle" in project_config
+    assert "kaggle_slug: playground-series-s6e6" in project_config
+    assert "target_column: null" in project_config
+    assert "metric: null" in project_config
     assert (project_dir / "task.md").exists()
     assert (project_dir / "profiles" / "root" / "autogluon-root-start-v1.yaml").exists()
     assert not (project_dir / "code").exists()
 
-    result = invoke(tmp_path, "project", "use", "demo_project")
+    result = invoke(tmp_path, "project", "use", "playground-series-s6e6")
     assert result.exit_code == 0, result.output
-    assert "demo_project" in (tmp_path / "tml.yaml").read_text(encoding="utf-8")
+    used_config = (tmp_path / "tml.yaml").read_text(encoding="utf-8")
+    assert "kind: kaggle" in used_config
+    assert "slug: playground-series-s6e6" in used_config
 
     result = invoke(tmp_path, "root", "status")
     assert result.exit_code == 0, result.output
-    assert "Active project: demo_project" in result.output
+    assert "Active project: playground-series-s6e6" in result.output
     assert "Hypotheses: 0" in result.output
 
 
+def test_init_project_reads_root_tml_yaml_defaults(tmp_path: Path):
+    (tmp_path / "tml.yaml").write_text(
+        """
+schema_version: 1
+defaults:
+  project_kind: kaggle
+  root_mode: legacy
+  prompt_output: tmp
+  probe_output: prompt-lab
+active_project: null
+active_run: null
+models:
+  hypothesis: mock
+  code: codex-test
+  review: mock
+  bugfix: mock
+""",
+        encoding="utf-8",
+    )
+
+    result = invoke(tmp_path, "init", "project", "playground-series-s6e6")
+    assert result.exit_code == 0, result.output
+
+    project_yaml = tmp_path / "projects" / "kaggle" / "playground-series-s6e6" / "project.yaml"
+    project = yaml.safe_load(project_yaml.read_text(encoding="utf-8"))
+    assert project["root"]["active_mode"] == "legacy"
+    assert project["models"]["code"] == "codex-test"
+
+
+def test_init_project_infers_submission_columns_when_data_exists(tmp_path: Path):
+    data_dir = tmp_path / "projects" / "kaggle" / "playground-series-s6e6" / "data"
+    data_dir.mkdir(parents=True)
+    (data_dir / "sample_submission.csv").write_text("id,class\n1,A\n", encoding="utf-8")
+
+    result = invoke(tmp_path, "init", "project", "playground-series-s6e6")
+    assert result.exit_code == 0, result.output
+
+    project_yaml = tmp_path / "projects" / "kaggle" / "playground-series-s6e6" / "project.yaml"
+    project = yaml.safe_load(project_yaml.read_text(encoding="utf-8"))
+    assert project["target"]["id_column"] == "id"
+    assert project["target"]["target_column"] == "class"
+    assert project["target"]["submission_kind"] == "labels"
+
+
 def test_root_mock_workflow_reindexes_and_records_node_artifacts(tmp_path: Path):
-    assert invoke(tmp_path, "init", "project", "demo_project", "kind=local").exit_code == 0
-    assert invoke(tmp_path, "project", "use", "demo_project").exit_code == 0
+    assert invoke(tmp_path, "init", "project", "playground-series-s6e6").exit_code == 0
+    assert invoke(tmp_path, "project", "use", "playground-series-s6e6").exit_code == 0
 
     result = invoke(tmp_path, "root", "generate", "count=1")
     assert result.exit_code == 0, result.output
     hypothesis = (
         tmp_path
         / "projects"
-        / "local"
-        / "demo_project"
+        / "kaggle"
+        / "playground-series-s6e6"
         / "hypotheses"
         / "000001"
         / "hypothesis.yaml"
@@ -60,7 +117,7 @@ def test_root_mock_workflow_reindexes_and_records_node_artifacts(tmp_path: Path)
 
     result = invoke(tmp_path, "root", "run", "mode=legacy")
     assert result.exit_code == 0, result.output
-    project_dir = tmp_path / "projects" / "local" / "demo_project"
+    project_dir = tmp_path / "projects" / "kaggle" / "playground-series-s6e6"
     node_dirs = list((project_dir / "runs").glob("*/artifacts/*"))
     assert len(node_dirs) == 1
     node_dir = node_dirs[0]
@@ -84,10 +141,15 @@ def test_root_mock_workflow_reindexes_and_records_node_artifacts(tmp_path: Path)
     assert "Hypotheses: 1" in result.output
     assert "Evaluated: 1" in result.output
 
+    db_path.unlink()
+    result = invoke(tmp_path, "reindex")
+    assert result.exit_code == 0, result.output
+    assert db_path.exists()
+
 
 def test_prompt_render_probe_and_diff_do_not_create_nodes(tmp_path: Path):
-    assert invoke(tmp_path, "init", "project", "demo_project", "kind=local").exit_code == 0
-    assert invoke(tmp_path, "project", "use", "demo_project").exit_code == 0
+    assert invoke(tmp_path, "init", "project", "playground-series-s6e6").exit_code == 0
+    assert invoke(tmp_path, "project", "use", "playground-series-s6e6").exit_code == 0
     assert invoke(tmp_path, "root", "generate", "count=1").exit_code == 0
     assert invoke(tmp_path, "root", "materialize", "mode=autogluon").exit_code == 0
 
@@ -108,7 +170,7 @@ def test_prompt_render_probe_and_diff_do_not_create_nodes(tmp_path: Path):
     assert (probe_path / "request.md").exists()
     assert (probe_path / "response.json").exists()
 
-    assert not list((tmp_path / "projects" / "local" / "demo_project" / "runs").glob("*"))
+    assert not list((tmp_path / "projects" / "kaggle" / "playground-series-s6e6" / "runs").glob("*"))
 
     assert invoke(tmp_path, "root", "run").exit_code == 0
     diff = invoke(tmp_path, "prompt", "diff", "1", "code")
@@ -117,12 +179,12 @@ def test_prompt_render_probe_and_diff_do_not_create_nodes(tmp_path: Path):
 
 
 def test_root_ensure_is_idempotent_for_failed_autogluon_attempt(tmp_path: Path):
-    assert invoke(tmp_path, "init", "project", "demo_project", "kind=local").exit_code == 0
-    assert invoke(tmp_path, "project", "use", "demo_project").exit_code == 0
+    assert invoke(tmp_path, "init", "project", "playground-series-s6e6").exit_code == 0
+    assert invoke(tmp_path, "project", "use", "playground-series-s6e6").exit_code == 0
 
     first = invoke(tmp_path, "root", "ensure", "count=1")
     assert first.exit_code == 0, first.output
-    project_dir = tmp_path / "projects" / "local" / "demo_project"
+    project_dir = tmp_path / "projects" / "kaggle" / "playground-series-s6e6"
     node_dirs = list((project_dir / "runs").glob("*/artifacts/*"))
     assert len(node_dirs) == 1
     assert (node_dirs[0] / "failed.yaml").exists()

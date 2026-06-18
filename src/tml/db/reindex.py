@@ -28,7 +28,7 @@ def reindex_project(project_dir: Path, db_path: Path) -> dict[str, int]:
             conn.execute(f"DELETE FROM {table}")
         conn.execute(
             "INSERT INTO projects(project_id, kind, path) VALUES (?, ?, ?)",
-            (config["project_id"], config.get("kind", "local"), str(project_dir)),
+            (config["project_id"], config.get("kind", "kaggle"), str(project_dir)),
         )
         _index_profiles(conn, project_dir)
         _index_hypotheses(conn, project_dir)

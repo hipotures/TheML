@@ -7,8 +7,9 @@ from rich.console import Console
 
 from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.errors import TmlError
+from tml.core.kaggle import download_competition_data
 from tml.core.paths import active_project_ref, workspace_root
-from tml.core.project import init_project, use_project
+from tml.core.project import default_project_kind, init_project, use_project
 from tml.db.reindex import reindex_project
 from tml.hypotheses.generate import generate_missing_root_hypotheses
 from tml.hypotheses.materialize import materialize_missing
@@ -26,11 +27,13 @@ init_app = typer.Typer(no_args_is_help=True)
 project_app = typer.Typer(no_args_is_help=True)
 root_app = typer.Typer(no_args_is_help=True)
 prompt_app = typer.Typer(no_args_is_help=True)
+kaggle_app = typer.Typer(no_args_is_help=True)
 
 app.add_typer(init_app, name="init")
 app.add_typer(project_app, name="project")
 app.add_typer(root_app, name="root")
 app.add_typer(prompt_app, name="prompt")
+app.add_typer(kaggle_app, name="kaggle")
 
 EXTRA = {"allow_extra_args": True, "ignore_unknown_options": True}
 
@@ -39,7 +42,9 @@ EXTRA = {"allow_extra_args": True, "ignore_unknown_options": True}
 def init_project_cmd(ctx: typer.Context, slug: str) -> None:
     try:
         overrides = _overrides(ctx.args)
-        ref = init_project(workspace_root(), slug, str(overrides.get("kind", "local")))
+        root = workspace_root()
+        kind = str(overrides.get("kind") or default_project_kind(root) or "kaggle")
+        ref = init_project(root, slug, kind, download=_bool(overrides.get("download", False)))
         console.print(f"Initialized project: {ref.path}")
     except Exception as exc:
         _abort(exc)
@@ -143,6 +148,18 @@ def reindex_cmd(scope: str | None = None, run_id: str | None = None) -> None:
             f"Reindexed {counts['hypotheses']} hypotheses, "
             f"{counts['materializations']} materializations, {counts['nodes']} nodes"
         )
+    except Exception as exc:
+        _abort(exc)
+
+
+@kaggle_app.command("download")
+def kaggle_download_cmd() -> None:
+    try:
+        ref = active_project_ref()
+        config = load_project_config(ref.path)
+        slug = str(config.get("kaggle_slug") or ref.slug)
+        download_competition_data(slug, ref.path / str(config.get("data_dir") or "data"))
+        console.print(f"Downloaded Kaggle data for {slug}")
     except Exception as exc:
         _abort(exc)
 
