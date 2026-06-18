@@ -1,0 +1,11 @@
+schema_version: 1
+profile_id: ag-medium-10m-v1
+source_profile: theml.default
+mode: autogluon
+presets: medium_quality
+time_limit: 600
+included_model_types:
+- XGB
+- GBM
+- CAT
+use_gpu: false

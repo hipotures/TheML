@@ -1,0 +1,15 @@
+schema_version: 1
+profile_id: ag-fast-boost-v1
+source_profile: aideml.fast_boost
+mode: autogluon
+included_model_types:
+- XGB
+- GBM
+presets: medium_quality
+time_limit: 600
+use_gpu: false
+validation_strategy: holdout
+fit_args:
+  save_space: true
+  fit_weighted_ensemble: false
+  auto_stack: false

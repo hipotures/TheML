@@ -1,0 +1,13 @@
+schema_version: 1
+profile_id: ag-best-boost-1h-v1
+source_profile: aideml.best_boost_1h
+mode: autogluon
+included_model_types:
+- XGB
+- GBM
+- CAT
+presets: best
+time_limit: 3600
+use_gpu: false
+fit_args:
+  save_space: true

@@ -1,0 +1,17 @@
+schema_version: 1
+profile_id: ag-s6e6-boost-ens-v1
+source_profile: aideml.s6e6_boost_ens
+mode: autogluon
+included_model_types:
+- XGB
+- GBM
+- CAT
+presets: medium_quality
+time_limit: 600
+use_gpu: false
+validation_strategy: holdout
+class_balance: balanced
+fit_args:
+  save_space: true
+  fit_weighted_ensemble: true
+  auto_stack: false

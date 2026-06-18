@@ -1,0 +1,5 @@
+schema_version: 1
+profile_id: legacy-root-start-v1
+mode: legacy
+timeout_seconds: 900
+seed: 1

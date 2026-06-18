@@ -1,0 +1,24 @@
+schema_version: 1
+profile_id: ag-xgb-medium-gpu-balanced-10m-v1
+source_profile: aideml.xgb_medium_gpu_balanced_10m
+mode: autogluon
+included_model_types:
+- XGB
+presets: medium_quality
+time_limit: 600
+preprocess_timeout: 180
+validation_strategy: holdout
+class_balance: balanced
+use_gpu: true
+hyperparameters:
+  XGB:
+  - device: cuda
+    tree_method: hist
+    ag_args:
+      priority: 999
+    ag_args_fit:
+      num_gpus: 1
+fit_args:
+  save_space: true
+  fit_weighted_ensemble: false
+  auto_stack: false

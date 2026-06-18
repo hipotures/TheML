@@ -13,6 +13,7 @@ from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.errors import TmlError
 from tml.core.kaggle import download_competition_data
 from tml.core.paths import active_project_ref, workspace_root
+from tml.core.profiles import profile_hash
 from tml.core.project import default_download_data, default_project_kind, init_project, use_project
 from tml.db.reindex import reindex_project
 from tml.hypotheses.generate import generate_missing_root_hypotheses
@@ -84,13 +85,12 @@ def root_status_cmd(ctx: typer.Context) -> None:
         counts = filesystem_counts(ref.path)
         mode = active_mode(config)
         profile_id = active_profile_id(config, mode)
-        profile_path = ref.path / "profiles" / "root" / f"{profile_id}.yaml"
-        profile_hash = sha256_file(profile_path) if profile_path.exists() else "missing"
+        active_hash = profile_hash(ref.path, mode, profile_id)
         best = _best_score(ref.path)
         console.print(f"Active project: {ref.slug}")
         console.print(f"Target ROOT count: {config.get('root', {}).get('target_count', 20)}")
         console.print(f"Active mode: {mode}")
-        console.print(f"Active profile: {profile_id} ({profile_hash})")
+        console.print(f"Active profile: {profile_id} ({active_hash})")
         console.print(f"Hypotheses: {counts['hypotheses']}")
         console.print(f"Materialized: {counts['materialized']}")
         console.print(f"Evaluated: {counts['evaluated']}")
