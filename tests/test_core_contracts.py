@@ -9,7 +9,7 @@ from tml.core.ids import node_id, run_id
 from tml.core.kaggle import download_competition_data
 from tml.core.errors import TmlError
 from tml.db.reindex import classify_node
-from tml.execution.autogluon_wrapper import run_autogluon_materialization
+from tml.execution.autogluon_wrapper import _fit_kwargs_from_profile, run_autogluon_materialization
 
 
 def test_run_and_node_ids_are_timestamp_random_and_step_based():
@@ -55,6 +55,28 @@ def test_autogluon_wrapper_fails_clearly_when_required_data_is_missing(tmp_path:
     assert result.status == "failed"
     assert result.returncode == 2
     assert "Missing AutoGluon input files" in str(result.error)
+
+
+def test_autogluon_profile_is_mapped_to_fit_kwargs():
+    fit_kwargs = _fit_kwargs_from_profile(
+        {
+            "time_limit": 600,
+            "presets": "medium_quality",
+            "included_model_types": ["XGB", "GBM", "CAT"],
+            "hyperparameters": {"XGB": [{"device": "cuda"}]},
+            "validation_strategy": "holdout",
+            "validation_fraction": 0.2,
+            "fit_args": {"save_space": True, "fit_weighted_ensemble": False},
+        }
+    )
+
+    assert fit_kwargs["time_limit"] == 600
+    assert fit_kwargs["presets"] == "medium_quality"
+    assert fit_kwargs["included_model_types"] == ["XGB", "GBM", "CAT"]
+    assert fit_kwargs["hyperparameters"] == {"XGB": [{"device": "cuda"}]}
+    assert fit_kwargs["holdout_frac"] == 0.2
+    assert fit_kwargs["save_space"] is True
+    assert fit_kwargs["fit_weighted_ensemble"] is False
 
 
 def test_kaggle_download_fails_clearly_when_cli_is_missing(tmp_path: Path, monkeypatch):

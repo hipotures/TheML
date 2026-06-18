@@ -120,10 +120,7 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
         eval_metric=metric,
         path=str(work_dir / "tml-autogluon-workdir" / "AutoGluonModels"),
     )
-    fit_kwargs = {
-        "time_limit": int(profile.get("time_limit", 60)),
-        "presets": profile.get("presets", "medium_quality"),
-    }
+    fit_kwargs = _fit_kwargs_from_profile(profile)
     predictor.fit(train_out, **fit_kwargs)
 
     predictions = predictor.predict(test_out)
@@ -147,6 +144,23 @@ def _load_profile(project_dir: Path, profile_id: str) -> dict[str, object]:
     from tml.utils.yaml_io import read_yaml
 
     return read_yaml(project_dir / "profiles" / "root" / f"{profile_id}.yaml")
+
+
+def _fit_kwargs_from_profile(profile: dict[str, object]) -> dict[str, object]:
+    fit_kwargs: dict[str, object] = {
+        "time_limit": int(profile.get("time_limit", 60)),
+        "presets": profile.get("presets", "medium_quality"),
+    }
+    for key in ("included_model_types", "hyperparameters"):
+        value = profile.get(key)
+        if value is not None:
+            fit_kwargs[key] = value
+    if profile.get("validation_strategy") == "holdout" and profile.get("validation_fraction") is not None:
+        fit_kwargs["holdout_frac"] = float(profile["validation_fraction"])
+    fit_args = profile.get("fit_args")
+    if isinstance(fit_args, dict):
+        fit_kwargs.update(fit_args)
+    return fit_kwargs
 
 
 def _project_path(project_dir: Path, path: Path) -> str:

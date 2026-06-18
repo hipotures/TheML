@@ -30,6 +30,304 @@ ROOT_CONFIG_DEFAULTS: dict[str, Any] = {
 }
 
 
+DEFAULT_AUTOGLUON_PROFILE_ID = "ag-medium-10m-v1"
+LEGACY_PROFILE_ID = "legacy-root-start-v1"
+
+
+AUTOGLUON_PROFILES: dict[str, dict[str, Any]] = {
+    DEFAULT_AUTOGLUON_PROFILE_ID: {
+        "schema_version": 1,
+        "profile_id": DEFAULT_AUTOGLUON_PROFILE_ID,
+        "source_profile": "theml.default",
+        "mode": "autogluon",
+        "presets": "medium_quality",
+        "time_limit": 600,
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "use_gpu": False,
+    },
+    "ag-fast-boost-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-fast-boost-v1",
+        "source_profile": "aideml.fast_boost",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM"],
+        "presets": "medium_quality",
+        "time_limit": 600,
+        "use_gpu": False,
+        "validation_strategy": "holdout",
+        "fit_args": {"save_space": True, "fit_weighted_ensemble": False, "auto_stack": False},
+    },
+    "ag-full-boost-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-full-boost-v1",
+        "source_profile": "aideml.full_boost",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "presets": "medium_quality",
+        "time_limit": 600,
+        "use_gpu": False,
+        "validation_strategy": "holdout",
+        "fit_args": {"save_space": True, "fit_weighted_ensemble": False, "auto_stack": False},
+    },
+    "ag-s6e6-boost-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-s6e6-boost-v1",
+        "source_profile": "aideml.s6e6_boost",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "presets": "medium_quality",
+        "time_limit": 600,
+        "use_gpu": False,
+        "validation_strategy": "holdout",
+        "fit_args": {"save_space": True, "fit_weighted_ensemble": False, "auto_stack": False},
+    },
+    "ag-s6e6-boost-ens-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-s6e6-boost-ens-v1",
+        "source_profile": "aideml.s6e6_boost_ens",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "presets": "medium_quality",
+        "time_limit": 600,
+        "use_gpu": False,
+        "validation_strategy": "holdout",
+        "class_balance": "balanced",
+        "fit_args": {"save_space": True, "fit_weighted_ensemble": True, "auto_stack": False},
+    },
+    "ag-full-boost-gpu-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-full-boost-gpu-v1",
+        "source_profile": "aideml.full_boost_gpu",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "presets": "medium_quality",
+        "time_limit": 600,
+        "use_gpu": True,
+        "validation_strategy": "holdout",
+        "hyperparameters": {
+            "XGB": [{"device": "cuda", "tree_method": "hist", "ag_args": {"priority": 999}, "ag_args_fit": {"num_gpus": 1}}],
+            "GBM": [{"device": "cuda", "ag_args_fit": {"num_gpus": 1}}],
+            "CAT": [{"task_type": "GPU", "devices": "0", "gpu_ram_part": 0.8, "ag_args_fit": {"num_gpus": 1}}],
+        },
+        "fit_args": {"save_space": True, "fit_weighted_ensemble": False, "auto_stack": False},
+    },
+    "ag-s6e6-boost-gpu-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-s6e6-boost-gpu-v1",
+        "source_profile": "aideml.s6e6_boost_gpu",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "presets": "medium_quality",
+        "time_limit": 600,
+        "use_gpu": True,
+        "validation_strategy": "holdout",
+        "hyperparameters": {
+            "XGB": [{"device": "cuda", "tree_method": "hist", "ag_args": {"priority": 999}, "ag_args_fit": {"num_gpus": 1}}],
+            "GBM": [{"device": "cuda", "ag_args_fit": {"num_gpus": 1}}],
+            "CAT": [{"task_type": "GPU", "devices": "0", "gpu_ram_part": 0.8, "ag_args_fit": {"num_gpus": 1}}],
+        },
+        "fit_args": {"save_space": True, "fit_weighted_ensemble": False, "auto_stack": False},
+    },
+    "ag-s6e6-boost-gpu-ens-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-s6e6-boost-gpu-ens-v1",
+        "source_profile": "aideml.s6e6_boost_gpu_ens",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "presets": "medium_quality",
+        "time_limit": 600,
+        "use_gpu": True,
+        "validation_strategy": "holdout",
+        "class_balance": "balanced",
+        "hyperparameters": {
+            "XGB": [{"device": "cuda", "tree_method": "hist", "ag_args": {"priority": 999}, "ag_args_fit": {"num_gpus": 1}}],
+            "GBM": [{"device": "cuda", "ag_args_fit": {"num_gpus": 1}}],
+            "CAT": [{"task_type": "GPU", "devices": "0", "gpu_ram_part": 0.8, "ag_args_fit": {"num_gpus": 1}}],
+        },
+        "fit_args": {"save_space": True, "fit_weighted_ensemble": True, "auto_stack": False},
+    },
+    "ag-s6e6-boost-gpu-ens-cv3-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-s6e6-boost-gpu-ens-cv3-v1",
+        "source_profile": "aideml.s6e6_boost_gpu_ens_cv3",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "presets": "medium_quality",
+        "time_limit": 900,
+        "use_gpu": True,
+        "validation_strategy": "autogluon",
+        "class_balance": "balanced",
+        "hyperparameters": {
+            "XGB": [{"device": "cuda", "tree_method": "hist", "ag_args": {"priority": 999}, "ag_args_fit": {"num_gpus": 1}}],
+            "GBM": [{"device": "cuda", "ag_args_fit": {"num_gpus": 1}}],
+            "CAT": [{"task_type": "GPU", "devices": "0", "gpu_ram_part": 0.8, "ag_args_fit": {"num_gpus": 1}}],
+        },
+        "fit_args": {
+            "save_space": True,
+            "fit_weighted_ensemble": True,
+            "auto_stack": False,
+            "num_bag_folds": 3,
+            "num_bag_sets": 1,
+            "num_stack_levels": 0,
+        },
+    },
+    "ag-full-boost-gpu-ens-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-full-boost-gpu-ens-v1",
+        "source_profile": "aideml.full_boost_gpu_ens",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "presets": "medium_quality",
+        "time_limit": 600,
+        "use_gpu": True,
+        "validation_strategy": "holdout",
+        "hyperparameters": {
+            "XGB": [{"device": "cuda", "tree_method": "hist", "ag_args": {"priority": 999}, "ag_args_fit": {"num_gpus": 1}}],
+            "GBM": [{"device": "cuda", "ag_args_fit": {"num_gpus": 1}}],
+            "CAT": [{"task_type": "GPU", "devices": "0", "gpu_ram_part": 0.8, "ag_args_fit": {"num_gpus": 1}}],
+        },
+        "fit_args": {"save_space": True, "fit_weighted_ensemble": True, "auto_stack": False},
+    },
+    "ag-best-boost-gpu-30m-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-best-boost-gpu-30m-v1",
+        "source_profile": "aideml.best_boost_gpu_30m",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "presets": "best",
+        "time_limit": 1800,
+        "use_gpu": True,
+        "hyperparameters": {
+            "XGB": [{"device": "cuda", "tree_method": "hist", "ag_args": {"priority": 999}, "ag_args_fit": {"num_gpus": 1}}],
+            "GBM": [{"device": "cuda", "ag_args_fit": {"num_gpus": 1}}],
+            "CAT": [{"task_type": "GPU", "devices": "0", "gpu_ram_part": 0.8, "ag_args_fit": {"num_gpus": 1}}],
+        },
+        "fit_args": {"save_space": True},
+    },
+    "ag-best-boost-gpu-1h-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-best-boost-gpu-1h-v1",
+        "source_profile": "aideml.best_boost_gpu_1h",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "presets": "best",
+        "time_limit": 3600,
+        "preprocess_timeout": 180,
+        "validation_fraction": 0.2,
+        "validation_strategy": "autogluon",
+        "seed": 42,
+        "class_balance": "balanced",
+        "use_gpu": True,
+        "hyperparameters": {
+            "XGB": [{"device": "cuda", "tree_method": "hist", "ag_args": {"priority": 999}, "ag_args_fit": {"num_gpus": 1}}],
+            "GBM": [{"device": "cuda", "ag_args_fit": {"num_gpus": 1}}],
+            "CAT": [{"task_type": "GPU", "devices": "0", "gpu_ram_part": 0.8, "ag_args_fit": {"num_gpus": 1}}],
+        },
+        "fit_args": {},
+    },
+    "ag-best-xgb-gpu-1h-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-best-xgb-gpu-1h-v1",
+        "source_profile": "aideml.best_xgb_gpu_1h",
+        "mode": "autogluon",
+        "included_model_types": ["XGB"],
+        "presets": "best",
+        "time_limit": 3600,
+        "preprocess_timeout": 180,
+        "validation_fraction": 0.2,
+        "validation_strategy": "autogluon",
+        "seed": 42,
+        "class_balance": "balanced",
+        "use_gpu": True,
+        "hyperparameters": {
+            "XGB": [{"device": "cuda", "tree_method": "hist", "ag_args": {"priority": 999}, "ag_args_fit": {"num_gpus": 1}}],
+        },
+        "fit_args": {},
+    },
+    "ag-xgb-medium-gpu-balanced-10m-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-xgb-medium-gpu-balanced-10m-v1",
+        "source_profile": "aideml.xgb_medium_gpu_balanced_10m",
+        "mode": "autogluon",
+        "included_model_types": ["XGB"],
+        "presets": "medium_quality",
+        "time_limit": 600,
+        "preprocess_timeout": 180,
+        "validation_strategy": "holdout",
+        "class_balance": "balanced",
+        "use_gpu": True,
+        "hyperparameters": {
+            "XGB": [{"device": "cuda", "tree_method": "hist", "ag_args": {"priority": 999}, "ag_args_fit": {"num_gpus": 1}}],
+        },
+        "fit_args": {"save_space": True, "fit_weighted_ensemble": False, "auto_stack": False},
+    },
+    "ag-best-xgb-cpu-1h-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-best-xgb-cpu-1h-v1",
+        "source_profile": "aideml.best_xgb_cpu_1h",
+        "mode": "autogluon",
+        "included_model_types": ["XGB"],
+        "presets": "best",
+        "time_limit": 3600,
+        "preprocess_timeout": 180,
+        "validation_fraction": 0.2,
+        "validation_strategy": "autogluon",
+        "seed": 42,
+        "class_balance": "balanced",
+        "use_gpu": False,
+        "hyperparameters": {
+            "XGB": [{"device": "cpu", "tree_method": "hist", "ag_args": {"priority": 999}, "ag_args_fit": {"num_gpus": 0}}],
+        },
+        "fit_args": {},
+    },
+    "ag-best-boost-1h-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-best-boost-1h-v1",
+        "source_profile": "aideml.best_boost_1h",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "presets": "best",
+        "time_limit": 3600,
+        "use_gpu": False,
+        "fit_args": {"save_space": True},
+    },
+    "ag-best-boost-2h-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-best-boost-2h-v1",
+        "source_profile": "aideml.best_boost_2h",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "presets": "best",
+        "time_limit": 7200,
+        "use_gpu": False,
+    },
+    "ag-full-best-30m-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-full-best-30m-v1",
+        "source_profile": "aideml.full_best_30m",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "presets": "best_quality",
+        "time_limit": 1800,
+    },
+    "ag-full-best-30m-gpu-v1": {
+        "schema_version": 1,
+        "profile_id": "ag-full-best-30m-gpu-v1",
+        "source_profile": "aideml.full_best_30m_gpu",
+        "mode": "autogluon",
+        "included_model_types": ["XGB", "GBM", "CAT"],
+        "presets": "best_quality",
+        "time_limit": 1800,
+        "use_gpu": True,
+        "hyperparameters": {
+            "XGB": [{"device": "cuda", "tree_method": "hist", "ag_args": {"priority": 999}, "ag_args_fit": {"num_gpus": 1}}],
+            "GBM": [{"device": "cuda", "ag_args_fit": {"num_gpus": 1}}],
+            "CAT": [{"task_type": "GPU", "devices": "0", "gpu_ram_part": 0.8, "ag_args_fit": {"num_gpus": 1}}],
+        },
+    },
+}
+
+
 GITIGNORE_TEXT = """# Python
 __pycache__/
 *.py[cod]
@@ -144,8 +442,8 @@ def init_project(
                     "target_count": 20,
                     "active_mode": str(root_config.get("defaults", {}).get("root_mode") or "autogluon"),
                     "active_profiles": {
-                        "autogluon": "autogluon-root-start-v1",
-                        "legacy": "legacy-root-start-v1",
+                        "autogluon": DEFAULT_AUTOGLUON_PROFILE_ID,
+                        "legacy": LEGACY_PROFILE_ID,
                     },
                 },
                 "models": {
@@ -157,6 +455,8 @@ def init_project(
                 "created_at": datetime.now().isoformat(timespec="seconds"),
             },
         )
+    else:
+        _ensure_project_profile_defaults(project_dir / "project.yaml")
     _write_default_profiles(project_dir)
     return ref
 
@@ -230,18 +530,10 @@ def _data_file(project_dir: Path, name: str) -> Path:
 
 def _write_default_profiles(project_dir: Path) -> None:
     profiles = {
-        "autogluon-root-start-v1.yaml": {
+        **{f"{profile_id}.yaml": payload for profile_id, payload in AUTOGLUON_PROFILES.items()},
+        f"{LEGACY_PROFILE_ID}.yaml": {
             "schema_version": 1,
-            "profile_id": "autogluon-root-start-v1",
-            "mode": "autogluon",
-            "time_limit": 60,
-            "presets": "medium_quality",
-            "validation_fraction": 0.2,
-            "seed": 1,
-        },
-        "legacy-root-start-v1.yaml": {
-            "schema_version": 1,
-            "profile_id": "legacy-root-start-v1",
+            "profile_id": LEGACY_PROFILE_ID,
             "mode": "legacy",
             "timeout_seconds": 900,
             "seed": 1,
@@ -251,3 +543,20 @@ def _write_default_profiles(project_dir: Path) -> None:
         path = project_dir / "profiles" / "root" / filename
         if not path.exists():
             write_yaml(path, payload)
+
+
+def _ensure_project_profile_defaults(project_yaml: Path) -> None:
+    config = read_yaml(project_yaml)
+    root = config.setdefault("root", {})
+    if not isinstance(root, dict):
+        root = {}
+        config["root"] = root
+    active_profiles = root.setdefault("active_profiles", {})
+    if not isinstance(active_profiles, dict):
+        active_profiles = {}
+        root["active_profiles"] = active_profiles
+    if active_profiles.get("autogluon") in {None, "autogluon-root-start-v1", "ag-root-start-v1"}:
+        active_profiles["autogluon"] = DEFAULT_AUTOGLUON_PROFILE_ID
+    if active_profiles.get("legacy") in {None, "legacy-root-start-v1"}:
+        active_profiles["legacy"] = LEGACY_PROFILE_ID
+    write_yaml(project_yaml, config)

@@ -99,7 +99,7 @@ def test_init_project_defaults_to_kaggle_and_writes_root_config(tmp_path: Path):
     assert "target_column: null" in project_config
     assert "metric: null" in project_config
     assert (project_dir / "task.md").exists()
-    assert (project_dir / "profiles" / "root" / "autogluon-root-start-v1.yaml").exists()
+    assert (project_dir / "profiles" / "root" / "ag-medium-10m-v1.yaml").exists()
     assert not (project_dir / "code").exists()
 
     result = invoke(tmp_path, "project", "use", "playground-series-s6e6")
@@ -142,6 +142,56 @@ models:
     project = yaml.safe_load(project_yaml.read_text(encoding="utf-8"))
     assert project["root"]["active_mode"] == "legacy"
     assert project["models"]["code"] == "codex-test"
+
+
+def test_init_project_writes_autogluon_profiles_as_separate_files(tmp_path: Path):
+    (tmp_path / "tml.yaml").write_text(
+        """
+schema_version: 1
+defaults:
+  project_kind: kaggle
+  download_data: false
+active_project: null
+active_run: null
+models:
+  hypothesis: mock
+  code: mock
+  review: mock
+  bugfix: mock
+""",
+        encoding="utf-8",
+    )
+
+    result = invoke(tmp_path, "init", "project", "playground-series-s6e6")
+    assert result.exit_code == 0, result.output
+
+    project_dir = tmp_path / "projects" / "kaggle" / "playground-series-s6e6"
+    project = yaml.safe_load((project_dir / "project.yaml").read_text(encoding="utf-8"))
+    assert project["root"]["active_profiles"]["autogluon"] == "ag-medium-10m-v1"
+
+    profile_dir = project_dir / "profiles" / "root"
+    profile_files = {path.name for path in profile_dir.glob("*.yaml")}
+    assert "ag-medium-10m-v1.yaml" in profile_files
+    assert "ag-fast-boost-v1.yaml" in profile_files
+    assert "ag-s6e6-boost-gpu-ens-cv3-v1.yaml" in profile_files
+    assert "ag-full-best-30m-gpu-v1.yaml" in profile_files
+    assert "legacy-root-start-v1.yaml" in profile_files
+
+    default_profile = yaml.safe_load((profile_dir / "ag-medium-10m-v1.yaml").read_text(encoding="utf-8"))
+    assert default_profile["profile_id"] == "ag-medium-10m-v1"
+    assert default_profile["mode"] == "autogluon"
+    assert default_profile["presets"] == "medium_quality"
+    assert default_profile["time_limit"] == 600
+    assert default_profile["included_model_types"] == ["XGB", "GBM", "CAT"]
+    assert default_profile["use_gpu"] is False
+    assert "profiles" not in default_profile
+
+    gpu_cv_profile = yaml.safe_load(
+        (profile_dir / "ag-s6e6-boost-gpu-ens-cv3-v1.yaml").read_text(encoding="utf-8")
+    )
+    assert gpu_cv_profile["time_limit"] == 900
+    assert gpu_cv_profile["fit_args"]["num_bag_folds"] == 3
+    assert gpu_cv_profile["hyperparameters"]["XGB"][0]["device"] == "cuda"
 
 
 def test_init_project_infers_submission_columns_when_data_exists(tmp_path: Path):
