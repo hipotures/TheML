@@ -4,9 +4,23 @@ import json
 import re
 
 from .client import AiRequest, AiResponse
+from .invocation import ModelInvocation, ProviderResult
 
 
 class MockAiClient:
+    def invoke(self, invocation: ModelInvocation, spec: object) -> ProviderResult:
+        response = self.call(AiRequest(role=invocation.role, model=invocation.model, prompt=invocation.prompt))
+        return ProviderResult(
+            text=response.text,
+            metadata=response.metadata,
+            raw={
+                "provider": "mock",
+                "model": invocation.model,
+                "role": invocation.role,
+                "simulated": True,
+            },
+        )
+
     def call(self, request: AiRequest) -> AiResponse:
         if request.role == "hypothesis":
             payload = {

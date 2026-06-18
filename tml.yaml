@@ -36,4 +36,19 @@ providers:
     api_key_env: LLAMA_CPP_API_KEY
     base_url_env: LLAMA_CPP_BASE_URL
   codex:
-    kind: codex_cli
+    kind: codex_app_server
+    sandbox: read_only
+    summary: concise
+    isolated_home: true
+    home_dir: tmp/app-server
+    project_doc_max_bytes: 0
+    disable_features:
+      - apps
+      - browser_use
+      - computer_use
+      - multi_agent
+      - plugins
+      - shell_snapshot
+      - skill_mcp_dependency_install
+      - tool_suggest
+      - workspace_dependencies

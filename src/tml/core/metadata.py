@@ -4,14 +4,13 @@ import json
 import csv
 import gzip
 from collections.abc import Callable
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from tml.ai import AiRequest, client_for_model
+from tml.ai import ModelInvocation, run_model_invocation
+from tml.core.config import repo_root_for_project
 from tml.core.kaggle_pages import fetch_competition_pages
 from tml.prompts.renderer import render_template
-from tml.utils.atomic import atomic_write_json, atomic_write_text
 
 
 SKLEARN_TO_AUTOGLUON_METRIC = {
@@ -68,27 +67,22 @@ def detect_project_metadata(
     )
     out_dir = project_dir / "logs" / "project-metadata"
     out_dir.mkdir(parents=True, exist_ok=True)
-    atomic_write_text(out_dir / "request.md", rendered["rendered"])
-    atomic_write_json(
-        out_dir / "request.json",
-        {
-            "kind": "project-metadata",
-            "model": model,
-            "provider": model,
-            "messages": [{"role": "user", "content": rendered["rendered"]}],
-            "template_id": rendered["template_id"],
-            "template_path": rendered["template_path"],
-            "template_hash": rendered["template_hash"],
-            "rendered_prompt_hash": rendered["rendered_hash"],
-            "project_dir": ".",
-            "created_at": datetime.now().isoformat(timespec="seconds"),
-        },
+    response = run_model_invocation(
+        ModelInvocation(
+            role="metadata",
+            model=model,
+            prompt=rendered["rendered"],
+            template_id=rendered["template_id"],
+            template_path=rendered["template_path"],
+            template_hash=rendered["template_hash"],
+            rendered_prompt_hash=rendered["rendered_hash"],
+            cwd=repo_root_for_project(project_dir),
+            sandbox="read_only",
+            metadata={"kind": "project-metadata"},
+        ),
+        artifact_dir=out_dir,
+        providers=providers,
     )
-    response = client_for_model(model, providers).call(
-        AiRequest(role="metadata", model=model, prompt=rendered["rendered"])
-    )
-    atomic_write_text(out_dir / "response.md", response.text)
-    atomic_write_json(out_dir / "response.json", {"text": response.text, **response.metadata})
     payload = _parse_json_object(response.text)
     if not payload:
         return None

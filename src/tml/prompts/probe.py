@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from tml.ai import AiRequest, client_for_model
-from tml.core.config import active_mode, load_project_config
+from tml.ai import ModelInvocation, run_model_invocation
+from tml.core.config import active_mode, load_project_config, repo_providers_for_project, repo_root_for_project
 from tml.core.ids import timestamp_id
 from tml.core.metadata import render_project_metadata_prompt
 from tml.prompts.context import project_prompt_context
@@ -42,14 +42,25 @@ def probe_prompt(
     config = load_project_config(project_dir)
     role = _role_for_target(target, stage)
     models = config.get("models", {}) if isinstance(config.get("models"), dict) else {}
-    providers = _repo_providers(project_dir)
+    providers = repo_providers_for_project(project_dir)
     model = model_override or str(models.get(role) or models.get("hypothesis") or "mock")
     rendered = _render_for_target(project_dir, target=target, stage=stage)
-    atomic_write_text(out_dir / "request.md", rendered["rendered"])
-    atomic_write_json(out_dir / "request.json", _request_json(project_dir, rendered, "probe", model=model))
-    response = client_for_model(model, providers).call(AiRequest(role=role, model=model, prompt=rendered["rendered"]))
-    atomic_write_text(out_dir / "response.md", response.text)
-    atomic_write_json(out_dir / "response.json", {"text": response.text, **response.metadata})
+    run_model_invocation(
+        ModelInvocation(
+            role=role,
+            model=model,
+            prompt=rendered["rendered"],
+            template_id=rendered["template_id"],
+            template_path=rendered["template_path"],
+            template_hash=rendered["template_hash"],
+            rendered_prompt_hash=rendered["rendered_hash"],
+            cwd=repo_root_for_project(project_dir),
+            sandbox="read_only",
+            metadata={"kind": "probe"},
+        ),
+        artifact_dir=out_dir,
+        providers=providers,
+    )
     return out_dir
 
 
@@ -108,15 +119,3 @@ def _request_json(project_dir: Path, rendered: dict[str, str], kind: str, model:
 def _tmp_dir(project_dir: Path, tmp_root: Path | None) -> Path:
     root = tmp_root or Path("/tmp")
     return root / "tml" / project_dir.name / timestamp_id()
-
-
-def _repo_providers(project_dir: Path) -> dict[str, object]:
-    try:
-        from tml.core.paths import context_path
-        from tml.utils.yaml_io import read_yaml
-
-        root_config = read_yaml(context_path(project_dir.parents[2]))
-    except Exception:
-        return {}
-    providers = root_config.get("providers")
-    return providers if isinstance(providers, dict) else {}

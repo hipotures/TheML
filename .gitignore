@@ -6,6 +6,7 @@ __pycache__/
 .mypy_cache/
 .venv/
 .env
+tmp/app-server/
 
 # TheML local DB/cache
 tml.db
