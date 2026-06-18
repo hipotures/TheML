@@ -407,7 +407,7 @@ def test_prompt_render_probe_and_diff_do_not_create_nodes(tmp_path: Path):
     assert invoke(tmp_path, "root", "generate", "count=1").exit_code == 0
     assert invoke(tmp_path, "root", "materialize", "mode=autogluon").exit_code == 0
 
-    render = invoke(tmp_path, "prompt", "render", "tmp=true")
+    render = invoke(tmp_path, "prompt", "render", "root", "hypothesis")
     assert render.exit_code == 0, render.output
     rendered_path = Path(render.output.strip().splitlines()[-1])
     assert rendered_path.exists()
@@ -418,7 +418,7 @@ def test_prompt_render_probe_and_diff_do_not_create_nodes(tmp_path: Path):
     code_rendered_path = Path(code_render.output.strip().splitlines()[-1])
     assert "preprocess(df)" in code_rendered_path.read_text(encoding="utf-8")
 
-    probe = invoke(tmp_path, "prompt", "probe", "tmp=true")
+    probe = invoke(tmp_path, "prompt", "probe", "root", "hypothesis")
     assert probe.exit_code == 0, probe.output
     probe_path = Path(probe.output.strip().splitlines()[-1])
     assert (probe_path / "request.md").exists()

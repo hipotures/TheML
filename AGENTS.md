@@ -59,6 +59,8 @@ uv run <command>
 - If you modify files in a Git repository, do not finish the task with uncommitted changes unless the user explicitly says not to commit.
 - Any task that changes files must end in one of two states: changes committed, or an explicit explanation why they were not committed.
 - Before committing, run relevant verification and inspect `git status --short`.
+- Do not create or expand tests for every code change by default. Keep test work proportional to risk and user intent.
+- If the user asks for `git push`, first ask whether they want to check test coverage and add missing tests before pushing.
 - Commit only changes made for the current task.
 - If changes in `research_hypotheses/` are detected or created, you must commit those `research_hypotheses/` changes in a separate commit from code, script, or documentation changes outside `research_hypotheses/`.
 - Never commit unrelated user changes.

@@ -197,10 +197,14 @@ def prompt_render_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
         positional = _positional(ctx.args)
+        if not positional:
+            _print_prompt_choices()
+            return
+        target, stage = _prompt_target_stage(positional)
         path = render_prompt(
             ref.path,
-            target=positional[0] if len(positional) >= 1 else None,
-            stage=positional[1] if len(positional) >= 2 else None,
+            target=target,
+            stage=stage,
             tmp_root=_tmp_root(),
         )
         console.print(str(path))
@@ -214,13 +218,14 @@ def prompt_probe_cmd(ctx: typer.Context) -> None:
         ref = active_project_ref()
         overrides = _overrides(ctx.args)
         positional = _positional(ctx.args)
-        tmp = _bool(overrides.get("tmp", False))
+        tmp = _bool(overrides.get("tmp", True))
         model = str(overrides["model"]) if "model" in overrides else None
+        target, stage = _prompt_target_stage(positional)
         path = probe_prompt(
             ref.path,
             tmp=tmp,
-            target=positional[0] if len(positional) >= 1 else None,
-            stage=positional[1] if len(positional) >= 2 else None,
+            target=target,
+            stage=stage,
             model_override=model,
             tmp_root=_tmp_root(),
         )
@@ -258,6 +263,40 @@ def _overrides(args: list[str]) -> dict[str, object]:
 
 def _positional(args: list[str]) -> list[str]:
     return [arg for arg in args if "=" not in arg]
+
+
+def _prompt_target_stage(positional: list[str]) -> tuple[str | None, str | None]:
+    if positional == ["metadata"]:
+        return "project", "metadata"
+    if positional == ["root", "hypothesis"]:
+        return None, None
+    return (
+        positional[0] if len(positional) >= 1 else None,
+        positional[1] if len(positional) >= 2 else None,
+    )
+
+
+def _print_prompt_choices() -> None:
+    table = Table(title="Available prompts", box=box.SIMPLE_HEAVY)
+    table.add_column("Name", style="bold", no_wrap=True)
+    table.add_column("Render", no_wrap=True)
+    table.add_column("Probe", no_wrap=True)
+    table.add_row(
+        "metadata",
+        "uv run tml prompt render metadata",
+        "uv run tml prompt probe metadata",
+    )
+    table.add_row(
+        "root hypothesis",
+        "uv run tml prompt render root hypothesis",
+        "uv run tml prompt probe root hypothesis",
+    )
+    table.add_row(
+        "code",
+        "uv run tml prompt render <hypothesis_id> code",
+        "uv run tml prompt probe <hypothesis_id> code",
+    )
+    console.print(table)
 
 
 def _coerce(value: str) -> object:
