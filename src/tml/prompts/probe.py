@@ -40,7 +40,8 @@ def probe_prompt(
     tmp_root: Path | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> Path:
-    out_dir = _tmp_dir(project_dir, tmp_root) if tmp else project_dir / "prompt-lab" / timestamp_id()
+    _ = tmp
+    out_dir = _tmp_dir(project_dir, tmp_root)
     out_dir.mkdir(parents=True, exist_ok=True)
     role = _role_for_target(target, stage)
     models = repo_models_for_project(project_dir)

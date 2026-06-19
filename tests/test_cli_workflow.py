@@ -146,7 +146,7 @@ defaults:
   download_data: false
   root_mode: legacy
   prompt_output: tmp
-  probe_output: prompt-lab
+  probe_output: tmp
 active_project: null
 active_run: null
 models:

@@ -60,4 +60,4 @@ def _project_gitignore_template(project_dir: Path) -> str:
     template = project_dir.parents[2] / "control" / "templates" / "project.gitignore"
     if template.exists():
         return template.read_text(encoding="utf-8")
-    return "data/\nlogs/\nsubmissions/\nprompt-lab/\ntml.db\n"
+    return "data/\nlogs/\nsubmissions/\ntml.db\n"

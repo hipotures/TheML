@@ -4,7 +4,7 @@ defaults:
   download_data: true
   root_mode: autogluon
   prompt_output: tmp
-  probe_output: prompt-lab
+  probe_output: tmp
 active_project:
   kind: kaggle
   slug: playground-series-s6e6

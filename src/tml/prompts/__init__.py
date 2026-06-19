@@ -1,1 +1,1 @@
-"""Prompt rendering and prompt-lab helpers."""
+"""Prompt rendering and probing helpers."""
