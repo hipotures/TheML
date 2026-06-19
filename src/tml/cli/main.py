@@ -9,6 +9,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from rich.tree import Tree
 
+from tml.cli.prompt_output import print_prompt_choices, print_prompt_render_summary
 from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.errors import TmlError
 from tml.core.kaggle import download_competition_data
@@ -208,16 +209,24 @@ def prompt_render_cmd(ctx: typer.Context) -> None:
         ref = active_project_ref()
         positional = _positional(ctx.args)
         if not positional:
-            _print_prompt_choices()
+            print_prompt_choices(console)
             return
         target, stage = _prompt_target_stage(positional)
-        path = render_prompt(
-            ref.path,
-            target=target,
-            stage=stage,
-            tmp_root=_tmp_root(),
-        )
-        console.print(str(path))
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            transient=False,
+        ) as progress:
+            task = progress.add_task("Rendering prompt...", total=None)
+            path = render_prompt(
+                ref.path,
+                target=target,
+                stage=stage,
+                tmp_root=_tmp_root(),
+            )
+            progress.update(task, description=f"Prompt rendered: {path}")
+        print_prompt_render_summary(console, path)
     except Exception as exc:
         _abort(exc)
 
@@ -300,35 +309,12 @@ def _positional(args: list[str]) -> list[str]:
 def _prompt_target_stage(positional: list[str]) -> tuple[str | None, str | None]:
     if positional == ["metadata"]:
         return "project", "metadata"
-    if positional == ["root", "hypothesis"]:
+    if positional in (["hypothesis"], ["root", "hypothesis"]):
         return None, None
     return (
         positional[0] if len(positional) >= 1 else None,
         positional[1] if len(positional) >= 2 else None,
     )
-
-
-def _print_prompt_choices() -> None:
-    table = Table(title="Available prompts", box=box.SIMPLE_HEAVY)
-    table.add_column("Name", style="bold", no_wrap=True)
-    table.add_column("Render", no_wrap=True)
-    table.add_column("Probe", no_wrap=True)
-    table.add_row(
-        "metadata",
-        "uv run tml prompt render metadata",
-        "uv run tml prompt probe metadata",
-    )
-    table.add_row(
-        "root hypothesis",
-        "uv run tml prompt render root hypothesis",
-        "uv run tml prompt probe root hypothesis",
-    )
-    table.add_row(
-        "code",
-        "uv run tml prompt render <hypothesis_id> code",
-        "uv run tml prompt probe <hypothesis_id> code",
-    )
-    console.print(table)
 
 
 def _coerce(value: str) -> object:
