@@ -97,6 +97,7 @@ class CodexAiClient:
         turn_completed: dict[str, Any] | None = None
         error_message: str | None = None
         final_answer_completed = False
+        post_final_deadline: float | None = None
         thread_idle = False
 
         with tempfile.TemporaryDirectory(prefix="tml-codex-app-server-") as tmp:
@@ -171,6 +172,8 @@ class CodexAiClient:
                     _send(proc, _request(2, "turn/start", turn_params))
                     deadline = started + timeout_seconds
                     while perf_counter() < deadline:
+                        if post_final_deadline is not None and perf_counter() >= post_final_deadline:
+                            break
                         message = _read_message(proc, raw_lines, timeout_seconds=1)
                         if message is None:
                             if proc.poll() is not None:
@@ -191,6 +194,8 @@ class CodexAiClient:
                                 final_chunks.append(delta)
                         elif method == "thread/tokenUsage/updated":
                             usage = params
+                            if final_answer_completed:
+                                break
                         elif method == "turn/completed":
                             turn_completed = params
                             break
@@ -205,11 +210,13 @@ class CodexAiClient:
                                 if isinstance(item_text, str) and item_text.strip():
                                     final_chunks = [item_text]
                                 final_answer_completed = True
-                                break
+                                if usage is not None:
+                                    break
+                                post_final_deadline = perf_counter() + 2
                         elif method == "thread/status/changed":
                             status = params.get("status") if isinstance(params, dict) else {}
                             thread_idle = isinstance(status, dict) and status.get("type") == "idle"
-                            if final_answer_completed and thread_idle:
+                            if final_answer_completed and thread_idle and usage is not None:
                                 break
                         elif method == "error":
                             raise RuntimeError(f"Codex app-server error notification: {params!r}")
