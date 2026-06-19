@@ -10,7 +10,8 @@ from .registry import template_text
 
 def render_template(project_dir: Path, template_id: str, context: dict[str, Any]) -> dict[str, str]:
     source, source_path = template_text(project_dir, template_id)
-    rendered = _render(source, context)
+    prompt_source = _strip_front_matter(source)
+    rendered = _render(prompt_source, context)
     return {
         "template_id": template_id,
         "template_path": source_path,
@@ -18,6 +19,18 @@ def render_template(project_dir: Path, template_id: str, context: dict[str, Any]
         "rendered": rendered,
         "rendered_hash": sha256_text(rendered),
     }
+
+
+def _strip_front_matter(source: str) -> str:
+    if not source.startswith("---\n"):
+        return source
+    end = source.find("\n---\n", 4)
+    if end == -1:
+        return source
+    front_matter = source[4:end]
+    if "template_id:" not in front_matter:
+        return source
+    return source[end + len("\n---\n") :]
 
 
 def _render(source: str, context: dict[str, Any]) -> str:
