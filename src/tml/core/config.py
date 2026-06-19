@@ -40,3 +40,12 @@ def repo_providers_for_project(project_dir: Path) -> dict[str, object]:
         return {}
     providers = root_config.get("providers")
     return providers if isinstance(providers, dict) else {}
+
+
+def repo_models_for_project(project_dir: Path) -> dict[str, object]:
+    try:
+        root_config = read_yaml(context_path(repo_root_for_project(project_dir)))
+    except Exception:
+        return {}
+    models = root_config.get("models")
+    return models if isinstance(models, dict) else {}

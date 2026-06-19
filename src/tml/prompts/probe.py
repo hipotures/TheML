@@ -6,7 +6,7 @@ from typing import Callable
 
 from tml.ai import ModelInvocation, run_model_invocation
 from tml.ai.models import resolve_role_model
-from tml.core.config import active_mode, load_project_config, repo_providers_for_project, repo_root_for_project
+from tml.core.config import active_mode, load_project_config, repo_models_for_project, repo_providers_for_project, repo_root_for_project
 from tml.core.ids import timestamp_id
 from tml.core.metadata import render_project_metadata_prompt
 from tml.prompts.context import project_prompt_context
@@ -42,9 +42,8 @@ def probe_prompt(
 ) -> Path:
     out_dir = _tmp_dir(project_dir, tmp_root) if tmp else project_dir / "prompt-lab" / timestamp_id()
     out_dir.mkdir(parents=True, exist_ok=True)
-    config = load_project_config(project_dir)
     role = _role_for_target(target, stage)
-    models = config.get("models", {}) if isinstance(config.get("models"), dict) else {}
+    models = repo_models_for_project(project_dir)
     providers = repo_providers_for_project(project_dir)
     model, role_options = resolve_role_model(
         models,

@@ -164,7 +164,7 @@ models:
     project_yaml = tmp_path / "projects" / "kaggle" / "playground-series-s6e6" / "project.yaml"
     project = yaml.safe_load(project_yaml.read_text(encoding="utf-8"))
     assert project["root"]["active_mode"] == "legacy"
-    assert project["models"]["code"] == "codex-test"
+    assert "models" not in project
 
 
 def test_init_project_uses_root_autogluon_profiles_without_copying_defaults(tmp_path: Path):

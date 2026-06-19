@@ -177,38 +177,14 @@ def init_project(
             atomic_write_text(project_dir / "task.md", metadata_task_markdown(metadata, slug))
         else:
             atomic_write_text(project_dir / "task.md", f"# {slug}\n\nDescribe the ML task here.\n")
-    if not (project_dir / "project.yaml").exists():
-        target = _merge_target_metadata(inferred_target, metadata)
-        write_yaml(
-            project_dir / "project.yaml",
-            {
-                "schema_version": 1,
-                "project_id": slug,
-                "kind": kind,
-                "kaggle_slug": slug if kind == "kaggle" else None,
-                "task_file": "task.md",
-                "data_dir": "data",
-                "target": target,
-                "root": {
-                    "target_count": 20,
-                    "active_mode": str(root_config.get("defaults", {}).get("root_mode") or "autogluon"),
-                    "active_profiles": {
-                        "autogluon": DEFAULT_AUTOGLUON_PROFILE_ID,
-                        "legacy": LEGACY_PROFILE_ID,
-                    },
-                },
-                "models": {
-                    "metadata": str(models.get("metadata") or "mock"),
-                    "hypothesis": str(models.get("hypothesis") or "mock"),
-                    "code": str(models.get("code") or "mock"),
-                    "review": str(models.get("review") or "mock"),
-                    "bugfix": str(models.get("bugfix") or "mock"),
-                },
-                "created_at": datetime.now().isoformat(timespec="seconds"),
-            },
-        )
-    else:
-        _ensure_project_profile_defaults(project_dir / "project.yaml")
+    _ensure_project_config(
+        project_dir / "project.yaml",
+        slug=slug,
+        kind=kind,
+        root_config=root_config,
+        inferred_target=inferred_target,
+        metadata=metadata,
+    )
     return ref
 
 
@@ -304,6 +280,53 @@ def _merge_target_metadata(target: dict[str, Any], metadata: dict[str, Any] | No
     if isinstance(meta_target.get("maximize"), bool):
         merged["maximize"] = meta_target["maximize"]
     return merged
+
+
+def _ensure_project_config(
+    project_yaml: Path,
+    *,
+    slug: str,
+    kind: str,
+    root_config: dict[str, Any],
+    inferred_target: dict[str, Any],
+    metadata: dict[str, Any] | None,
+) -> None:
+    existing = read_yaml(project_yaml) if project_yaml.exists() else {}
+    if not isinstance(existing, dict):
+        existing = {}
+    target = _merge_target_metadata(inferred_target, metadata)
+    current_target = existing.get("target") if isinstance(existing.get("target"), dict) else {}
+    current_root = existing.get("root") if isinstance(existing.get("root"), dict) else {}
+    active_profiles = current_root.get("active_profiles") if isinstance(current_root.get("active_profiles"), dict) else {}
+
+    merged = {
+        **existing,
+        "schema_version": existing.get("schema_version", 1),
+        "project_id": existing.get("project_id") or slug,
+        "kind": existing.get("kind") or kind,
+        "kaggle_slug": existing.get("kaggle_slug") or (slug if kind == "kaggle" else None),
+        "task_file": existing.get("task_file") or "task.md",
+        "data_dir": existing.get("data_dir") or "data",
+        "target": {**target, **current_target},
+        "root": {
+            **current_root,
+            "target_count": current_root.get("target_count") or 20,
+            "active_mode": current_root.get("active_mode")
+            or str(root_config.get("defaults", {}).get("root_mode") or "autogluon"),
+            "active_profiles": {
+                **active_profiles,
+                "autogluon": active_profiles.get("autogluon") or DEFAULT_AUTOGLUON_PROFILE_ID,
+                "legacy": (
+                    LEGACY_PROFILE_ID
+                    if active_profiles.get("legacy") in {None, "legacy-root-start-v1"}
+                    else active_profiles.get("legacy")
+                ),
+            },
+        },
+        "created_at": existing.get("created_at") or datetime.now().isoformat(timespec="seconds"),
+    }
+    merged.pop("models", None)
+    write_yaml(project_yaml, merged)
 
 
 def _ensure_project_profile_defaults(project_yaml: Path) -> None:

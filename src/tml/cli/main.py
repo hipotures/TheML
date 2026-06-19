@@ -349,6 +349,10 @@ def _print_init_project_summary(root: Path, project_dir: Path, slug: str, *, dow
     table.add_row("Project config", _repo_path(project_dir / "project.yaml", root))
     table.add_row("Task file", _repo_path(project_dir / "task.md", root))
     table.add_row("Data dir", _repo_path(data_dir, root))
+    metadata = _metadata_run_summary(project_dir)
+    if metadata:
+        table.add_row("Metadata model", str(metadata["model"]))
+        table.add_row("Metadata result", str(metadata["result"]))
     if download:
         files = _data_files(data_dir)
         suffix = f" ({', '.join(files)})" if files else ""
@@ -358,6 +362,31 @@ def _print_init_project_summary(root: Path, project_dir: Path, slug: str, *, dow
     console.print(table)
     _print_data_tree(root, project_dir)
     console.print(f"[bold]Next:[/bold] uv run tml project use {slug}")
+
+
+def _metadata_run_summary(project_dir: Path) -> dict[str, str] | None:
+    request_path = project_dir / "logs" / "project-metadata" / "request.json"
+    response_path = project_dir / "logs" / "project-metadata" / "response.json"
+    if not request_path.exists() or not response_path.exists():
+        return None
+    try:
+        request = read_yaml(request_path)
+        response = read_yaml(response_path)
+    except Exception:
+        return None
+    if not isinstance(request, dict) or not isinstance(response, dict):
+        return None
+    model = str(request.get("model") or response.get("model") or "unknown")
+    role_options = request.get("role_options") if isinstance(request.get("role_options"), dict) else {}
+    timeout = role_options.get("timeout_seconds") if isinstance(role_options, dict) else None
+    if timeout is not None:
+        model = f"{model} (timeout={timeout}s)"
+    status = str(response.get("status") or "unknown")
+    wall_ms = response.get("wall_ms")
+    result = status
+    if isinstance(wall_ms, int):
+        result = f"{status} in {wall_ms / 1000:.1f}s"
+    return {"model": model, "result": result}
 
 
 def _print_kaggle_download_summary(root: Path, slug: str, data_dir: Path) -> None:

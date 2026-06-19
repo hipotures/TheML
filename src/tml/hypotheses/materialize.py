@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tml.ai import ModelInvocation, run_model_invocation
 from tml.ai.models import resolve_role_model
-from tml.core.config import load_project_config, repo_providers_for_project, repo_root_for_project
+from tml.core.config import repo_models_for_project, repo_providers_for_project, repo_root_for_project
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
 from tml.utils.atomic import atomic_write_text
@@ -17,8 +17,7 @@ from .model import hypothesis_dirs
 
 
 def materialize_missing(project_dir: Path, mode: str) -> int:
-    config = load_project_config(project_dir)
-    models = config.get("models", {}) if isinstance(config.get("models"), dict) else {}
+    models = repo_models_for_project(project_dir)
     model, role_options = resolve_role_model(models, "code")
     providers = repo_providers_for_project(project_dir)
     created = 0

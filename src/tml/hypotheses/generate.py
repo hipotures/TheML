@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tml.ai import ModelInvocation, run_model_invocation
 from tml.ai.models import resolve_role_model
-from tml.core.config import load_project_config, repo_providers_for_project, repo_root_for_project
+from tml.core.config import load_project_config, repo_models_for_project, repo_providers_for_project, repo_root_for_project
 from tml.core.ids import hypothesis_id
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
@@ -20,7 +20,7 @@ def generate_missing_root_hypotheses(project_dir: Path, count: int | None = None
     target = count or int(config.get("root", {}).get("target_count", 20))
     existing = len(hypothesis_dirs(project_dir))
     created = 0
-    models = config.get("models", {}) if isinstance(config.get("models"), dict) else {}
+    models = repo_models_for_project(project_dir)
     model, role_options = resolve_role_model(models, "hypothesis")
     providers = repo_providers_for_project(project_dir)
     for number in range(existing + 1, target + 1):
