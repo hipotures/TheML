@@ -42,6 +42,9 @@ providers:
     isolated_home: true
     home_dir: tmp/app-server
     project_doc_max_bytes: 0
+    log_event_deltas: false
+    log_raw_jsonl: false
+    log_raw_notifications: false
     disable_features:
       - apps
       - browser_use

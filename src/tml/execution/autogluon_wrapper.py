@@ -114,7 +114,7 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
     target = config.get("target", {}) if isinstance(config.get("target"), dict) else {}
     target_col = str(target.get("target_column") or "target")
     id_col = str(target.get("id_column") or "id")
-    metric = str(target.get("metric") or "balanced_accuracy")
+    metric = str(target.get("autogluon_metric") or target.get("metric") or "balanced_accuracy")
     profile_id = active_profile_id(config, "autogluon")
     profile = _load_profile(project_dir, profile_id)
 

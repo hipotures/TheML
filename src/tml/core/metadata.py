@@ -103,11 +103,13 @@ def render_project_metadata_prompt(
         project_dir,
         "project.metadata",
         {
-            "slug": slug,
-            "pages": resolved_pages,
-            "sample_submission_header": sample_submission_header or _sample_submission_header(project_dir),
-        },
-    )
+        "slug": slug,
+        "pages": resolved_pages,
+        "sample_submission_header": sample_submission_header or _sample_submission_header(project_dir),
+        "sklearn_to_autogluon_metrics": dict(sorted(SKLEARN_TO_AUTOGLUON_METRIC.items())),
+        "autogluon_metrics": sorted(AUTOGLUON_METRICS),
+    },
+)
 
 
 def normalize_project_metadata(payload: dict[str, Any]) -> dict[str, Any]:
@@ -128,36 +130,44 @@ def normalize_project_metadata(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def normalize_metric(target: dict[str, Any]) -> dict[str, Any]:
-    raw_metric = _optional_string(target.get("metric"))
-    source = _optional_string(target.get("metric_source"))
+    raw_metric = _optional_string(target.get("autogluon_metric"))
+    legacy_metric = _optional_string(target.get("metric"))
     description = _optional_string(target.get("metric_description"))
     maximize = target.get("maximize")
     maximize = maximize if isinstance(maximize, bool) else True
     sklearn_metric = _optional_string(target.get("sklearn_metric"))
 
-    if raw_metric and raw_metric.startswith("sklearn.metrics."):
-        sklearn_metric = raw_metric
-        mapped = SKLEARN_TO_AUTOGLUON_METRIC.get(raw_metric)
+    if legacy_metric and legacy_metric.startswith("sklearn.metrics.") and not sklearn_metric:
+        sklearn_metric = legacy_metric
+    elif legacy_metric and not raw_metric:
+        raw_metric = legacy_metric
+
+    if sklearn_metric:
+        mapped = SKLEARN_TO_AUTOGLUON_METRIC.get(sklearn_metric)
         if mapped:
             return {
-                "metric": mapped,
-                "metric_source": "autogluon",
-                "sklearn_metric": raw_metric,
+                "autogluon_metric": mapped,
+                "sklearn_metric": sklearn_metric,
+                "metric_description": description,
+                "maximize": maximize,
+            }
+        if raw_metric and raw_metric in AUTOGLUON_METRICS:
+            return {
+                "autogluon_metric": raw_metric,
+                "sklearn_metric": sklearn_metric,
                 "metric_description": description,
                 "maximize": maximize,
             }
         return {
-            "metric": "custom",
-            "metric_source": "custom",
-            "sklearn_metric": raw_metric,
-            "metric_description": description or f"Unmapped sklearn metric: {raw_metric}",
+            "autogluon_metric": "custom",
+            "sklearn_metric": sklearn_metric,
+            "metric_description": description or f"Unmapped sklearn metric: {sklearn_metric}",
             "maximize": maximize,
         }
 
-    if raw_metric == "custom" or source == "custom":
+    if raw_metric == "custom":
         return {
-            "metric": "custom",
-            "metric_source": "custom",
+            "autogluon_metric": "custom",
             "sklearn_metric": sklearn_metric,
             "metric_description": description,
             "maximize": maximize,
@@ -165,16 +175,14 @@ def normalize_metric(target: dict[str, Any]) -> dict[str, Any]:
 
     if raw_metric in AUTOGLUON_METRICS:
         return {
-            "metric": raw_metric,
-            "metric_source": "autogluon",
+            "autogluon_metric": raw_metric,
             "sklearn_metric": sklearn_metric,
             "metric_description": description,
             "maximize": maximize,
         }
 
     return {
-        "metric": raw_metric,
-        "metric_source": source,
+        "autogluon_metric": raw_metric,
         "sklearn_metric": sklearn_metric,
         "metric_description": description,
         "maximize": maximize,

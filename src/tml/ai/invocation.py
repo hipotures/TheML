@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from tml.utils.atomic import atomic_write_json, atomic_write_text
 
@@ -26,6 +27,7 @@ class ModelInvocation:
     sandbox: str | None = None
     output_schema: dict[str, Any] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    progress: Callable[[str], None] | None = field(default=None, repr=False, compare=False)
     runtime_artifact_dir: Path | None = field(default=None, repr=False, compare=False)
     runtime_response_prefix: str | None = field(default=None, repr=False, compare=False)
 
@@ -133,12 +135,12 @@ def _write_response_artifacts(
     response_prefix: str | None,
 ) -> None:
     prefix = f"{response_prefix}." if response_prefix else ""
-    atomic_write_text(artifact_dir / f"{prefix}response.md", result.text)
+    atomic_write_text(artifact_dir / f"{prefix}response.md", _pretty_response_text(result.text))
     atomic_write_json(artifact_dir / f"{prefix}response.json", {"text": result.text, **result.metadata})
     if result.raw is not None:
         atomic_write_json(artifact_dir / f"{prefix}provider-raw.json", {"raw": _jsonable(result.raw)})
     if result.events:
-        lines = "".join(__import__("json").dumps(_jsonable(event), sort_keys=True) + "\n" for event in result.events)
+        lines = "".join(json.dumps(_jsonable(event), sort_keys=True) + "\n" for event in result.events)
         atomic_write_text(artifact_dir / f"{prefix}events.jsonl", lines)
     if result.stdout:
         atomic_write_text(artifact_dir / f"{prefix}stdout.txt", result.stdout)
@@ -153,6 +155,16 @@ def _response_metadata(result: ProviderResult) -> dict[str, Any]:
     if result.events:
         metadata["event_count"] = len(result.events)
     return metadata
+
+
+def _pretty_response_text(text: str) -> str:
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return text
+    if not isinstance(parsed, (dict, list)):
+        return text
+    return json.dumps(parsed, indent=2, sort_keys=False, ensure_ascii=False) + "\n"
 
 
 def _jsonable(value: Any) -> Any:

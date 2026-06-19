@@ -85,6 +85,9 @@ class CodexAiClient:
         summary = str(provider_config.get("summary") or "concise")
         timeout_seconds = int(provider_config.get("timeout_seconds") or 120)
         isolated_home = _as_bool(provider_config.get("isolated_home"), default=True)
+        log_event_deltas = _as_bool(provider_config.get("log_event_deltas"), default=False)
+        log_raw_jsonl = _as_bool(provider_config.get("log_raw_jsonl"), default=False)
+        log_raw_notifications = _as_bool(provider_config.get("log_raw_notifications"), default=False)
         stderr_text = ""
         raw_lines: list[str] = []
         rpc_responses: list[dict[str, Any]] = []
@@ -101,6 +104,7 @@ class CodexAiClient:
             app_server_env = _app_server_env(cwd, provider_config, isolated_home=isolated_home)
             stderr_path = Path(tmp) / "stderr.txt"
             with stderr_path.open("w+", encoding="utf-8") as stderr_handle:
+                _report(invocation, "Starting Codex app-server...")
                 proc = subprocess.Popen(
                     app_server_cmd,
                     stdin=subprocess.PIPE,
@@ -112,6 +116,7 @@ class CodexAiClient:
                 )
                 started = perf_counter()
                 try:
+                    _report(invocation, "Initializing Codex app-server...")
                     _send(proc, _request(0, "initialize", {"clientInfo": _client_info()}))
                     init_response = _read_until_response(
                         proc,
@@ -122,9 +127,10 @@ class CodexAiClient:
                         timeout_seconds=timeout_seconds,
                     )
                     _raise_for_rpc_error(init_response, "initialize")
-                    _flush_live_artifacts(invocation, raw_lines, notifications)
+                    _flush_live_artifacts(invocation, raw_lines, notifications, include_deltas=log_event_deltas)
                     _send(proc, {"method": "initialized", "params": {}})
 
+                    _report(invocation, f"Starting Codex thread ({model}, effort={spec.reasoning_effort or 'default'})...")
                     thread_params: dict[str, Any] = {
                         "model": model,
                         "cwd": str(cwd),
@@ -143,7 +149,7 @@ class CodexAiClient:
                         timeout_seconds=timeout_seconds,
                     )
                     _raise_for_rpc_error(thread_response, "thread/start")
-                    _flush_live_artifacts(invocation, raw_lines, notifications)
+                    _flush_live_artifacts(invocation, raw_lines, notifications, include_deltas=log_event_deltas)
                     thread_id = (
                         thread_response.get("result", {})
                         .get("thread", {})
@@ -152,6 +158,7 @@ class CodexAiClient:
                     if not thread_id:
                         raise RuntimeError(f"Codex app-server did not return a thread id: {thread_response!r}")
 
+                    _report(invocation, "Sending prompt to Codex...")
                     turn_params: dict[str, Any] = {
                         "threadId": thread_id,
                         "input": [{"type": "text", "text": invocation.prompt}],
@@ -174,9 +181,10 @@ class CodexAiClient:
                             _raise_for_rpc_error(message, str(message.get("id")))
                             continue
                         notifications.append(message)
-                        _flush_live_artifacts(invocation, raw_lines, notifications)
+                        _flush_live_artifacts(invocation, raw_lines, notifications, include_deltas=log_event_deltas)
                         method = message.get("method")
                         params = message.get("params") if isinstance(message.get("params"), dict) else {}
+                        _report_event(invocation, method, len(notifications))
                         if method == "item/agentMessage/delta":
                             delta = params.get("delta")
                             if isinstance(delta, str):
@@ -216,13 +224,15 @@ class CodexAiClient:
 
         wall_ms = int((perf_counter() - started) * 1000)
         text = "".join(final_chunks).strip()
+        logged_notifications = notifications if log_raw_notifications else _compact_events(notifications, include_deltas=log_event_deltas)
         raw = {
             "rpc_responses": rpc_responses,
-            "notifications": notifications,
+            "notifications": logged_notifications,
             "turn_completed": turn_completed,
             "usage": usage,
-            "stdout_jsonl": raw_lines,
         }
+        if log_raw_jsonl:
+            raw["stdout_jsonl"] = raw_lines
         status = _turn_status(turn_completed) or ("completed" if final_answer_completed and thread_idle else None)
         result = ProviderResult(
             text=text,
@@ -238,12 +248,13 @@ class CodexAiClient:
                 "usage": usage,
             },
             raw=raw,
-            events=notifications,
-            stdout="".join(raw_lines),
+            events=logged_notifications,
+            stdout="".join(raw_lines) if log_raw_jsonl else None,
             stderr=stderr_text or None,
         )
         if error_message:
             raise ProviderInvocationError(error_message, result)
+        _report(invocation, f"Codex completed in {wall_ms} ms.")
         return result
 
     def _call_sdk(self, invocation: ModelInvocation, spec: ModelSpec) -> ProviderResult:
@@ -330,15 +341,93 @@ def _flush_live_artifacts(
     invocation: ModelInvocation,
     raw_lines: list[str],
     notifications: list[dict[str, Any]],
+    *,
+    include_deltas: bool,
 ) -> None:
     if invocation.runtime_artifact_dir is None:
         return
     prefix = f"{invocation.runtime_response_prefix}." if invocation.runtime_response_prefix else ""
-    if raw_lines:
+    if raw_lines and _provider_bool(invocation, "log_raw_jsonl", default=False):
         atomic_write_text(invocation.runtime_artifact_dir / f"{prefix}stdout.txt", "".join(raw_lines))
     if notifications:
-        lines = "".join(json.dumps(_dump_obj(event), sort_keys=True) + "\n" for event in notifications)
+        lines = "".join(
+            json.dumps(_dump_obj(event), sort_keys=True) + "\n"
+            for event in _compact_events(notifications, include_deltas=include_deltas)
+        )
         atomic_write_text(invocation.runtime_artifact_dir / f"{prefix}events.jsonl", lines)
+
+
+def _compact_events(events: list[dict[str, Any]], *, include_deltas: bool) -> list[dict[str, Any]]:
+    compacted = []
+    for event in events:
+        compact = _compact_event(event, include_deltas=include_deltas)
+        if compact is not None:
+            compacted.append(compact)
+    return compacted
+
+
+def _compact_event(event: dict[str, Any], *, include_deltas: bool) -> dict[str, Any] | None:
+    if include_deltas:
+        return event
+    method = event.get("method")
+    params = event.get("params")
+    if method == "item/agentMessage/delta" and isinstance(params, dict):
+        return None
+    if method in {"item/reasoning/summaryTextDelta", "item/reasoning/textDelta"} and isinstance(params, dict):
+        return None
+    if method in {"item/started", "item/completed"} and isinstance(params, dict):
+        compact = dict(params)
+        item = compact.get("item")
+        if isinstance(item, dict):
+            compact["item"] = _compact_item(item)
+        return {"method": method, "params": compact}
+    return event
+
+
+def _compact_item(item: dict[str, Any]) -> dict[str, Any]:
+    compact = dict(item)
+    text = compact.pop("text", None)
+    if isinstance(text, str):
+        compact["text_chars"] = len(text)
+    content = compact.get("content")
+    if isinstance(content, list):
+        compact["content"] = [_compact_content(part) for part in content]
+    return compact
+
+
+def _compact_content(part: Any) -> Any:
+    if not isinstance(part, dict):
+        return part
+    compact = dict(part)
+    text = compact.pop("text", None)
+    if isinstance(text, str):
+        compact["text_chars"] = len(text)
+    return compact
+
+
+def _provider_bool(invocation: ModelInvocation, key: str, *, default: bool) -> bool:
+    value = invocation.metadata.get(key)
+    return _as_bool(value, default=default)
+
+
+def _report(invocation: ModelInvocation, message: str) -> None:
+    if invocation.progress is not None:
+        invocation.progress(message)
+
+
+def _report_event(invocation: ModelInvocation, method: Any, count: int) -> None:
+    if not isinstance(method, str):
+        _report(invocation, f"Codex event {count}...")
+        return
+    labels = {
+        "turn/started": "Codex turn started...",
+        "item/agentMessage/delta": "Receiving Codex response...",
+        "item/completed": "Codex item completed...",
+        "thread/tokenUsage/updated": "Codex usage received...",
+        "thread/status/changed": "Codex status updated...",
+        "turn/completed": "Codex turn completed...",
+    }
+    _report(invocation, labels.get(method, f"Codex event {count}: {method}"))
 
 
 def _client_info() -> dict[str, str]:

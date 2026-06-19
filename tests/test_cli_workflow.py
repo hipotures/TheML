@@ -120,7 +120,7 @@ def test_init_project_defaults_to_kaggle_and_writes_root_config(tmp_path: Path):
     assert "kind: kaggle" in project_config
     assert "kaggle_slug: playground-series-s6e6" in project_config
     assert "target_column: class" in project_config
-    assert "metric: balanced_accuracy" in project_config
+    assert "autogluon_metric: balanced_accuracy" in project_config
     assert (project_dir / "task.md").exists()
     assert not (project_dir / "profiles").exists()
     assert not (project_dir / "code").exists()
@@ -280,8 +280,7 @@ def test_init_project_uses_kaggle_pages_prompt_to_fill_task_and_config(tmp_path:
     assert project["target"]["id_column"] == "id"
     assert project["target"]["target_column"] == "class"
     assert project["target"]["problem_type"] == "multiclass"
-    assert project["target"]["metric"] == "balanced_accuracy"
-    assert project["target"]["metric_source"] == "autogluon"
+    assert project["target"]["autogluon_metric"] == "balanced_accuracy"
     assert project["target"]["sklearn_metric"] == "sklearn.metrics.balanced_accuracy_score"
     assert project["target"]["maximize"] is True
     assert project["target"]["submission_kind"] == "labels"
@@ -293,7 +292,8 @@ def test_init_project_uses_kaggle_pages_prompt_to_fill_task_and_config(tmp_path:
     assert (metadata_log / "response.md").exists()
     assert (metadata_log / "response.json").exists()
     response = yaml.safe_load((metadata_log / "response.md").read_text(encoding="utf-8"))
-    assert response["target"]["metric"] == "sklearn.metrics.balanced_accuracy_score"
+    assert response["target"]["autogluon_metric"] == "balanced_accuracy"
+    assert response["target"]["sklearn_metric"] == "sklearn.metrics.balanced_accuracy_score"
 
 
 def test_prompt_render_project_metadata_uses_metadata_template(tmp_path: Path):
@@ -335,7 +335,8 @@ def test_prompt_probe_project_metadata_uses_metadata_role(tmp_path: Path):
     request_json = yaml.safe_load((out_dir / "request.json").read_text(encoding="utf-8"))
     response = yaml.safe_load((out_dir / "response.md").read_text(encoding="utf-8"))
     assert request_json["template_id"] == "project.metadata"
-    assert response["target"]["metric"] == "sklearn.metrics.balanced_accuracy_score"
+    assert response["target"]["autogluon_metric"] == "balanced_accuracy"
+    assert response["target"]["sklearn_metric"] == "sklearn.metrics.balanced_accuracy_score"
 
 
 def test_root_mock_workflow_reindexes_and_records_node_artifacts(tmp_path: Path):

@@ -229,27 +229,23 @@ with zipfile.ZipFile(out / "playground-series-s6e6.zip", "w") as archive:
 def test_project_metadata_metric_normalization_supports_sklearn_and_custom():
     sklearn_metric = normalize_metric(
         {
-            "metric": "sklearn.metrics.balanced_accuracy_score",
-            "metric_source": "sklearn",
+            "sklearn_metric": "sklearn.metrics.balanced_accuracy_score",
             "metric_description": "Balanced accuracy between predicted and observed class.",
             "maximize": True,
         }
     )
-    assert sklearn_metric["metric"] == "balanced_accuracy"
-    assert sklearn_metric["metric_source"] == "autogluon"
+    assert sklearn_metric["autogluon_metric"] == "balanced_accuracy"
     assert sklearn_metric["sklearn_metric"] == "sklearn.metrics.balanced_accuracy_score"
     assert sklearn_metric["metric_description"] == "Balanced accuracy between predicted and observed class."
 
     custom_metric = normalize_metric(
         {
-            "metric": "custom",
-            "metric_source": "custom",
+            "autogluon_metric": "custom",
             "metric_description": "Competition-specific grouped concordance metric.",
             "maximize": False,
         }
     )
-    assert custom_metric["metric"] == "custom"
-    assert custom_metric["metric_source"] == "custom"
+    assert custom_metric["autogluon_metric"] == "custom"
     assert custom_metric["sklearn_metric"] is None
     assert custom_metric["metric_description"] == "Competition-specific grouped concordance metric."
 
@@ -276,5 +272,6 @@ For each id in the test set, you must predict a numeric price value.
     assert payload["goal"] == "Predict the sale price."
     assert payload["target"]["target_column"] == "price"
     assert payload["target"]["problem_type"] == "regression"
-    assert payload["target"]["metric"] == "sklearn.metrics.root_mean_squared_error"
+    assert payload["target"]["autogluon_metric"] == "root_mean_squared_error"
+    assert payload["target"]["sklearn_metric"] == "sklearn.metrics.root_mean_squared_error"
     assert payload["target"]["submission_kind"] == "numeric"

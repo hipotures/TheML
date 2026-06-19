@@ -221,14 +221,36 @@ def prompt_probe_cmd(ctx: typer.Context) -> None:
         tmp = _bool(overrides.get("tmp", True))
         model = str(overrides["model"]) if "model" in overrides else None
         target, stage = _prompt_target_stage(positional)
-        path = probe_prompt(
-            ref.path,
-            tmp=tmp,
-            target=target,
-            stage=stage,
-            model_override=model,
-            tmp_root=_tmp_root(),
-        )
+        if model and model.startswith("codex:"):
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+                transient=False,
+            ) as progress:
+                task = progress.add_task("Rendering prompt...", total=None)
+
+                def report(message: str) -> None:
+                    progress.update(task, description=message)
+
+                path = probe_prompt(
+                    ref.path,
+                    tmp=tmp,
+                    target=target,
+                    stage=stage,
+                    model_override=model,
+                    tmp_root=_tmp_root(),
+                    progress=report,
+                )
+        else:
+            path = probe_prompt(
+                ref.path,
+                tmp=tmp,
+                target=target,
+                stage=stage,
+                model_override=model,
+                tmp_root=_tmp_root(),
+            )
         console.print(str(path))
     except Exception as exc:
         _abort(exc)

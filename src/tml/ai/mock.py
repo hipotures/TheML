@@ -70,6 +70,7 @@ def project_metadata(prompt: str) -> dict[str, object]:
     submission_kind = _submission_kind_from_text(lowered, problem_type)
     goal = _goal_from_text(prompt)
     metric_description = _metric_description(metric)
+    autogluon_metric = _mock_autogluon_metric(metric)
     return {
         "goal": goal or "Solve the Kaggle prediction task.",
         "evaluation": _evaluation_summary(metric, submission_kind),
@@ -78,14 +79,32 @@ def project_metadata(prompt: str) -> dict[str, object]:
             "id_column": id_column or "id",
             "target_column": target_column,
             "problem_type": problem_type,
-            "metric": metric,
-            "metric_source": "sklearn" if metric else "unknown",
+            "autogluon_metric": autogluon_metric,
             "sklearn_metric": metric,
             "metric_description": metric_description,
             "maximize": True,
             "submission_kind": submission_kind,
         },
     }
+
+
+def _mock_autogluon_metric(sklearn_metric: str | None) -> str | None:
+    mapping = {
+        "sklearn.metrics.accuracy_score": "accuracy",
+        "sklearn.metrics.balanced_accuracy_score": "balanced_accuracy",
+        "sklearn.metrics.roc_auc_score": "roc_auc",
+        "sklearn.metrics.log_loss": "log_loss",
+        "sklearn.metrics.f1_score": "f1",
+        "sklearn.metrics.precision_score": "precision",
+        "sklearn.metrics.recall_score": "recall",
+        "sklearn.metrics.mean_absolute_error": "mean_absolute_error",
+        "sklearn.metrics.mean_squared_error": "mean_squared_error",
+        "sklearn.metrics.root_mean_squared_error": "root_mean_squared_error",
+        "sklearn.metrics.r2_score": "r2",
+    }
+    if sklearn_metric is None:
+        return None
+    return mapping.get(sklearn_metric, "custom")
 
 
 def _sample_submission_columns(prompt: str) -> tuple[str | None, str | None]:

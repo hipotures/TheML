@@ -3,12 +3,28 @@ You are configuring a Kaggle machine learning project.
 Use the Kaggle competition page text and sample submission header below to return
 only one JSON object. Do not use markdown fences.
 
-The metric must be one of:
-- an AutoGluon metric name when there is a direct AutoGluon equivalent
-- a fully-qualified sklearn.metrics function name when the page clearly names a sklearn metric
-- "custom" when the metric is competition-specific or cannot be mapped confidently
+Choose exactly one evaluation metric.
 
-If the metric is "custom", metric_description must explain how it is computed.
+Use the metric mapping table below; do not invent AutoGluon or sklearn metric
+names from memory. If the competition metric is listed, return both names from
+the same row. If it is not listed but clearly names an sklearn.metrics function,
+set autogluon_metric to "custom" and sklearn_metric to that function name. If it
+is competition-specific or cannot be mapped confidently, set autogluon_metric to
+"custom" and sklearn_metric to null.
+
+Metric mapping table:
+{% for sklearn_name, autogluon_name in sklearn_to_autogluon_metrics.items() -%}
+- {{ sklearn_name }} => {{ autogluon_name }}
+{% endfor %}
+
+Additional AutoGluon metric names that may be used only when the page clearly
+names the same metric:
+{% for metric_name in autogluon_metrics -%}
+- {{ metric_name }}
+{% endfor %}
+
+If autogluon_metric is "custom", metric_description must explain how the metric
+is computed.
 Do not invent target columns. Prefer sample_submission_header for id_column and
 target_column when present.
 
@@ -21,9 +37,8 @@ Return this exact shape:
     "id_column": "id or null",
     "target_column": "target column or null",
     "problem_type": "binary|multiclass|regression|custom|null",
-    "metric": "autogluon metric, sklearn.metrics.*, custom, or null",
-    "metric_source": "autogluon|sklearn|custom|unknown",
-    "sklearn_metric": "sklearn.metrics.* or null",
+    "autogluon_metric": "exactly one AutoGluon metric name, custom, or null",
+    "sklearn_metric": "exactly one sklearn.metrics.* name or null",
     "metric_description": "plain language metric definition or null",
     "maximize": true,
     "submission_kind": "labels|probabilities|numeric|custom|null"

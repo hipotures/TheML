@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
 from tml.ai import ModelInvocation, run_model_invocation
 from tml.core.config import active_mode, load_project_config, repo_providers_for_project, repo_root_for_project
@@ -36,6 +37,7 @@ def probe_prompt(
     stage: str | None = None,
     model_override: str | None = None,
     tmp_root: Path | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> Path:
     out_dir = _tmp_dir(project_dir, tmp_root) if tmp else project_dir / "prompt-lab" / timestamp_id()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -57,6 +59,7 @@ def probe_prompt(
             cwd=repo_root_for_project(project_dir),
             sandbox="read_only",
             metadata={"kind": "probe"},
+            progress=progress,
         ),
         artifact_dir=out_dir,
         providers=providers,
