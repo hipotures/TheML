@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -15,11 +17,22 @@ from tml.utils.yaml_io import write_yaml
 from .model import hypothesis_dirs
 
 
-def generate_missing_root_hypotheses(project_dir: Path, count: int | None = None) -> int:
+@dataclass(frozen=True)
+class GeneratedHypothesis:
+    hypothesis_id: str
+    path: Path
+
+
+def generate_missing_root_hypotheses(
+    project_dir: Path,
+    count: int | None = None,
+    *,
+    progress: Callable[[str], None] | None = None,
+) -> list[GeneratedHypothesis]:
     config = load_project_config(project_dir)
     target = count or int(config.get("root", {}).get("target_count", 20))
     existing = len(hypothesis_dirs(project_dir))
-    created = 0
+    created: list[GeneratedHypothesis] = []
     models = repo_models_for_project(project_dir)
     model, role_options = resolve_role_model(models, "hypothesis")
     providers = repo_providers_for_project(project_dir)
@@ -27,6 +40,8 @@ def generate_missing_root_hypotheses(project_dir: Path, count: int | None = None
         hid = hypothesis_id(number)
         hdir = project_dir / "hypotheses" / hid
         hdir.mkdir(parents=True, exist_ok=True)
+        if progress is not None:
+            progress(f"Generating ROOT hypothesis {hid} with {model}...")
         rendered = render_template(
             project_dir,
             "root.hypothesis",
@@ -43,6 +58,7 @@ def generate_missing_root_hypotheses(project_dir: Path, count: int | None = None
                 rendered_prompt_hash=rendered["rendered_hash"],
                 cwd=repo_root_for_project(project_dir),
                 sandbox="read_only",
+                progress=progress,
             ),
             artifact_dir=hdir,
             providers=providers,
@@ -59,7 +75,7 @@ def generate_missing_root_hypotheses(project_dir: Path, count: int | None = None
             }
         )
         write_yaml(hdir / "hypothesis.yaml", payload)
-        created += 1
+        created.append(GeneratedHypothesis(hypothesis_id=hid, path=hdir))
     return created
 
 

@@ -16,7 +16,7 @@ from tml.core.paths import active_project_ref, workspace_root
 from tml.core.profiles import profile_hash
 from tml.core.project import default_download_data, default_project_kind, init_project, use_project
 from tml.db.reindex import reindex_project
-from tml.hypotheses.generate import generate_missing_root_hypotheses
+from tml.hypotheses.generate import GeneratedHypothesis, generate_missing_root_hypotheses
 from tml.hypotheses.materialize import materialize_missing
 from tml.hypotheses.run import run_missing
 from tml.hypotheses.status import filesystem_counts
@@ -105,8 +105,19 @@ def root_generate_cmd(ctx: typer.Context) -> None:
         ref = active_project_ref()
         overrides = _overrides(ctx.args)
         count = int(overrides["count"]) if "count" in overrides else None
-        created = generate_missing_root_hypotheses(ref.path, count=count)
-        console.print(f"Generated ROOT hypotheses: {created}")
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+            transient=False,
+        ) as progress:
+            task = progress.add_task("Generating ROOT hypotheses...", total=None)
+
+            def report(message: str) -> None:
+                progress.update(task, description=message)
+
+            created = generate_missing_root_hypotheses(ref.path, count=count, progress=report)
+        _print_generated_hypotheses(created)
     except Exception as exc:
         _abort(exc)
 
@@ -148,7 +159,7 @@ def root_ensure_cmd(ctx: typer.Context) -> None:
         materialized = materialize_missing(ref.path, mode=mode)
         ran = run_missing(ref.path, mode=mode)
         reindex_project(ref.path, ref.db_path)
-        console.print(f"Generated: {generated}; materialized: {materialized}; executed: {ran}")
+        console.print(f"Generated: {len(generated)}; materialized: {materialized}; executed: {ran}")
     except Exception as exc:
         _abort(exc)
 
@@ -364,9 +375,39 @@ def _print_init_project_summary(root: Path, project_dir: Path, slug: str, *, dow
     console.print(f"[bold]Next:[/bold] uv run tml project use {slug}")
 
 
+def _print_generated_hypotheses(created: list[GeneratedHypothesis]) -> None:
+    table = Table(title="ROOT hypotheses generated", box=box.SIMPLE_HEAVY)
+    table.add_column("Hypothesis", style="bold", no_wrap=True)
+    table.add_column("Model", overflow="fold")
+    table.add_column("Result", overflow="fold")
+    if not created:
+        table.add_row("none", "n/a", "already satisfied")
+        console.print(table)
+        return
+    for item in created:
+        summary = _artifact_run_summary(item.path, "01-hypothesis")
+        table.add_row(
+            item.hypothesis_id,
+            summary["model"] if summary else "unknown",
+            summary["result"] if summary else "unknown",
+        )
+    console.print(table)
+
+
 def _metadata_run_summary(project_dir: Path) -> dict[str, str] | None:
     request_path = project_dir / "logs" / "project-metadata" / "request.json"
     response_path = project_dir / "logs" / "project-metadata" / "response.json"
+    return _run_summary_from_paths(request_path, response_path)
+
+
+def _artifact_run_summary(artifact_dir: Path, prefix: str) -> dict[str, str] | None:
+    return _run_summary_from_paths(
+        artifact_dir / f"{prefix}.request.json",
+        artifact_dir / f"{prefix}.response.json",
+    )
+
+
+def _run_summary_from_paths(request_path: Path, response_path: Path) -> dict[str, str] | None:
     if not request_path.exists() or not response_path.exists():
         return None
     try:
@@ -386,13 +427,13 @@ def _metadata_run_summary(project_dir: Path) -> dict[str, str] | None:
     result = status
     if isinstance(wall_ms, int):
         result = f"{status} in {wall_ms / 1000:.1f}s"
-    total_tokens = _metadata_total_tokens(response)
+    total_tokens = _run_total_tokens(response)
     if total_tokens is not None:
         result = f"{result}, totalTokens={total_tokens}"
     return {"model": model, "result": result}
 
 
-def _metadata_total_tokens(response: dict[str, object]) -> int | None:
+def _run_total_tokens(response: dict[str, object]) -> int | None:
     usage = response.get("usage")
     if not isinstance(usage, dict):
         return None

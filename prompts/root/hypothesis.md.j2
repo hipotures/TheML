@@ -2,9 +2,41 @@
 template_id: root.hypothesis
 ---
 
-Generate ROOT hypotheses for project {{ project.project_id }}.
+You are designing ROOT hypotheses for a Kaggle tabular ML project.
+
+Project: {{ project.project_id }}
+Competition kind: {{ project.kind }}
+Kaggle slug: {{ project.kaggle_slug }}
+
+Target metadata:
+- id column: {{ project.target.id_column }}
+- target column: {{ project.target.target_column }}
+- problem type: {{ project.target.problem_type }}
+- AutoGluon metric: {{ project.target.autogluon_metric }}
+- sklearn metric: {{ project.target.sklearn_metric }}
+- metric description: {{ project.target.metric_description }}
+- maximize metric: {{ project.target.maximize }}
+- submission kind: {{ project.target.submission_kind }}
+
+Data directory: {{ data_dir }}
 
 Task:
 {{ task_text }}
 
-Return valid JSON for {{ count }} ROOT hypothesis object(s).
+Create one practical ROOT hypothesis. A ROOT hypothesis is a complete modeling
+direction that can be materialized into runnable code later.
+
+Use the known target metadata above. Do not invent a different target column,
+metric, or submission format.
+
+Return only valid JSON. Do not use markdown fences.
+
+Return this exact shape:
+{
+  "title": "short descriptive title",
+  "rationale": "why this direction should work for this competition",
+  "approach": "modeling plan including preprocessing, validation, and metric handling",
+  "risks": ["specific risk or failure mode"],
+  "features": ["feature engineering or input handling idea"],
+  "validation": "how to validate against the competition metric"
+}
