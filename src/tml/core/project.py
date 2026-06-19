@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from tml.core.gitignore import ensure_project_gitignore, ensure_root_gitignore
 from tml.core.paths import ProjectRef, context_path, find_project
 from tml.core.metadata import detect_project_metadata, metadata_task_markdown
 from tml.core.profiles import DEFAULT_AUTOGLUON_PROFILE_ID, LEGACY_PROFILE_ID
@@ -58,50 +59,6 @@ ROOT_CONFIG_DEFAULTS: dict[str, Any] = {
 }
 
 
-GITIGNORE_TEXT = """# Python
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.venv/
-.env
-
-# TheML local DB/cache
-tml.db
-tml.db-wal
-tml.db-shm
-*.tmp
-*.partial
-
-# Runtime workdirs / heavy ML products
-projects/**/workspaces/
-projects/**/runs/**/artifacts/**/work/
-**/AutoGluonModels/
-*.csv.gz
-*.parquet
-*.pkl
-*.pickle
-*.joblib
-*.model
-
-# Large generated prediction artifacts
-projects/**/runs/**/artifacts/**/artifacts/oof_predictions*
-projects/**/runs/**/artifacts/**/artifacts/test_predictions*
-"""
-
-
-def ensure_gitignore(root: Path) -> None:
-    path = root / ".gitignore"
-    if not path.exists():
-        atomic_write_text(path, GITIGNORE_TEXT)
-        return
-    text = path.read_text(encoding="utf-8")
-    missing = [line for line in GITIGNORE_TEXT.splitlines() if line and line not in text]
-    if missing:
-        atomic_write_text(path, text.rstrip() + "\n" + "\n".join(missing) + "\n")
-
-
 def ensure_root_config(root: Path) -> dict[str, Any]:
     path = context_path(root)
     existing = read_yaml(path)
@@ -132,12 +89,14 @@ def init_project(
     download: bool = False,
     progress: Callable[[str], None] | None = None,
 ) -> ProjectRef:
-    ensure_gitignore(root)
+    ensure_root_gitignore(root)
     root_config = ensure_root_config(root)
     kind = kind or default_project_kind(root)
     ref = ProjectRef(root=root, kind=kind, slug=slug)
     project_dir = ref.path
     _progress(progress, f"Preparing project directory: {project_dir.relative_to(root).as_posix()}")
+    project_dir.mkdir(parents=True, exist_ok=True)
+    ensure_project_gitignore(project_dir)
     for rel in (
         "data",
         "hypotheses",

@@ -1,0 +1,21 @@
+# Project-local runtime and data
+data/
+logs/
+submissions/
+prompt-lab/
+runs/**/artifacts/**/work/
+workspaces/
+tml.db
+tml.db-wal
+tml.db-shm
+*.tmp
+*.partial
+
+# Heavy ML artifacts
+**/AutoGluonModels/
+*.csv.gz
+*.parquet
+*.pkl
+*.pickle
+*.joblib
+*.model
