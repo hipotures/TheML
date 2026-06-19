@@ -9,6 +9,7 @@ from typing import Any
 
 from tml.ai import ModelInvocation, run_model_invocation
 from tml.core.config import repo_root_for_project
+from tml.core.errors import TmlError
 from tml.core.kaggle_pages import fetch_competition_pages
 from tml.prompts.renderer import render_template
 
@@ -44,6 +45,11 @@ AUTOGLUON_METRICS = set(SKLEARN_TO_AUTOGLUON_METRIC.values()) | {
 }
 
 
+def _progress(progress: Callable[[str], None] | None, message: str) -> None:
+    if progress is not None:
+        progress(message)
+
+
 def detect_project_metadata(
     project_dir: Path,
     *,
@@ -59,6 +65,7 @@ def detect_project_metadata(
         return None
     if not pages:
         return None
+    _progress(progress, "Rendering project metadata prompt...")
     rendered = render_project_metadata_prompt(
         project_dir,
         slug=slug,
@@ -67,22 +74,31 @@ def detect_project_metadata(
     )
     out_dir = project_dir / "logs" / "project-metadata"
     out_dir.mkdir(parents=True, exist_ok=True)
-    response = run_model_invocation(
-        ModelInvocation(
-            role="metadata",
-            model=model,
-            prompt=rendered["rendered"],
-            template_id=rendered["template_id"],
-            template_path=rendered["template_path"],
-            template_hash=rendered["template_hash"],
-            rendered_prompt_hash=rendered["rendered_hash"],
-            cwd=repo_root_for_project(project_dir),
-            sandbox="read_only",
-            metadata={"kind": "project-metadata"},
-        ),
-        artifact_dir=out_dir,
-        providers=providers,
-    )
+    _progress(progress, f"Extracting project metadata with model {model}...")
+    try:
+        response = run_model_invocation(
+            ModelInvocation(
+                role="metadata",
+                model=model,
+                prompt=rendered["rendered"],
+                template_id=rendered["template_id"],
+                template_path=rendered["template_path"],
+                template_hash=rendered["template_hash"],
+                rendered_prompt_hash=rendered["rendered_hash"],
+                cwd=repo_root_for_project(project_dir),
+                sandbox="read_only",
+                metadata={"kind": "project-metadata"},
+                progress=progress,
+            ),
+            artifact_dir=out_dir,
+            providers=providers,
+        )
+    except Exception as exc:
+        raise TmlError(
+            f"Project metadata extraction failed with models.metadata={model!r}. "
+            f"Set models.metadata in tml.yaml to mock or provider:model[:effort], "
+            f"for example codex:gpt-5.4:low. Cause: {exc}"
+        ) from exc
     payload = _parse_json_object(response.text)
     if not payload:
         return None

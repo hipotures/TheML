@@ -17,12 +17,19 @@ def resolve_model_spec(raw: str, providers: dict[str, Any] | None = None) -> Mod
     parts = value.split(":")
     if len(parts) == 1:
         provider = _legacy_provider(parts[0])
-        model = None if provider == "mock" else parts[0]
+        if provider == "mock":
+            return ModelSpec(raw=value, provider="mock", provider_config={"kind": "mock"})
+        provider_config = _provider_config(provider, provider_configs)
+        if value == provider and provider_config:
+            raise ValueError(
+                f"Model spec {value!r} selects a provider but does not name a model. "
+                f"Use {provider}:<model>[:effort], for example {provider}:gpt-5.4:low."
+            )
         return ModelSpec(
             raw=value,
             provider=provider,
-            model=model,
-            provider_config=_provider_config(provider, provider_configs),
+            model=parts[0],
+            provider_config=provider_config,
         )
     if len(parts) not in {2, 3}:
         raise ValueError(f"Invalid model spec {value!r}. Expected provider:model[:effort].")

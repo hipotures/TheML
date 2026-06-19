@@ -196,11 +196,16 @@ class CodexAiClient:
                             break
                         elif method == "item/completed":
                             item = params.get("item") if isinstance(params, dict) else {}
-                            final_answer_completed = (
+                            if (
                                 isinstance(item, dict)
                                 and item.get("type") == "agentMessage"
                                 and item.get("phase") == "final_answer"
-                            ) or final_answer_completed
+                            ):
+                                item_text = item.get("text")
+                                if isinstance(item_text, str) and item_text.strip():
+                                    final_chunks = [item_text]
+                                final_answer_completed = True
+                                break
                         elif method == "thread/status/changed":
                             status = params.get("status") if isinstance(params, dict) else {}
                             thread_idle = isinstance(status, dict) and status.get("type") == "idle"
@@ -208,7 +213,7 @@ class CodexAiClient:
                                 break
                         elif method == "error":
                             raise RuntimeError(f"Codex app-server error notification: {params!r}")
-                    if turn_completed is None and not (final_answer_completed and thread_idle):
+                    if turn_completed is None and not final_answer_completed:
                         error_message = "Codex app-server turn did not complete before timeout."
                 finally:
                     if proc.stdin:
@@ -233,7 +238,7 @@ class CodexAiClient:
         }
         if log_raw_jsonl:
             raw["stdout_jsonl"] = raw_lines
-        status = _turn_status(turn_completed) or ("completed" if final_answer_completed and thread_idle else None)
+        status = _turn_status(turn_completed) or ("completed" if final_answer_completed else None)
         result = ProviderResult(
             text=text,
             metadata={
