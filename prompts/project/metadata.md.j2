@@ -23,8 +23,8 @@ names the same metric:
 - {{ metric_name }}
 {% endfor %}
 
-If autogluon_metric is "custom", metric_description must explain how the metric
-is computed.
+If the returned JSON uses "autogluon_metric": "custom", then
+"metric_description" must describe how the competition metric is computed.
 Do not invent target columns. Prefer sample_submission_header for id_column and
 target_column when present.
 
