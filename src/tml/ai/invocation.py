@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -26,6 +26,8 @@ class ModelInvocation:
     sandbox: str | None = None
     output_schema: dict[str, Any] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    runtime_artifact_dir: Path | None = field(default=None, repr=False, compare=False)
+    runtime_response_prefix: str | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,12 @@ def run_model_invocation(
 ) -> AiResponse:
     spec = resolve_model_spec(invocation.model, providers)
     artifact_dir.mkdir(parents=True, exist_ok=True)
+    if invocation.runtime_artifact_dir is None:
+        invocation = replace(
+            invocation,
+            runtime_artifact_dir=artifact_dir,
+            runtime_response_prefix=response_prefix,
+        )
     _write_request_artifacts(artifact_dir, invocation, spec, response_prefix=response_prefix)
 
     from . import client_for_spec

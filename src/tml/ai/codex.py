@@ -13,6 +13,7 @@ from typing import Any
 
 from .client import AiRequest, AiResponse, ModelSpec
 from .invocation import ModelInvocation, ProviderInvocationError, ProviderResult
+from tml.utils.atomic import atomic_write_text
 
 
 class CodexAiClient:
@@ -82,7 +83,7 @@ class CodexAiClient:
             invocation.sandbox or str(provider_config.get("sandbox") or "read_only")
         )
         summary = str(provider_config.get("summary") or "concise")
-        timeout_seconds = int(provider_config.get("timeout_seconds") or 900)
+        timeout_seconds = int(provider_config.get("timeout_seconds") or 120)
         isolated_home = _as_bool(provider_config.get("isolated_home"), default=True)
         stderr_text = ""
         raw_lines: list[str] = []
@@ -92,6 +93,8 @@ class CodexAiClient:
         usage: Any | None = None
         turn_completed: dict[str, Any] | None = None
         error_message: str | None = None
+        final_answer_completed = False
+        thread_idle = False
 
         with tempfile.TemporaryDirectory(prefix="tml-codex-app-server-") as tmp:
             app_server_cmd = _app_server_command(provider_config)
@@ -119,6 +122,7 @@ class CodexAiClient:
                         timeout_seconds=timeout_seconds,
                     )
                     _raise_for_rpc_error(init_response, "initialize")
+                    _flush_live_artifacts(invocation, raw_lines, notifications)
                     _send(proc, {"method": "initialized", "params": {}})
 
                     thread_params: dict[str, Any] = {
@@ -139,6 +143,7 @@ class CodexAiClient:
                         timeout_seconds=timeout_seconds,
                     )
                     _raise_for_rpc_error(thread_response, "thread/start")
+                    _flush_live_artifacts(invocation, raw_lines, notifications)
                     thread_id = (
                         thread_response.get("result", {})
                         .get("thread", {})
@@ -169,6 +174,7 @@ class CodexAiClient:
                             _raise_for_rpc_error(message, str(message.get("id")))
                             continue
                         notifications.append(message)
+                        _flush_live_artifacts(invocation, raw_lines, notifications)
                         method = message.get("method")
                         params = message.get("params") if isinstance(message.get("params"), dict) else {}
                         if method == "item/agentMessage/delta":
@@ -180,9 +186,21 @@ class CodexAiClient:
                         elif method == "turn/completed":
                             turn_completed = params
                             break
+                        elif method == "item/completed":
+                            item = params.get("item") if isinstance(params, dict) else {}
+                            final_answer_completed = (
+                                isinstance(item, dict)
+                                and item.get("type") == "agentMessage"
+                                and item.get("phase") == "final_answer"
+                            ) or final_answer_completed
+                        elif method == "thread/status/changed":
+                            status = params.get("status") if isinstance(params, dict) else {}
+                            thread_idle = isinstance(status, dict) and status.get("type") == "idle"
+                            if final_answer_completed and thread_idle:
+                                break
                         elif method == "error":
                             raise RuntimeError(f"Codex app-server error notification: {params!r}")
-                    if turn_completed is None:
+                    if turn_completed is None and not (final_answer_completed and thread_idle):
                         error_message = "Codex app-server turn did not complete before timeout."
                 finally:
                     if proc.stdin:
@@ -205,6 +223,7 @@ class CodexAiClient:
             "usage": usage,
             "stdout_jsonl": raw_lines,
         }
+        status = _turn_status(turn_completed) or ("completed" if final_answer_completed and thread_idle else None)
         result = ProviderResult(
             text=text,
             metadata={
@@ -213,7 +232,7 @@ class CodexAiClient:
                 "provider_kind": provider_config.get("kind", "codex_app_server"),
                 "model": model,
                 "reasoning_effort": spec.reasoning_effort,
-                "status": _turn_status(turn_completed),
+                "status": status,
                 "error": error_message,
                 "wall_ms": wall_ms,
                 "usage": usage,
@@ -305,6 +324,21 @@ def _codex_app_server_sandbox(value: str) -> str:
     if normalized in {"full-access", "danger-full-access", "full"}:
         return "danger-full-access"
     raise RuntimeError(f"Unsupported Codex sandbox {value!r}. Expected read_only, workspace_write, or full_access.")
+
+
+def _flush_live_artifacts(
+    invocation: ModelInvocation,
+    raw_lines: list[str],
+    notifications: list[dict[str, Any]],
+) -> None:
+    if invocation.runtime_artifact_dir is None:
+        return
+    prefix = f"{invocation.runtime_response_prefix}." if invocation.runtime_response_prefix else ""
+    if raw_lines:
+        atomic_write_text(invocation.runtime_artifact_dir / f"{prefix}stdout.txt", "".join(raw_lines))
+    if notifications:
+        lines = "".join(json.dumps(_dump_obj(event), sort_keys=True) + "\n" for event in notifications)
+        atomic_write_text(invocation.runtime_artifact_dir / f"{prefix}events.jsonl", lines)
 
 
 def _client_info() -> dict[str, str]:
