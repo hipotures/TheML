@@ -25,7 +25,9 @@ names the same metric:
 
 If the returned JSON uses "autogluon_metric": "custom", then
 "metric_description" must describe how the competition metric is computed well
-enough to recreate it in Python.
+enough to recreate it in Python. If the Kaggle page gives a formula, scoring
+procedure, grouping rule, threshold rule, or tie-breaking rule for a custom
+metric, include those details in "metric_description".
 Do not invent target columns. Prefer sample_submission_header for id_column and
 target_column when present.
 
