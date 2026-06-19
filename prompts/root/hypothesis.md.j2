@@ -1,36 +1,13 @@
-Project: {{ project.project_id }}
-Competition kind: {{ project.kind }}
-Kaggle slug: {{ project.kaggle_slug }}
-
-Target metadata:
-- id column: {{ project.target.id_column }}
-- target column: {{ project.target.target_column }}
-- problem type: {{ project.target.problem_type }}
-- AutoGluon metric: {{ project.target.autogluon_metric }}
-- sklearn metric: {{ project.target.sklearn_metric }}
-- metric description: {{ project.target.metric_description }}
-- maximize metric: {{ project.target.maximize }}
-- submission kind: {{ project.target.submission_kind }}
-
-Data directory: {{ data_dir }}
-
-Task:
 {{ task_text }}
-
-Create one practical modeling hypothesis. It must be a complete modeling
-direction that can be materialized into runnable code later.
-
-Use the known target metadata above. Do not invent a different target column,
-metric, or submission format.
 
 Return only valid JSON. Do not use markdown fences.
 
-Return this exact shape:
+Return one modeling hypothesis with this shape:
 {
   "title": "short descriptive title",
-  "rationale": "why this direction should work for this competition",
+  "rationale": "why this direction should work for this task",
   "approach": "modeling plan including preprocessing, validation, and metric handling",
   "risks": ["specific risk or failure mode"],
   "features": ["feature engineering or input handling idea"],
-  "validation": "how to validate against the competition metric"
+  "validation": "how to validate against the evaluation metric"
 }
