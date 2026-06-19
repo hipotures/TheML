@@ -1,7 +1,7 @@
 You are configuring a Kaggle machine learning project.
 
-Use the Kaggle competition page text and sample submission header below to return
-only one JSON object. Do not use markdown fences.
+Use the Kaggle competition page text, sample submission header, and Data Overview
+below to return only one JSON object. Do not use markdown fences.
 
 Choose exactly one evaluation metric.
 
@@ -50,6 +50,10 @@ Return this exact shape:
 
 Competition slug: {{ slug }}
 Sample submission header: {{ sample_submission_header }}
+
+# Data Overview
+
+{{ data_overview }}
 
 {% for name, content in pages.items() %}
 ## Kaggle page: {{ name }}

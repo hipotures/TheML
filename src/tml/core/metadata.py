@@ -72,6 +72,7 @@ def detect_project_metadata(
         slug=slug,
         pages=pages,
         sample_submission_header=sample_submission_header,
+        progress=progress,
     )
     out_dir = project_dir / "logs" / "project-metadata"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -117,6 +118,7 @@ def render_project_metadata_prompt(
     progress: Callable[[str], None] | None = None,
 ) -> dict[str, str]:
     resolved_pages = pages if pages is not None else fetch_competition_pages(slug, progress=progress)
+    _progress(progress, "EDA...")
     return render_template(
         project_dir,
         "project.metadata",
@@ -124,6 +126,7 @@ def render_project_metadata_prompt(
         "slug": slug,
         "pages": resolved_pages,
         "sample_submission_header": sample_submission_header or _sample_submission_header(project_dir),
+        "data_overview": _data_overview(project_dir),
         "sklearn_to_autogluon_metrics": dict(sorted(SKLEARN_TO_AUTOGLUON_METRIC.items())),
         "autogluon_metrics": sorted(AUTOGLUON_METRICS),
     },
@@ -249,6 +252,142 @@ def _sample_submission_header(project_dir: Path) -> list[str]:
             columns = [target.get("id_column"), target.get("target_column")]
             return [str(column) for column in columns if column]
     return []
+
+
+def _data_overview(project_dir: Path) -> str:
+    data_dir = _project_data_dir(project_dir)
+    files = sorted(
+        path
+        for path in data_dir.iterdir()
+        if path.is_file() and (path.suffix == ".csv" or path.name.endswith(".csv.gz"))
+    ) if data_dir.exists() else []
+    if not files:
+        return "No local CSV data files found."
+    sections = [_summarize_csv_file(path) for path in files]
+    return "\n\n".join(section for section in sections if section).strip()
+
+
+def _project_data_dir(project_dir: Path) -> Path:
+    config_path = project_dir / "project.yaml"
+    if not config_path.exists():
+        return project_dir / "data"
+    from tml.utils.yaml_io import read_yaml
+
+    config = read_yaml(config_path)
+    return project_dir / str(config.get("data_dir") or "data")
+
+
+def _summarize_csv_file(path: Path) -> str:
+    try:
+        opener = gzip.open if path.name.endswith(".gz") else Path.open
+        with opener(path, mode="rt", newline="", encoding="utf-8") as handle:
+            reader = csv.reader(handle)
+            header = next(reader, [])
+            columns = [_ColumnSummary(name) for name in header]
+            row_count = 0
+            for row in reader:
+                row_count += 1
+                for index, column in enumerate(columns):
+                    column.add(row[index] if index < len(row) else "")
+    except Exception:
+        return f"-> {_display_data_name(path)} could not be summarized."
+
+    lines = [f"-> {_display_data_name(path)} has {row_count} rows and {len(header)} columns."]
+    if columns:
+        lines.append("Here is some information about the columns:")
+        lines.extend(column.render() for column in columns)
+    return "\n".join(lines)
+
+
+class _ColumnSummary:
+    _MAX_UNIQUE_VALUES = 10
+    _NAN_VALUES = {"", "na", "n/a", "nan", "none", "null"}
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.nan_count = 0
+        self.non_null_count = 0
+        self.int_possible = True
+        self.float_possible = True
+        self.min_value: float | None = None
+        self.max_value: float | None = None
+        self.unique_values: list[str] = []
+        self._unique_seen: set[str] = set()
+        self._unique_overflow = False
+
+    def add(self, raw_value: str) -> None:
+        value = raw_value.strip()
+        if value.lower() in self._NAN_VALUES:
+            self.nan_count += 1
+            return
+
+        self.non_null_count += 1
+        if not self._unique_overflow and value not in self._unique_seen:
+            self._unique_seen.add(value)
+            self.unique_values.append(value)
+            if len(self.unique_values) > self._MAX_UNIQUE_VALUES:
+                self.unique_values.clear()
+                self._unique_seen.clear()
+                self._unique_overflow = True
+
+        if self.int_possible:
+            try:
+                int(value)
+            except ValueError:
+                self.int_possible = False
+
+        if self.float_possible:
+            try:
+                numeric = float(value)
+            except ValueError:
+                self.float_possible = False
+            else:
+                self.min_value = numeric if self.min_value is None else min(self.min_value, numeric)
+                self.max_value = numeric if self.max_value is None else max(self.max_value, numeric)
+
+    def render(self) -> str:
+        dtype = self._dtype()
+        prefix = f"{self.name} ({dtype})"
+        if self.non_null_count == 0:
+            return f"{prefix} has only nan values: {self.nan_count} nan values"
+        if self.unique_values and not self._unique_overflow:
+            return (
+                f"{prefix} has {len(self.unique_values)} unique values: "
+                f"{_format_unique_values(self.unique_values, dtype)}, {self.nan_count} nan values"
+            )
+        if dtype in {"int64", "float64"} and self.min_value is not None and self.max_value is not None:
+            return (
+                f"{prefix} has range: {_format_number(self.min_value)} - {_format_number(self.max_value)}, "
+                f"{self.nan_count} nan values"
+            )
+        return f"{prefix} has {self.nan_count} nan values"
+
+    def _dtype(self) -> str:
+        if self.non_null_count == 0:
+            return "object"
+        if self.int_possible:
+            return "int64"
+        if self.float_possible:
+            return "float64"
+        return "object"
+
+
+def _display_data_name(path: Path) -> str:
+    if path.name.endswith(".csv.gz"):
+        return path.name[:-3]
+    return path.name
+
+
+def _format_unique_values(values: list[str], dtype: str) -> str:
+    if dtype == "int64":
+        return "[" + ", ".join(str(int(value)) for value in values) + "]"
+    if dtype == "float64":
+        return "[" + ", ".join(_format_number(float(value)) for value in values) + "]"
+    return "[" + ", ".join(repr(value) for value in values) + "]"
+
+
+def _format_number(value: float) -> str:
+    return f"{value:.2f}"
 
 
 def _data_file(data_dir: Path, name: str) -> Path:
