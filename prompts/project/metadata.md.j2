@@ -24,7 +24,8 @@ names the same metric:
 {% endfor %}
 
 If the returned JSON uses "autogluon_metric": "custom", then
-"metric_description" must describe how the competition metric is computed.
+"metric_description" must describe how the competition metric is computed well
+enough to recreate it in Python.
 Do not invent target columns. Prefer sample_submission_header for id_column and
 target_column when present.
 
