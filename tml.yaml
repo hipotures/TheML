@@ -10,7 +10,11 @@ active_project:
   slug: playground-series-s6e6
 active_run: null
 models:
-  metadata: mock
+  metadata:
+    provider: codex
+    model: gpt-5.4
+    effort: low
+    timeout_seconds: 30
   hypothesis: mock
   code: mock
   review: mock

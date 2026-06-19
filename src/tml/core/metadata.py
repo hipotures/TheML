@@ -58,6 +58,7 @@ def detect_project_metadata(
     sample_submission_header: list[str],
     progress: Callable[[str], None] | None = None,
     providers: dict[str, object] | None = None,
+    role_options: dict[str, object] | None = None,
 ) -> dict[str, Any] | None:
     try:
         pages = fetch_competition_pages(slug, progress=progress)
@@ -92,6 +93,7 @@ def detect_project_metadata(
             ),
             artifact_dir=out_dir,
             providers=providers,
+            role_options=role_options,
         )
     except Exception as exc:
         raise TmlError(

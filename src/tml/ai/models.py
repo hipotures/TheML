@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .client import ModelSpec
+from .defaults import MODEL_ROLE_DEFAULTS
 
 
 VALID_REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh"}
@@ -51,6 +52,54 @@ def resolve_model_spec(raw: str, providers: dict[str, Any] | None = None) -> Mod
         reasoning_effort=effort,
         provider_config=_provider_config(provider, provider_configs),
     )
+
+
+def resolve_role_model(
+    models: dict[str, Any],
+    role: str,
+    *,
+    fallback_role: str | None = None,
+    model_override: str | None = None,
+) -> tuple[str, dict[str, object]]:
+    options = dict(MODEL_ROLE_DEFAULTS.get(role, {}))
+    if model_override:
+        return model_override, options
+
+    entry = models.get(role) if isinstance(models, dict) else None
+    if entry is None and fallback_role:
+        entry = models.get(fallback_role) if isinstance(models, dict) else None
+    if entry is None:
+        return "mock", options
+    if isinstance(entry, str):
+        return entry, options
+    if isinstance(entry, dict):
+        model_spec = _model_spec_from_mapping(role, entry)
+        options.update(
+            {
+                str(key): value
+                for key, value in entry.items()
+                if key not in {"provider", "model", "effort", "reasoning_effort"}
+            }
+        )
+        return model_spec, options
+    raise ValueError(f"models.{role} must be a model string or a mapping with a 'model' key.")
+
+
+def _model_spec_from_mapping(role: str, entry: dict[str, Any]) -> str:
+    model = entry.get("model")
+    if not isinstance(model, str) or not model.strip():
+        raise ValueError(f"models.{role} must define a non-empty 'model' string.")
+    provider = entry.get("provider")
+    effort = entry.get("effort", entry.get("reasoning_effort"))
+    if provider is None:
+        return model
+    if not isinstance(provider, str) or not provider.strip():
+        raise ValueError(f"models.{role}.provider must be a non-empty string.")
+    if effort is None:
+        return f"{provider}:{model}"
+    if not isinstance(effort, str) or not effort.strip():
+        raise ValueError(f"models.{role}.effort must be a non-empty string.")
+    return f"{provider}:{model}:{effort}"
 
 
 def _legacy_provider(model: str) -> str:

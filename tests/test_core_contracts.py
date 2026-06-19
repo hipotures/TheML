@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from tml.ai import AiRequest
+from tml.ai.models import resolve_role_model
 from tml.ai.mock import MockAiClient
 from tml.core.ids import node_id, run_id
 from tml.core.kaggle import download_competition_data
@@ -27,6 +28,23 @@ from tml.execution.autogluon_wrapper import (
 def test_run_and_node_ids_are_timestamp_random_and_step_based():
     assert re.fullmatch(r"\d{8}T\d{6}-[0-9a-f]{8}", run_id())
     assert re.fullmatch(r"\d{8}T\d{6}-[0-9a-f]{8}-7", node_id(7))
+
+
+def test_models_mapping_resolves_model_spec_and_role_options():
+    model, options = resolve_role_model(
+        {
+            "metadata": {
+                "provider": "codex",
+                "model": "gpt-5.4",
+                "effort": "low",
+                "timeout_seconds": 30,
+            }
+        },
+        "metadata",
+    )
+
+    assert model == "codex:gpt-5.4:low"
+    assert options == {"timeout_seconds": 30}
 
 
 def test_classify_node_uses_phase_files(tmp_path: Path):

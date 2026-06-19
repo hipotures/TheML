@@ -24,6 +24,7 @@ class ModelSpec:
     model: str | None = None
     reasoning_effort: str | None = None
     provider_config: dict[str, object] | None = None
+    role_config: dict[str, object] | None = None
 
 
 class AiClient(Protocol):

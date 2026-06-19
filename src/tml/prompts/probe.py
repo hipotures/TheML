@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from tml.ai import ModelInvocation, run_model_invocation
+from tml.ai.models import resolve_role_model
 from tml.core.config import active_mode, load_project_config, repo_providers_for_project, repo_root_for_project
 from tml.core.ids import timestamp_id
 from tml.core.metadata import render_project_metadata_prompt
@@ -45,7 +46,12 @@ def probe_prompt(
     role = _role_for_target(target, stage)
     models = config.get("models", {}) if isinstance(config.get("models"), dict) else {}
     providers = repo_providers_for_project(project_dir)
-    model = model_override or str(models.get(role) or models.get("hypothesis") or "mock")
+    model, role_options = resolve_role_model(
+        models,
+        role,
+        fallback_role="hypothesis",
+        model_override=model_override,
+    )
     rendered = _render_for_target(project_dir, target=target, stage=stage)
     run_model_invocation(
         ModelInvocation(
@@ -63,6 +69,7 @@ def probe_prompt(
         ),
         artifact_dir=out_dir,
         providers=providers,
+        role_options=role_options,
     )
     return out_dir
 

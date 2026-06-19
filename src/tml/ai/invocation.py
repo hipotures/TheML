@@ -58,9 +58,17 @@ def run_model_invocation(
     *,
     artifact_dir: Path,
     providers: dict[str, object] | None = None,
+    role_options: dict[str, object] | None = None,
     response_prefix: str | None = None,
 ) -> AiResponse:
     spec = resolve_model_spec(invocation.model, providers)
+    role_config = dict(role_options or {})
+    if role_config:
+        spec = replace(
+            spec,
+            provider_config={**(spec.provider_config or {}), **role_config},
+            role_config=role_config,
+        )
     artifact_dir.mkdir(parents=True, exist_ok=True)
     if invocation.runtime_artifact_dir is None:
         invocation = replace(
@@ -113,6 +121,7 @@ def _write_request_artifacts(
         "provider_kind": (spec.provider_config or {}).get("kind"),
         "resolved_model": spec.model,
         "reasoning_effort": spec.reasoning_effort,
+        "role_options": spec.role_config or {},
         "messages": invocation.messages or [{"role": "user", "content": invocation.prompt}],
         "template_id": invocation.template_id,
         "template_path": invocation.template_path,

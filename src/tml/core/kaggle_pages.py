@@ -4,7 +4,6 @@ import csv
 import shutil
 import subprocess
 from collections.abc import Callable
-from pathlib import Path
 
 from tml.core.errors import TmlError
 

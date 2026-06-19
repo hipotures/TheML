@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from tml.ai import ModelInvocation, run_model_invocation
+from tml.ai.models import resolve_role_model
 from tml.core.config import load_project_config, repo_providers_for_project, repo_root_for_project
 from tml.core.ids import hypothesis_id
 from tml.prompts.context import project_prompt_context
@@ -19,7 +20,8 @@ def generate_missing_root_hypotheses(project_dir: Path, count: int | None = None
     target = count or int(config.get("root", {}).get("target_count", 20))
     existing = len(hypothesis_dirs(project_dir))
     created = 0
-    model = str(config.get("models", {}).get("hypothesis", "mock"))
+    models = config.get("models", {}) if isinstance(config.get("models"), dict) else {}
+    model, role_options = resolve_role_model(models, "hypothesis")
     providers = repo_providers_for_project(project_dir)
     for number in range(existing + 1, target + 1):
         hid = hypothesis_id(number)
@@ -44,6 +46,7 @@ def generate_missing_root_hypotheses(project_dir: Path, count: int | None = None
             ),
             artifact_dir=hdir,
             providers=providers,
+            role_options=role_options,
             response_prefix="01-hypothesis",
         )
         payload = _parse_hypothesis(response.text)

@@ -11,7 +11,6 @@ from typing import Any
 from tml.core.config import active_profile_id, load_project_config
 from tml.core.profiles import load_profile
 from tml.utils.atomic import atomic_write_text
-from tml.utils.yaml_io import write_yaml
 
 from .result import ExecutionResult
 

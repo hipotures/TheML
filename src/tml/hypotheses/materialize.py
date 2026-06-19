@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from tml.ai import ModelInvocation, run_model_invocation
+from tml.ai.models import resolve_role_model
 from tml.core.config import load_project_config, repo_providers_for_project, repo_root_for_project
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
@@ -17,7 +18,8 @@ from .model import hypothesis_dirs
 
 def materialize_missing(project_dir: Path, mode: str) -> int:
     config = load_project_config(project_dir)
-    model = str(config.get("models", {}).get("code", "mock"))
+    models = config.get("models", {}) if isinstance(config.get("models"), dict) else {}
+    model, role_options = resolve_role_model(models, "code")
     providers = repo_providers_for_project(project_dir)
     created = 0
     for hdir in hypothesis_dirs(project_dir):
@@ -49,6 +51,7 @@ def materialize_missing(project_dir: Path, mode: str) -> int:
             ),
             artifact_dir=mat_dir,
             providers=providers,
+            role_options=role_options,
             response_prefix=f"{mode}-001",
         )
         code = _parse_code(response.text)

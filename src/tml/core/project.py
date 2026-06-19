@@ -157,16 +157,20 @@ def init_project(
     providers = root_config.get("providers") if isinstance(root_config.get("providers"), dict) else {}
     metadata = None
     if kind == "kaggle":
+        from tml.ai.models import resolve_role_model
+
+        metadata_model, metadata_options = resolve_role_model(models, "metadata", fallback_role="hypothesis")
         metadata = detect_project_metadata(
             project_dir,
             slug=slug,
-            model=str(models.get("metadata") or models.get("hypothesis") or "mock"),
+            model=metadata_model,
             sample_submission_header=[
                 str(inferred_target["id_column"]),
                 *([str(inferred_target["target_column"])] if inferred_target.get("target_column") else []),
             ],
             progress=progress,
             providers=providers,
+            role_options=metadata_options,
         )
     if not (project_dir / "task.md").exists():
         if metadata is not None:

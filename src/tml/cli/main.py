@@ -22,7 +22,6 @@ from tml.hypotheses.run import run_missing
 from tml.hypotheses.status import filesystem_counts
 from tml.prompts.diff import diff_prompt
 from tml.prompts.probe import probe_prompt, render_prompt
-from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml
 
 
