@@ -386,7 +386,24 @@ def _metadata_run_summary(project_dir: Path) -> dict[str, str] | None:
     result = status
     if isinstance(wall_ms, int):
         result = f"{status} in {wall_ms / 1000:.1f}s"
+    total_tokens = _metadata_total_tokens(response)
+    if total_tokens is not None:
+        result = f"{result}, totalTokens={total_tokens}"
     return {"model": model, "result": result}
+
+
+def _metadata_total_tokens(response: dict[str, object]) -> int | None:
+    usage = response.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    token_usage = usage.get("tokenUsage")
+    if not isinstance(token_usage, dict):
+        return None
+    total = token_usage.get("total")
+    if not isinstance(total, dict):
+        return None
+    total_tokens = total.get("totalTokens")
+    return total_tokens if isinstance(total_tokens, int) else None
 
 
 def _print_kaggle_download_summary(root: Path, slug: str, data_dir: Path) -> None:
