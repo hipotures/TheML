@@ -1,6 +1,6 @@
-Write legacy-wrapped preprocessing code for TheML.
+Write legacy-wrapped preprocessing code.
 
-The generated file is imported by the fixed TheML legacy wrapper. Your job is
+The generated file is imported by a fixed legacy wrapper. Your job is
 only to define one semantic feature group for preprocessing. The wrapper will
 run the group executor, log group timing, assign final column prefixes,
 concatenate raw features with prefixed group outputs, train the fixed legacy
@@ -21,9 +21,9 @@ Do not write the wrapper.
 
 Legacy wrapper boundary:
 - Do not write a complete runnable script.
-- Do not print `TML_RESULT_JSON`.
+- Do not print result JSON.
 - Do not train sklearn models.
 - Do not create validation splits.
 - Do not define `main()`.
 - Do not read project data files.
-- The fixed TheML legacy wrapper handles all of those steps outside this generated file.
+- The fixed legacy wrapper handles all of those steps outside this generated file.

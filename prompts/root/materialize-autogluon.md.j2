@@ -1,6 +1,6 @@
-Write AutoGluon-wrapped preprocessing code for TheML.
+Write AutoGluon-wrapped preprocessing code.
 
-The generated file is imported by the fixed TheML AutoGluon wrapper. Your job is
+The generated file is imported by a fixed AutoGluon wrapper. Your job is
 only to define one semantic feature group for preprocessing. The wrapper will
 run the group executor, log group timing, assign final column prefixes,
 concatenate raw features with prefixed group outputs, attach the target, train
@@ -27,4 +27,4 @@ AutoGluon wrapper boundary:
 - Do not define `main()`.
 - Do not define `preprocess(df)`.
 - Do not read `train.csv`, `test.csv`, `sample_submission.csv`, or `./input`.
-- The fixed TheML AutoGluon wrapper handles all of those steps outside this generated file.
+- The fixed AutoGluon wrapper handles all of those steps outside this generated file.
