@@ -39,7 +39,7 @@ def probe_prompt(
     stage: str | None = None,
     model_override: str | None = None,
     tmp_root: Path | None = None,
-    progress: Callable[[str], None] | None = None,
+    progress: Callable[[str, int | None], None] | None = None,
 ) -> Path:
     _ = tmp
     out_dir = _tmp_dir(project_dir, tmp_root)
@@ -50,10 +50,15 @@ def probe_prompt(
     model, role_options = resolve_role_model(
         models,
         role,
-        fallback_role="hypothesis",
+        fallback_role=_fallback_role_for_role(role),
         model_override=model_override,
     )
+    timeout_seconds = int(role_options.get("timeout_seconds") or 1)
     rendered = _render_for_target(project_dir, target=target, stage=stage)
+    if progress is not None:
+        progress(f"Output dir: {out_dir}", timeout_seconds)
+        progress(f"Request will be written to {out_dir / 'request.md'}", timeout_seconds)
+        progress(f"Sending {role} prompt to {model}...", timeout_seconds)
     run_model_invocation(
         ModelInvocation(
             role=role,
@@ -66,7 +71,7 @@ def probe_prompt(
             cwd=repo_root_for_project(project_dir),
             sandbox="read_only",
             metadata={"kind": "probe"},
-            progress=progress,
+            progress=(lambda message: progress(message, timeout_seconds)) if progress is not None else None,
         ),
         artifact_dir=out_dir,
         providers=providers,
@@ -101,8 +106,16 @@ def _role_for_target(target: str | None, stage: str | None) -> str:
     if target == "project" and stage == "metadata":
         return "metadata"
     if target and stage == "code":
-        return "code"
+        return "materializations"
     raise TmlError(_unknown_prompt_target_message(target, stage))
+
+
+def _fallback_role_for_role(role: str) -> str | None:
+    if role == "materializations":
+        return "code"
+    if role in {"hypothesis", "metadata"}:
+        return None
+    return "hypothesis"
 
 
 def _unknown_prompt_target_message(target: str | None, stage: str | None) -> str:

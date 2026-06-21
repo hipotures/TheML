@@ -325,39 +325,90 @@ def prompt_probe_cmd(ctx: typer.Context) -> None:
         tmp = _bool(overrides.get("tmp", True))
         model = str(overrides["model"]) if "model" in overrides else None
         target, stage = _prompt_target_stage(positional)
-        if model and model.startswith("codex:"):
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=console,
-                transient=False,
-            ) as progress:
-                task = progress.add_task("Rendering prompt...", total=None)
-
-                def report(message: str) -> None:
-                    progress.update(task, description=message)
-
-                path = probe_prompt(
-                    ref.path,
-                    tmp=tmp,
-                    target=target,
-                    stage=stage,
-                    model_override=model,
-                    tmp_root=_tmp_root(),
-                    progress=report,
-                )
-        else:
-            path = probe_prompt(
-                ref.path,
-                tmp=tmp,
-                target=target,
-                stage=stage,
-                model_override=model,
-                tmp_root=_tmp_root(),
-            )
+        path = _probe_with_progress(
+            ref.path,
+            tmp=tmp,
+            target=target,
+            stage=stage,
+            model_override=model,
+        )
         print_prompt_probe_summary(console, path)
     except Exception as exc:
         _abort(exc)
+
+
+def _probe_with_progress(
+    project_dir: Path,
+    *,
+    tmp: bool,
+    target: str | None,
+    stage: str | None,
+    model_override: str | None,
+) -> Path:
+    state: dict[str, object] = {
+        "message": "Preparing prompt probe...",
+        "timeout": 1,
+        "started_at": time.monotonic(),
+        "path": None,
+        "error": None,
+    }
+    lock = threading.Lock()
+
+    def report(message: str, timeout_seconds: int | None = None) -> None:
+        with lock:
+            state["message"] = message
+            state["timeout"] = max(1, int(timeout_seconds or 1))
+            state["started_at"] = time.monotonic()
+
+    def run() -> None:
+        try:
+            path = probe_prompt(
+                project_dir,
+                tmp=tmp,
+                target=target,
+                stage=stage,
+                model_override=model_override,
+                tmp_root=_tmp_root(),
+                progress=report,
+            )
+            with lock:
+                state["path"] = path
+        except Exception as exc:  # pragma: no cover - re-raised in caller thread
+            with lock:
+                state["error"] = exc
+
+    worker = threading.Thread(target=run, daemon=True)
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("{task.completed:.0f}/{task.total:.0f}s"),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        console=console,
+        transient=False,
+    ) as progress:
+        task = progress.add_task("Preparing prompt probe...", total=1)
+        worker.start()
+        while worker.is_alive():
+            with lock:
+                message = str(state["message"])
+                timeout_seconds = int(state["timeout"])
+                started_at = float(state["started_at"])
+            elapsed = min(timeout_seconds, max(0.0, time.monotonic() - started_at))
+            progress.update(task, description=message, total=timeout_seconds, completed=elapsed)
+            time.sleep(0.25)
+        worker.join()
+        with lock:
+            error = state["error"]
+            path = state["path"]
+            timeout_seconds = int(state["timeout"])
+            message = str(state["message"])
+        progress.update(task, description=message, total=timeout_seconds, completed=timeout_seconds)
+    if isinstance(error, Exception):
+        raise error
+    if not isinstance(path, Path):
+        raise TmlError("Prompt probe did not return an output directory.")
+    return path
 
 
 @prompt_app.command("diff", context_settings=EXTRA)
