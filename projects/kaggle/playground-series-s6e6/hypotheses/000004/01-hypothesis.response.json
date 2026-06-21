@@ -1,0 +1,32 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.4",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "high",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Distance-Corrected Luminosity Signature\",\n  \"group_name\": \"distance_corrected_luminosity_signature\",\n  \"family\": \"luminosity_distance\",\n  \"summary\": \"Convert apparent broadband brightness into a redshift-adjusted intrinsic-luminosity signature so the model can compare whether an object is physically star-like, galaxy-like, or quasar-like rather than only how bright it looks from Earth.\",\n  \"depends_on\": [],\n  \"strategy\": \"Define z_pos = max(redshift, 0). Compute a deterministic luminosity-distance surrogate in Mpc with H0 = 70.0, c = 299792.458, q0 = -0.55: d_mpc = max(1e-4, (c / H0) * z_pos * (1 + 0.5 * (1 - q0) * z_pos)). Convert each band m in {u,g,r,i,z} into a pseudo-absolute magnitude M = m - 5 * log10(d_mpc) - 25. From these distance-corrected magnitudes create only same-idea summaries: the median pseudo-absolute magnitude across the five bands, the minimum pseudo-absolute magnitude (brightest inferred intrinsic band), the maximum pseudo-absolute magnitude (faintest inferred intrinsic band), and the band-to-band pseudo-absolute range max(M) - min(M). Also add coarse intrinsic-brightness regime flags by binning the median pseudo-absolute magnitude into <= -24, (-24,-20], (-20,-16], (-16,-8], and > -8. For redshift <= 0, the floor d_mpc = 1e-4 keeps the transformation finite and intentionally maps such objects into a nearby-object regime instead of exploding the magnitude scale.\",\n  \"expected_signal\": \"Balanced accuracy may improve because stars, galaxies, and QSOs can share similar observed colors while differing sharply in implied intrinsic luminosity once apparent brightness is interpreted through redshift, giving the classifier a class-separating signal that is complementary to raw magnitudes and color-only descriptors.\",\n  \"risk\": \"The distance surrogate is only approximate, especially at high redshift and for noisy near-zero stellar redshifts, so the group can inject modeling error, duplicate some information already present in magnitudes plus redshift, and overfit if the train set contains class-specific redshift calibration artifacts.\"\n}",
+  "usage": {
+    "threadId": "019eec60-6253-76c1-9a47-d248c34e8a0a",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 0,
+        "inputTokens": 7428,
+        "outputTokens": 2392,
+        "reasoningOutputTokens": 1834,
+        "totalTokens": 9820
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 0,
+        "inputTokens": 7428,
+        "outputTokens": 2392,
+        "reasoningOutputTokens": 1834,
+        "totalTokens": 9820
+      }
+    },
+    "turnId": "019eec60-6261-7a30-be8e-8624d43f01be"
+  },
+  "wall_ms": 45297
+}
