@@ -50,7 +50,7 @@ providers:
     sandbox: read_only
     summary: concise
     isolated_home: true
-    home_dir: tmp/app-server
+    home_dir: tmp/codex-home
     project_doc_max_bytes: 0
     log_event_deltas: false
     log_raw_jsonl: false
