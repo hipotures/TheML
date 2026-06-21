@@ -79,6 +79,7 @@ class CodexAiClient:
 
         provider_config = spec.provider_config or {}
         cwd = invocation.cwd or Path.cwd()
+        thread_cwd = _app_server_work_dir(cwd, provider_config)
         sandbox = _codex_app_server_sandbox(
             invocation.sandbox or str(provider_config.get("sandbox") or "read_only")
         )
@@ -112,6 +113,7 @@ class CodexAiClient:
                     stdout=subprocess.PIPE,
                     stderr=stderr_handle,
                     env=app_server_env,
+                    cwd=str(thread_cwd),
                     text=True,
                     bufsize=1,
                 )
@@ -134,7 +136,7 @@ class CodexAiClient:
                     _report(invocation, f"Starting Codex thread ({model}, effort={spec.reasoning_effort or 'default'})...")
                     thread_params: dict[str, Any] = {
                         "model": model,
-                        "cwd": str(cwd),
+                        "cwd": str(thread_cwd),
                         "sandbox": sandbox,
                         "approvalPolicy": "never",
                         "ephemeral": True,
@@ -166,7 +168,7 @@ class CodexAiClient:
                         "model": model,
                         "effort": spec.reasoning_effort,
                         "summary": summary,
-                        "cwd": str(cwd),
+                        "cwd": str(thread_cwd),
                         "outputSchema": invocation.output_schema,
                     }
                     _send(proc, _request(2, "turn/start", turn_params))
@@ -496,6 +498,17 @@ def _app_server_env(cwd: Path, provider_config: dict[str, Any], *, isolated_home
     env["CODEX_HOME"] = str(codex_home)
     env["CODEX_SQLITE_HOME"] = str(codex_home)
     return env
+
+
+def _app_server_work_dir(cwd: Path, provider_config: dict[str, Any]) -> Path:
+    work_value = provider_config.get("work_dir")
+    if not work_value:
+        return cwd
+    work_dir = Path(str(work_value))
+    if not work_dir.is_absolute():
+        work_dir = cwd / work_dir
+    work_dir.mkdir(parents=True, exist_ok=True)
+    return work_dir
 
 
 def _toml_value(value: Any) -> str:

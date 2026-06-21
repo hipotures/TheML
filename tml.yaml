@@ -6,7 +6,7 @@ defaults:
   prompt_output: tmp
   probe_output: tmp
 env:
-  TML_WIDE_TERMINAL: true
+  TML_WIDE_TERMINAL: 50
 active_project:
   kind: kaggle
   slug: playground-series-s6e6
@@ -51,6 +51,7 @@ providers:
     summary: concise
     isolated_home: true
     home_dir: tmp/codex-home
+    work_dir: tmp/work-dir
     project_doc_max_bytes: 0
     log_event_deltas: false
     log_raw_jsonl: false

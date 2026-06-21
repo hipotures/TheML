@@ -379,7 +379,7 @@ def _print_generated_hypotheses(project_dir: Path, created: list[GeneratedHypoth
         table.add_column("Summary", overflow="fold")
         table.add_column("Model", no_wrap=True)
         table.add_column("Gen", no_wrap=True)
-        summary_limit = 60 if _env_flag("TML_WIDE_TERMINAL") else 30
+        summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
         for hdir in hypothesis_dirs(project_dir):
             payload = read_yaml(hdir / "hypothesis.yaml")
             if not isinstance(payload, dict):
@@ -443,13 +443,16 @@ def _short_text(value: str, limit: int) -> str:
     return text[: max(0, limit - 1)].rstrip() + "…"
 
 
-def _env_flag(name: str) -> bool:
+def _env_int(name: str, default: int) -> int:
     value = os.environ.get(name)
     if value is None:
         value = _dotenv_value(name)
     if value is None:
         value = _config_env_value(name)
-    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
 
 
 def _dotenv_value(name: str) -> str | None:
