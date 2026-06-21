@@ -1,0 +1,3 @@
+{
+  "code": "from __future__ import annotations\n\nimport pandas as pd\n\n\ndef add_numeric_missingness_indicators(raw, deps, aux, ctx):\n    _ = (deps, aux, ctx)\n    out = pd.DataFrame(index=raw.index)\n    for column in raw.select_dtypes(include='number').columns:\n        if str(column).lower() == 'id':\n            continue\n        out[f'{column}_is_missing'] = raw[column].isna().astype('int8')\n    return out\n\n\nFEATURE_GROUPS = [\n    {\n        'name': 'numeric_missingness_indicators',\n        'fn': add_numeric_missingness_indicators,\n        'depends_on': [],\n        'description': 'Binary missingness indicators for numeric raw columns.',\n    }\n]\n"
+}

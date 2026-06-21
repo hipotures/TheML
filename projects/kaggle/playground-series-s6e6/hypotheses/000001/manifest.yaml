@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: f099c3615861dc66d609085e0c482fe518d8771b71abf01642ee0dfa2021b84c
+    created_at: '2026-06-22T01:04:05'
+feature_group:
+  logical_name: broadband_color_shape
+  version_id: broadband_color_shape@000001
+  source_hypothesis_id: '000001'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py
