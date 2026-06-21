@@ -381,6 +381,7 @@ def _print_generated_hypotheses(project_dir: Path, created: list[GeneratedHypoth
             payload = read_yaml(hdir / "hypothesis.yaml")
             if not isinstance(payload, dict):
                 continue
+            payload["_hdir"] = str(hdir)
             summary = _artifact_run_summary(hdir, "01-hypothesis")
             table.add_row(
                 str(payload.get("hypothesis_id") or hdir.name),
@@ -403,13 +404,32 @@ def _print_generated_hypotheses(project_dir: Path, created: list[GeneratedHypoth
 
 def _hypothesis_status_icon(payload: dict[str, object]) -> str:
     if payload.get("enabled", True) is False:
-        return "x"
-    status = str(payload.get("status") or "").lower()
-    if status in {"failed", "error"}:
-        return "!"
-    if status in {"done", "completed", "ok"}:
-        return "+"
-    return "."
+        return "⊘"
+    hypothesis_id = str(payload.get("hypothesis_id") or "")
+    hdir = Path(str(payload.get("_hdir") or ""))
+    if hypothesis_id and hdir and _hypothesis_has_failed_run(hdir.parent.parent, hypothesis_id):
+        return "⚠"
+    if hypothesis_id and hdir and _hypothesis_has_completed_run(hdir.parent.parent, hypothesis_id):
+        return "▶"
+    if hdir and any((hdir / "materializations").glob("*.py")):
+        return "⌘"
+    return "◇"
+
+
+def _hypothesis_has_completed_run(project_dir: Path, hypothesis_id: str) -> bool:
+    for done in (project_dir / "runs").glob("*/artifacts/*/node.done.yaml"):
+        payload = read_yaml(done)
+        if payload.get("hypothesis_id") == hypothesis_id:
+            return True
+    return False
+
+
+def _hypothesis_has_failed_run(project_dir: Path, hypothesis_id: str) -> bool:
+    for failed in (project_dir / "runs").glob("*/artifacts/*/failed.yaml"):
+        payload = read_yaml(failed)
+        if payload.get("hypothesis_id") == hypothesis_id:
+            return True
+    return False
 
 
 def _short_text(value: str, limit: int) -> str:
