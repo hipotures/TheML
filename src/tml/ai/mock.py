@@ -24,14 +24,18 @@ class MockAiClient:
     def call(self, request: AiRequest) -> AiResponse:
         if request.role == "hypothesis":
             payload = {
-                "title": "Baseline robust tabular preprocessing",
-                "summary": "Create a small leakage-safe first ROOT hypothesis for tabular data.",
-                "feature_family": "baseline_preprocessing",
-                "feature_strategy": "Add bounded, target-free preprocessing and preserve row order.",
-                "materialization_hint": "Autogluon mode should expose preprocess(df); legacy mode may run a full script.",
-                "expected_signal": "Useful as a smoke-tested baseline before richer ROOT hypotheses.",
-                "risk": "This mock hypothesis is intentionally generic and should be replaced by a real model backend.",
-                "sources": [],
+                "title": "Numeric missingness indicators",
+                "group_name": "numeric_missingness_indicators",
+                "family": "missingness",
+                "summary": "Create one binary missingness indicator per numeric raw column.",
+                "depends_on": [],
+                "main_inputs": ["numeric raw columns"],
+                "uses_aux": False,
+                "uses_id": False,
+                "uses_train_test_covariate_stats": False,
+                "strategy": "Select numeric raw columns except obvious identifier columns and create is_missing flags with the same index.",
+                "expected_signal": "Missingness patterns can expose acquisition or measurement artifacts without using labels.",
+                "risk": "May add redundant constant columns when numeric columns have no missing values.",
             }
         elif request.role == "code":
             payload = {"code": legacy_code() if "legacy" in request.prompt else autogluon_code()}
@@ -46,19 +50,27 @@ def autogluon_code() -> str:
     return (
         "from __future__ import annotations\n\n"
         "import pandas as pd\n\n\n"
-        "def preprocess(df: pd.DataFrame) -> pd.DataFrame:\n"
-        "    out = df.copy()\n"
-        "    return out\n"
+        "def add_numeric_missingness_indicators(raw, deps, aux, ctx):\n"
+        "    _ = (deps, aux, ctx)\n"
+        "    out = pd.DataFrame(index=raw.index)\n"
+        "    for column in raw.select_dtypes(include='number').columns:\n"
+        "        if str(column).lower() == 'id':\n"
+        "            continue\n"
+        "        out[f'{column}_is_missing'] = raw[column].isna().astype('int8')\n"
+        "    return out\n\n\n"
+        "FEATURE_GROUPS = [\n"
+        "    {\n"
+        "        'name': 'numeric_missingness_indicators',\n"
+        "        'fn': add_numeric_missingness_indicators,\n"
+        "        'depends_on': [],\n"
+        "        'description': 'Binary missingness indicators for numeric raw columns.',\n"
+        "    }\n"
+        "]\n"
     )
 
 
 def legacy_code() -> str:
-    return (
-        "from __future__ import annotations\n\n"
-        "import json\n\n"
-        "result = {'status': 'ok', 'metric': None, 'maximize': True}\n"
-        "print('TML_RESULT_JSON:' + json.dumps(result, sort_keys=True))\n"
-    )
+    return autogluon_code()
 
 
 def project_metadata(prompt: str) -> dict[str, object]:

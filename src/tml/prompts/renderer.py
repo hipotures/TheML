@@ -11,7 +11,8 @@ from .registry import template_text
 def render_template(project_dir: Path, template_id: str, context: dict[str, Any]) -> dict[str, str]:
     source, source_path = template_text(project_dir, template_id)
     prompt_source = _strip_front_matter(source)
-    rendered = _render(prompt_source, context)
+    render_context = {"project_dir": str(project_dir), **context}
+    rendered = _render(prompt_source, render_context)
     return {
         "template_id": template_id,
         "template_path": source_path,
@@ -35,11 +36,29 @@ def _strip_front_matter(source: str) -> str:
 
 def _render(source: str, context: dict[str, Any]) -> str:
     try:
-        from jinja2 import Environment, StrictUndefined
+        from jinja2 import ChoiceLoader, Environment, FileSystemLoader, StrictUndefined
     except ModuleNotFoundError:
         return _render_simple(source, context)
-    env = Environment(undefined=StrictUndefined, autoescape=False)
+    project_dir = Path(str(context.get("project_dir") or "."))
+    repo_root = _repo_root(project_dir)
+    env = Environment(
+        loader=ChoiceLoader(
+            [
+                FileSystemLoader(str(project_dir / "prompts")),
+                FileSystemLoader(str(repo_root / "prompts")),
+            ]
+        ),
+        undefined=StrictUndefined,
+        autoescape=False,
+    )
     return env.from_string(source).render(**context)
+
+
+def _repo_root(project_dir: Path) -> Path:
+    try:
+        return project_dir.parents[2]
+    except IndexError:
+        return Path.cwd()
 
 
 def _render_simple(source: str, context: dict[str, Any]) -> str:

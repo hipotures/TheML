@@ -1,40 +1,14 @@
-You are materializing the modeling hypothesis below for TheML legacy mode.
+You are materializing one feature-group hypothesis for TheML legacy mode.
 
-# Task
-
-{{ task_text }}
-
-{{ data_overview }}
-
-# Project Target Contract
-{% set target = project.get("target", {}) %}
-- ID column: {{ target.get("id_column") or "unknown" }}
-- Target column: {{ target.get("target_column") or "unknown" }}
-- Problem type: {{ target.get("problem_type") or "unknown" }}
-- Evaluation metric: {{ target.get("autogluon_metric") or target.get("sklearn_metric") or "unknown" }}
-- Submission kind: {{ target.get("submission_kind") or "unknown" }}
+{% include "blocks/task-context.md.j2" %}
 
 # Hypothesis
-{% for key in ["hypothesis_id", "title", "summary", "feature_family", "feature_strategy", "materialization_hint", "expected_signal", "risk"] %}
-{% if hypothesis.get(key) -%}
+{% for key in ["hypothesis_id", "title", "group_name", "family", "summary", "depends_on", "main_inputs", "uses_aux", "uses_id", "uses_train_test_covariate_stats", "strategy", "expected_signal", "risk"] %}
+{% if hypothesis.get(key) is not none -%}
 - {{ key }}: {{ hypothesis.get(key) }}
 {% endif %}
 {% endfor %}
 
-# Implementation Contract
+{% include "blocks/group-code-contract.md.j2" %}
 
-Return only a complete Python script. Do not use markdown fences.
-
-The script must implement the selected hypothesis and print one line starting
-with `TML_RESULT_JSON:` followed by a JSON object containing at least:
-
-```json
-{"status": "ok", "metric": 0.0, "maximize": true}
-```
-
-Requirements:
-- Keep the implementation self-contained.
-- Compute a validation metric compatible with the project evaluation metric.
-- Preserve the submission row order if the script writes a submission file.
-- Write temporary files only under the current working directory.
-- Do not hard-code absolute paths.
+Legacy-specific rule: do not write a complete runnable script, print `TML_RESULT_JSON`, read project data files, train sklearn models, or define `main()`. The external TheML legacy wrapper will run the group executor, train the fixed legacy baseline, compute the metric, and emit the result JSON.

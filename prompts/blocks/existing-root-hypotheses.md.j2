@@ -1,1 +1,9 @@
-Existing hypotheses: {{ hypothesis_count }}
+# Prior Root Groups
+{% if prior_root_group_results %}
+Use this only to avoid obvious repetition. Do not imitate the best previous group.
+{% for item in prior_root_group_results %}
+- {{ item.get("group_name") or item.get("hypothesis_id") or "unknown" }}{% if item.get("family") %} ({{ item.get("family") }}){% endif %}: {{ item.get("summary") or item.get("title") or "" }}{% if item.get("score") is not none %} score={{ item.get("score") }}{% endif %}{% if item.get("status") %} status={{ item.get("status") }}{% endif %}
+{% endfor %}
+{% else %}
+No prior root groups are recorded.
+{% endif %}

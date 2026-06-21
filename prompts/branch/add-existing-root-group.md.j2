@@ -1,0 +1,41 @@
+You are proposing one branch ADD operation for a modular TheML feature set.
+
+{% include "blocks/task-context.md.j2" %}
+
+# Current Node
+
+{{ current_node_summary | default("No current node summary provided.") }}
+
+# Enabled Groups
+
+{{ enabled_feature_groups | default("No enabled feature groups provided.") }}
+
+# Available Root Groups
+
+{{ available_root_groups | default("No available root groups provided.") }}
+
+# Branch ADD Rules
+
+- Choose exactly one existing ROOT group to add.
+- Do not invent a new group.
+- Do not modify group internals.
+- Do not remove groups.
+- Do not combine add and modify.
+- The selected group is valid only if all its dependencies are already enabled in the current node.
+- The operation must represent one homogeneous group-level change.
+- Do not discuss model/training/validation/AutoGluon configuration.
+- Do not output code.
+
+{% include "blocks/output-contract.md.j2" %}
+
+Return exactly this JSON object:
+
+{
+  "operation": "add_existing_root_group",
+  "target_group_name": "existing_group_name",
+  "title": "short descriptive title",
+  "summary": "why adding this one group is worth testing in this node",
+  "dependency_notes": "state that dependencies are already enabled, or why this operation is invalid",
+  "expected_signal": "expected metric effect of this one added group",
+  "risk": "specific risk of adding this group"
+}

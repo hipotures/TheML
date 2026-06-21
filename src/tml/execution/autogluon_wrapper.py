@@ -10,6 +10,8 @@ from typing import Any
 
 from tml.core.config import active_profile_id, load_project_config
 from tml.core.profiles import load_profile
+from tml.features.groups import has_feature_groups, run_feature_groups
+from tml.features.validation import validate_group_code_source
 from tml.utils.atomic import atomic_write_text
 
 from .result import ExecutionResult
@@ -74,14 +76,16 @@ def run_autogluon_materialization(
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text("TheML AutoGluon workdir\n", encoding="utf-8")
     source = code_path.read_text(encoding="utf-8")
-    if "def preprocess" not in source:
+    if "FEATURE_GROUPS" not in source and "def preprocess" not in source:
         return ExecutionResult(
             status="failed",
             returncode=4,
             stdout="",
             stderr="",
-            error="AutoGluon materialization must define preprocess(df).",
+            error="AutoGluon materialization must define FEATURE_GROUPS or preprocess(df).",
         )
+    if "FEATURE_GROUPS" in source:
+        validate_group_code_source(source)
     try:
         metric = _run_tabular(code_path=code_path, project_dir=project_dir, work_dir=work_dir)
     except Exception as exc:
@@ -129,18 +133,25 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
         raise ValueError(f"Cannot import materialization: {_project_path(project_dir, code_path)}")
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)
-    preprocess = getattr(module, "preprocess", None)
-    if not callable(preprocess):
-        raise ValueError("AutoGluon materialization must define callable preprocess(df)")
 
     train_features = train.drop(columns=[target_col])
     combined = pd.concat([train_features, test], ignore_index=True, sort=False)
     with _preprocess_timeout(int(profile.get("preprocess_timeout", 180))):
-        transformed = preprocess(combined.copy())
+        if has_feature_groups(module):
+            transformed = run_feature_groups(
+                combined.copy(),
+                getattr(module, "FEATURE_GROUPS"),
+                log_path=work_dir / "feature-groups.jsonl",
+            )
+        else:
+            preprocess = getattr(module, "preprocess", None)
+            if not callable(preprocess):
+                raise ValueError("AutoGluon materialization must define FEATURE_GROUPS or callable preprocess(df)")
+            transformed = preprocess(combined.copy())
     if not isinstance(transformed, pd.DataFrame):
-        raise TypeError("preprocess(df) must return a pandas DataFrame")
+        raise TypeError("preprocessing must return a pandas DataFrame")
     if len(transformed) != len(combined):
-        raise ValueError("preprocess(df) must preserve row count")
+        raise ValueError("preprocessing must preserve row count")
 
     train_out = transformed.iloc[: len(train)].reset_index(drop=True)
     test_out = transformed.iloc[len(train) :].reset_index(drop=True)
@@ -161,6 +172,11 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
         valid_data=training_plan.valid_data,
         fit_args=training_plan.fit_args,
     )
+    ignored_columns = list(fit_kwargs.pop("ignored_columns", []) or [])
+    if id_col in train_out.columns and id_col not in ignored_columns:
+        ignored_columns.append(id_col)
+    if ignored_columns:
+        fit_kwargs["ignored_columns"] = ignored_columns
     predictor.fit(**fit_kwargs)
 
     predictions = predictor.predict(test_out)

@@ -11,9 +11,11 @@ HYPOTHESIS_MEMORY_FIELDS = (
     "hypothesis_id",
     "title",
     "summary",
-    "feature_family",
-    "feature_strategy",
+    "group_name",
+    "family",
     "expected_signal",
+    "score",
+    "status",
     "risk",
 )
 
@@ -25,9 +27,11 @@ def project_prompt_context(project_dir: Path, **extra: Any) -> dict[str, Any]:
     data_overview_file = project_dir / "docs" / "data-overview.md"
     data_overview = data_overview_file.read_text(encoding="utf-8") if data_overview_file.exists() else ""
     return {
+        "project_dir": str(project_dir),
         "project": project,
         "task_text": task_text,
         "data_overview": data_overview,
+        "prior_root_group_results": _existing_hypothesis_memory(project_dir),
         "existing_hypotheses": _existing_hypothesis_memory(project_dir),
         "hypothesis_count": len(enabled_hypotheses(project_dir)),
         "data_dir": str(project.get("data_dir", "data")),

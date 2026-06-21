@@ -1,52 +1,37 @@
-You are designing one concise, executable modeling hypothesis for this TheML
-project.
+You are designing one ROOT feature-group hypothesis for TheML.
 
-# Task
+{% include "blocks/task-context.md.j2" %}
 
-{{ task_text }}
+{% include "blocks/existing-root-hypotheses.md.j2" %}
 
-{{ data_overview }}
+# ROOT Rules
 
-# Project Target Contract
-{% set target = project.get("target", {}) %}
-- ID column: {{ target.get("id_column") or "unknown" }}
-- Target column: {{ target.get("target_column") or "unknown" }}
-- Problem type: {{ target.get("problem_type") or "unknown" }}
-- Evaluation metric: {{ target.get("autogluon_metric") or target.get("sklearn_metric") or "unknown" }}
-- Submission kind: {{ target.get("submission_kind") or "unknown" }}
+- Create exactly one new semantic feature group.
+- Do not create a full preprocessing pipeline.
+- Do not modify existing groups.
+- Do not discuss model families, ensembling, validation folds, training time, hyperparameters, or AutoGluon configuration.
+- The hypothesis must later generate exactly one feature-group function.
+- The group may contain multiple derived columns only when they belong to one coherent semantic idea.
+- A hypothesis must represent one homogeneous group-level change. Multiple implementation details are allowed only when they are necessary parts of that same semantic change.
+- Use prior root groups only to avoid obvious repetition.
+- ROOT v1 must use `depends_on: []`.
+- Do not output code.
 
-# Existing Modeling Hypotheses
-{% if existing_hypotheses %}
-Use this as memory of previous attempts. Do not repeat the same feature family,
-modeling strategy, or materialization plan unless the new hypothesis makes a
-specific, testable change.
-{% for item in existing_hypotheses %}
-- {{ item.get("hypothesis_id") or "unknown" }}: {{ item.get("title") or "Untitled" }}
-  {% if item.get("summary") %}Summary: {{ item.get("summary") }}{% endif %}
-  {% if item.get("feature_family") %}Feature family: {{ item.get("feature_family") }}{% endif %}
-  {% if item.get("feature_strategy") %}Feature strategy: {{ item.get("feature_strategy") }}{% endif %}
-  {% if item.get("expected_signal") %}Expected signal: {{ item.get("expected_signal") }}{% endif %}
-  {% if item.get("risk") %}Risk: {{ item.get("risk") }}{% endif %}
-{% endfor %}
-{% else %}
-No previous hypotheses are recorded.
-{% endif %}
+{% include "blocks/output-contract.md.j2" %}
 
-Return only valid JSON. Do not use markdown fences.
+Return exactly this JSON object:
 
-Base the hypothesis on the task description and Data Overview above. Do not
-invent columns, files, labels, or feature distributions that are not shown.
-Do not propose generic EDA as the hypothesis. Propose one concrete modeling or
-feature strategy that can be materialized and evaluated.
-
-Return one modeling hypothesis with this exact shape:
 {
   "title": "short descriptive title",
-  "summary": "one sentence summary of the experiment",
-  "feature_family": "short stable family name",
-  "feature_strategy": "specific features, preprocessing, model choice, validation, and metric handling",
-  "materialization_hint": "how TheML should implement the idea; AutoGluon mode should usually define preprocess(df), legacy mode may write a full script",
-  "expected_signal": "why this should improve or clarify the metric",
-  "risk": "specific risk or failure mode",
-  "sources": []
+  "group_name": "concise_snake_case_group_name",
+  "family": "compact feature-family label",
+  "summary": "one sentence summary of the feature group",
+  "depends_on": [],
+  "main_inputs": ["main conceptual raw columns, not every temporary column"],
+  "uses_aux": false,
+  "uses_id": false,
+  "uses_train_test_covariate_stats": false,
+  "strategy": "concrete deterministic feature logic, formulas, bins, statistics, and edge handling",
+  "expected_signal": "why this group may improve or clarify the metric",
+  "risk": "specific overfitting, leakage, cost, redundancy, or instability risk"
 }

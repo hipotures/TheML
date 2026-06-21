@@ -7,6 +7,7 @@ from pathlib import Path
 from tml.ai import ModelInvocation, run_model_invocation
 from tml.ai.models import resolve_role_model
 from tml.core.config import repo_models_for_project, repo_providers_for_project, repo_root_for_project
+from tml.features.validation import validate_group_code_source
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
 from tml.utils.atomic import atomic_write_text
@@ -54,8 +55,9 @@ def materialize_missing(project_dir: Path, mode: str) -> int:
             response_prefix=f"{mode}-001",
         )
         code = _parse_code(response.text)
+        validate_group_code_source(code)
         atomic_write_text(target, code)
-        _update_manifest(hdir, mode, target)
+        _update_manifest(hdir, mode, target, hypothesis)
         created += 1
     return created
 
@@ -70,7 +72,7 @@ def _parse_code(text: str) -> str:
     return text
 
 
-def _update_manifest(hdir: Path, mode: str, path: Path) -> None:
+def _update_manifest(hdir: Path, mode: str, path: Path, hypothesis: dict[str, object]) -> None:
     manifest_path = hdir / "manifest.yaml"
     manifest = read_yaml(manifest_path)
     versions = manifest.setdefault("materializations", {})
@@ -81,5 +83,14 @@ def _update_manifest(hdir: Path, mode: str, path: Path) -> None:
         "active": path.name,
         "sha256": sha256_file(path),
         "created_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    group_name = str(hypothesis.get("group_name") or hdir.name)
+    manifest["feature_group"] = {
+        "logical_name": group_name,
+        "version_id": f"{group_name}@{hdir.name}",
+        "source_hypothesis_id": str(hypothesis.get("hypothesis_id") or hdir.name),
+        "operation": "create_new_root_group",
+        "depends_on": list(hypothesis.get("depends_on") or []),
+        "code_artifact": path.name,
     }
     write_yaml(manifest_path, manifest)

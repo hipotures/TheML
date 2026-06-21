@@ -1,1 +1,17 @@
+# Task
+
 {{ task_text }}
+
+{% if data_overview %}
+# Data Overview
+
+{{ data_overview }}
+{% endif %}
+
+# Project Target
+{% set target = project.get("target", {}) %}
+- ID column: {{ target.get("id_column") or "unknown" }}
+- Target column: {{ target.get("target_column") or "unknown" }}
+- Problem type: {{ target.get("problem_type") or "unknown" }}
+- Evaluation metric: {{ target.get("autogluon_metric") or target.get("sklearn_metric") or "unknown" }}
+- Submission kind: {{ target.get("submission_kind") or "unknown" }}

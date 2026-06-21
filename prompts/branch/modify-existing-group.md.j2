@@ -1,0 +1,39 @@
+You are proposing one branch MODIFY operation for a modular TheML feature set.
+
+{% include "blocks/task-context.md.j2" %}
+
+# Current Node
+
+{{ current_node_summary | default("No current node summary provided.") }}
+
+# Selected Group
+
+{{ target_group_detail | default("No target group detail provided.") }}
+
+# Branch MODIFY Rules
+
+- Modify exactly one existing group already present in the node.
+- Do not invent a new group.
+- Do not add an unrelated group.
+- Do not remove groups.
+- Do not combine add and modify.
+- The modification creates a new implementation version of the same logical group. It must not overwrite the parent version globally.
+- The semantic goal of the group must be preserved.
+- Multiple code edits are allowed only when they implement one homogeneous semantic change.
+- Do not discuss model/training/validation/AutoGluon configuration.
+- Do not output code.
+
+{% include "blocks/output-contract.md.j2" %}
+
+Return exactly this JSON object:
+
+{
+  "operation": "modify_existing_group",
+  "target_group_name": "existing_group_name",
+  "title": "short descriptive title",
+  "summary": "one sentence summary of the homogeneous modification",
+  "semantic_goal_preserved": true,
+  "modification_strategy": "concrete one-idea change to formulas, bins, statistics, smoothing, clipping, or dependency usage",
+  "expected_signal": "expected metric effect of this one group modification",
+  "risk": "specific risk of this modification"
+}

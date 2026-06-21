@@ -10,6 +10,7 @@ from tml.ai import ModelInvocation, run_model_invocation
 from tml.ai.models import resolve_role_model
 from tml.core.config import load_project_config, repo_models_for_project, repo_providers_for_project, repo_root_for_project
 from tml.core.ids import hypothesis_id
+from tml.features.validation import validate_root_hypothesis
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
 from tml.utils.yaml_io import write_yaml
@@ -66,6 +67,7 @@ def generate_missing_root_hypotheses(
             response_prefix="01-hypothesis",
         )
         payload = _parse_hypothesis(response.text)
+        validate_root_hypothesis(payload)
         payload.update(
             {
                 "schema_version": 1,
