@@ -34,3 +34,8 @@ projects/**/runs/**/artifacts/**/work/
 # Large generated prediction artifacts
 projects/**/runs/**/artifacts/**/artifacts/oof_predictions*
 projects/**/runs/**/artifacts/**/artifacts/test_predictions*
+
+# Verbose model/debug traces
+*.provider-raw.json
+*.events.jsonl
+*.stderr.txt

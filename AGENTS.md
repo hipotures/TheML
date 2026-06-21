@@ -66,6 +66,7 @@ uv run <command>
 - Before committing, run relevant verification and inspect `git status --short`.
 - If the user asks for `git push`, first ask whether they want to check test coverage and add missing tests before pushing.
 - Commit only changes made for the current task.
+- Generated hypothesis artifacts under `projects/*/*/hypotheses/` are source artifacts and must be committed.
 - If changes in `research_hypotheses/` are detected or created, you must commit those `research_hypotheses/` changes in a separate commit from code, script, or documentation changes outside `research_hypotheses/`.
 - Never commit unrelated user changes.
 - Use concise commit messages.
