@@ -1,4 +1,40 @@
-Materialize hypothesis {{ hypothesis.hypothesis_id }} for legacy mode.
+You are materializing the modeling hypothesis below for TheML legacy mode.
 
-Return a complete Python script. The script must print one line starting with
-`TML_RESULT_JSON:` followed by a JSON object.
+# Task
+
+{{ task_text }}
+
+{{ data_overview }}
+
+# Project Target Contract
+{% set target = project.get("target", {}) %}
+- ID column: {{ target.get("id_column") or "unknown" }}
+- Target column: {{ target.get("target_column") or "unknown" }}
+- Problem type: {{ target.get("problem_type") or "unknown" }}
+- Evaluation metric: {{ target.get("autogluon_metric") or target.get("sklearn_metric") or "unknown" }}
+- Submission kind: {{ target.get("submission_kind") or "unknown" }}
+
+# Hypothesis
+{% for key in ["hypothesis_id", "title", "summary", "feature_family", "feature_strategy", "materialization_hint", "expected_signal", "risk"] %}
+{% if hypothesis.get(key) -%}
+- {{ key }}: {{ hypothesis.get(key) }}
+{% endif %}
+{% endfor %}
+
+# Implementation Contract
+
+Return only a complete Python script. Do not use markdown fences.
+
+The script must implement the selected hypothesis and print one line starting
+with `TML_RESULT_JSON:` followed by a JSON object containing at least:
+
+```json
+{"status": "ok", "metric": 0.0, "maximize": true}
+```
+
+Requirements:
+- Keep the implementation self-contained.
+- Compute a validation metric compatible with the project evaluation metric.
+- Preserve the submission row order if the script writes a submission file.
+- Write temporary files only under the current working directory.
+- Do not hard-code absolute paths.

@@ -7,7 +7,8 @@ from typing import Callable
 from tml.ai import ModelInvocation, run_model_invocation
 from tml.ai.models import resolve_role_model
 from tml.core.config import active_mode, load_project_config, repo_models_for_project, repo_providers_for_project, repo_root_for_project
-from tml.core.ids import timestamp_id
+from tml.core.errors import TmlError
+from tml.core.ids import run_id
 from tml.core.metadata import render_project_metadata_prompt
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
@@ -76,12 +77,14 @@ def probe_prompt(
 
 def _render_for_target(project_dir: Path, *, target: str | None, stage: str | None) -> dict[str, str]:
     config = load_project_config(project_dir)
+    if target is None and stage is None:
+        return render_template(project_dir, "root.hypothesis", project_prompt_context(project_dir, count=1))
     if target == "project" and stage == "metadata":
         return render_project_metadata_prompt(
             project_dir,
             slug=str(config.get("kaggle_slug") or config.get("project_id") or project_dir.name),
         )
-    if stage == "code":
+    if target and stage == "code":
         mode = active_mode(config)
         hypothesis = _hypothesis_for_target(project_dir, target)
         return render_template(
@@ -89,15 +92,26 @@ def _render_for_target(project_dir: Path, *, target: str | None, stage: str | No
             f"root.materialize-{mode}",
             project_prompt_context(project_dir, hypothesis=hypothesis),
         )
-    return render_template(project_dir, "root.hypothesis", project_prompt_context(project_dir, count=1))
+    raise TmlError(_unknown_prompt_target_message(target, stage))
 
 
 def _role_for_target(target: str | None, stage: str | None) -> str:
+    if target is None and stage is None:
+        return "hypothesis"
     if target == "project" and stage == "metadata":
         return "metadata"
-    if stage == "code":
+    if target and stage == "code":
         return "code"
-    return "hypothesis"
+    raise TmlError(_unknown_prompt_target_message(target, stage))
+
+
+def _unknown_prompt_target_message(target: str | None, stage: str | None) -> str:
+    supplied = " ".join(part for part in (target, stage) if part)
+    return (
+        f"Unknown prompt target: {supplied or '<empty>'}. "
+        "Use one of: tml prompt render, tml prompt render project metadata, "
+        "tml prompt render <hypothesis_id> code."
+    )
 
 
 def _hypothesis_for_target(project_dir: Path, target: str | None) -> dict[str, object]:
@@ -128,4 +142,4 @@ def _request_json(project_dir: Path, rendered: dict[str, str], kind: str, model:
 
 def _tmp_dir(project_dir: Path, tmp_root: Path | None) -> Path:
     root = tmp_root or Path("/tmp")
-    return root / "tml" / project_dir.name / timestamp_id()
+    return root / "tml" / project_dir.name / run_id()

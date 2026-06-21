@@ -1,10 +1,49 @@
-Materialize hypothesis {{ hypothesis.hypothesis_id }} for AutoGluon mode.
+You are materializing the modeling hypothesis below for TheML AutoGluon mode.
 
-Return only code containing:
+# Task
+
+{{ task_text }}
+
+{{ data_overview }}
+
+# Project Target Contract
+{% set target = project.get("target", {}) %}
+- ID column: {{ target.get("id_column") or "unknown" }}
+- Target column: {{ target.get("target_column") or "unknown" }}
+- Problem type: {{ target.get("problem_type") or "unknown" }}
+- Evaluation metric: {{ target.get("autogluon_metric") or target.get("sklearn_metric") or "unknown" }}
+- Submission kind: {{ target.get("submission_kind") or "unknown" }}
+
+# Hypothesis
+{% for key in ["hypothesis_id", "title", "summary", "feature_family", "feature_strategy", "materialization_hint", "expected_signal", "risk"] %}
+{% if hypothesis.get(key) -%}
+- {{ key }}: {{ hypothesis.get(key) }}
+{% endif %}
+{% endfor %}
+
+# Implementation Contract
+
+Return only Python code. Do not use markdown fences.
+
+Define this function:
 
 ```python
 def preprocess(df):
     ...
 ```
 
-The function must preserve row count and row order.
+TheML will call `preprocess(df)` once on train features and test rows
+concatenated together, without the target column. TheML will then split rows
+back into train/test, attach the target column, train AutoGluon with the active
+profile, and write `submission.csv`.
+
+Requirements:
+- Implement the selected hypothesis as concrete, deterministic preprocessing.
+- Preserve row count and row order exactly.
+- Return a pandas DataFrame.
+- Do not read target values, train.csv, test.csv, or sample_submission.csv
+  inside `preprocess(df)`.
+- Do not write files inside `preprocess(df)`.
+- Use only columns present in `df`; target-free train+test covariate transforms
+  are allowed when they are deterministic from `df`.
+- Handle missing values and unseen categorical values robustly.

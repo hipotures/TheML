@@ -12,6 +12,7 @@ from tml.core.config import repo_root_for_project
 from tml.core.errors import TmlError
 from tml.core.kaggle_pages import fetch_competition_pages
 from tml.prompts.renderer import render_template
+from tml.utils.atomic import atomic_write_text
 
 
 SKLEARN_TO_AUTOGLUON_METRIC = {
@@ -43,6 +44,8 @@ AUTOGLUON_METRICS = set(SKLEARN_TO_AUTOGLUON_METRIC.values()) | {
     "root_mean_squared_log_error",
     "spearmanr",
 }
+
+DATA_OVERVIEW_REL_PATH = Path("docs") / "data-overview.md"
 
 
 def _progress(progress: Callable[[str], None] | None, message: str) -> None:
@@ -118,19 +121,18 @@ def render_project_metadata_prompt(
     progress: Callable[[str], None] | None = None,
 ) -> dict[str, str]:
     resolved_pages = pages if pages is not None else fetch_competition_pages(slug, progress=progress)
-    _progress(progress, "EDA...")
     return render_template(
         project_dir,
         "project.metadata",
         {
-        "slug": slug,
-        "pages": resolved_pages,
-        "sample_submission_header": sample_submission_header or _sample_submission_header(project_dir),
-        "data_overview": _data_overview(project_dir),
-        "sklearn_to_autogluon_metrics": dict(sorted(SKLEARN_TO_AUTOGLUON_METRIC.items())),
-        "autogluon_metrics": sorted(AUTOGLUON_METRICS),
-    },
-)
+            "slug": slug,
+            "pages": resolved_pages,
+            "sample_submission_header": sample_submission_header or _sample_submission_header(project_dir),
+            "data_overview": _data_overview(project_dir, progress=progress),
+            "sklearn_to_autogluon_metrics": dict(sorted(SKLEARN_TO_AUTOGLUON_METRIC.items())),
+            "autogluon_metrics": sorted(AUTOGLUON_METRICS),
+        },
+    )
 
 
 def normalize_project_metadata(payload: dict[str, Any]) -> dict[str, Any]:
@@ -254,17 +256,51 @@ def _sample_submission_header(project_dir: Path) -> list[str]:
     return []
 
 
-def _data_overview(project_dir: Path) -> str:
+def _data_overview(project_dir: Path, *, progress: Callable[[str], None] | None = None) -> str:
+    path = project_dir / DATA_OVERVIEW_REL_PATH
+    files = _data_files(project_dir)
+    if _data_overview_is_current(path, files):
+        return _data_overview_body(path.read_text(encoding="utf-8"))
+
+    _progress(progress, "EDA...")
+    body = _build_data_overview(files)
+    text = f"# Data Overview\n\n{body}".strip() + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(path, text)
+    return body
+
+
+def _data_files(project_dir: Path) -> list[Path]:
     data_dir = _project_data_dir(project_dir)
-    files = sorted(
+    return sorted(
         path
         for path in data_dir.iterdir()
         if path.is_file() and (path.suffix == ".csv" or path.name.endswith(".csv.gz"))
     ) if data_dir.exists() else []
+
+
+def _data_overview_is_current(path: Path, files: list[Path]) -> bool:
+    if not path.exists():
+        return False
+    overview_mtime = path.stat().st_mtime
+    return all(file.stat().st_mtime <= overview_mtime for file in files)
+
+
+def _build_data_overview(files: list[Path]) -> str:
     if not files:
         return "No local CSV data files found."
     sections = [_summarize_csv_file(path) for path in files]
     return "\n\n".join(section for section in sections if section).strip()
+
+
+def _data_overview_body(text: str) -> str:
+    stripped = text.strip()
+    heading = "# Data Overview"
+    if stripped == heading:
+        return ""
+    if stripped.startswith(heading + "\n"):
+        return stripped[len(heading) :].strip()
+    return stripped
 
 
 def _project_data_dir(project_dir: Path) -> Path:

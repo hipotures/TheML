@@ -1,13 +1,35 @@
+You are designing one concise, executable modeling hypothesis for this TheML
+project.
+
+# Task
+
 {{ task_text }}
+
+{{ data_overview }}
+
+# Project Target Contract
+{% set target = project.get("target", {}) %}
+- ID column: {{ target.get("id_column") or "unknown" }}
+- Target column: {{ target.get("target_column") or "unknown" }}
+- Problem type: {{ target.get("problem_type") or "unknown" }}
+- Evaluation metric: {{ target.get("autogluon_metric") or target.get("sklearn_metric") or "unknown" }}
+- Submission kind: {{ target.get("submission_kind") or "unknown" }}
 
 Return only valid JSON. Do not use markdown fences.
 
-Return one modeling hypothesis with this shape:
+Base the hypothesis on the task description and Data Overview above. Do not
+invent columns, files, labels, or feature distributions that are not shown.
+Do not propose generic EDA as the hypothesis. Propose one concrete modeling or
+feature strategy that can be materialized and evaluated.
+
+Return one modeling hypothesis with this exact shape:
 {
   "title": "short descriptive title",
-  "rationale": "why this direction should work for this task",
-  "approach": "modeling plan including preprocessing, validation, and metric handling",
-  "risks": ["specific risk or failure mode"],
-  "features": ["feature engineering or input handling idea"],
-  "validation": "how to validate against the evaluation metric"
+  "summary": "one sentence summary of the experiment",
+  "feature_family": "short stable family name",
+  "feature_strategy": "specific features, preprocessing, model choice, validation, and metric handling",
+  "materialization_hint": "how TheML should implement the idea; AutoGluon mode should usually define preprocess(df), legacy mode may write a full script",
+  "expected_signal": "why this should improve or clarify the metric",
+  "risk": "specific risk or failure mode",
+  "sources": []
 }

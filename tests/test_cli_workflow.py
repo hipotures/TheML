@@ -9,6 +9,9 @@ import yaml
 from typer.testing import CliRunner
 
 from tml.cli.main import app
+from tml.prompts import probe as prompt_probe
+from tml.prompts.context import project_prompt_context
+from tml.prompts.renderer import render_template
 
 
 runner = CliRunner()
@@ -28,6 +31,10 @@ def ensure_root_resources(root: Path) -> None:
         target = root / name
         if not target.exists():
             shutil.copytree(source_root / name, target)
+
+
+def rendered_output_path(result) -> Path:
+    return Path(result.output.strip().splitlines()[-1])
 
 
 def fake_kaggle_cli(tmp_path: Path, *, sample_submission: str | None = None) -> dict[str, str]:
@@ -307,13 +314,14 @@ def test_prompt_render_project_metadata_uses_metadata_template(tmp_path: Path):
     result = invoke(tmp_path, "prompt", "render", "project", "metadata", env=env)
     assert result.exit_code == 0, result.output
 
-    request_path = Path(result.output.strip())
+    request_path = rendered_output_path(result)
     assert request_path.exists()
     request_text = request_path.read_text(encoding="utf-8")
     assert "You are configuring a Kaggle machine learning project." in request_text
-    assert "Competition slug: playground-series-s6e6" in request_text
+    assert "Competition slug: playground-series-s6e6" not in request_text
     assert "balanced accuracy" in request_text
     assert "Sample submission header: ['id', 'class']" in request_text
+    assert "# Data Overview" in request_text
     assert "Generate ROOT hypotheses" not in request_text
 
     request_json = yaml.safe_load((request_path.parent / "request.json").read_text(encoding="utf-8"))
@@ -410,14 +418,36 @@ def test_prompt_render_probe_and_diff_do_not_create_nodes(tmp_path: Path):
 
     render = invoke(tmp_path, "prompt", "render", "root", "hypothesis")
     assert render.exit_code == 0, render.output
-    rendered_path = Path(render.output.strip().splitlines()[-1])
+    rendered_path = rendered_output_path(render)
     assert rendered_path.exists()
-    assert "ROOT hypothesis" in rendered_path.read_text(encoding="utf-8")
+    rendered_text = rendered_path.read_text(encoding="utf-8")
+    assert "# Data Overview" in rendered_text
+    assert "Return one modeling hypothesis" in rendered_text
+    assert '"feature_family"' in rendered_text
+    assert '"materialization_hint"' in rendered_text
+    assert '"expected_signal"' in rendered_text
 
     code_render = invoke(tmp_path, "prompt", "render", "1", "code", "tmp=true")
     assert code_render.exit_code == 0, code_render.output
-    code_rendered_path = Path(code_render.output.strip().splitlines()[-1])
-    assert "preprocess(df)" in code_rendered_path.read_text(encoding="utf-8")
+    code_rendered_path = rendered_output_path(code_render)
+    code_rendered_text = code_rendered_path.read_text(encoding="utf-8")
+    assert "preprocess(df)" in code_rendered_text
+    assert "# Task" in code_rendered_text
+    assert "# Data Overview" in code_rendered_text
+    assert "balanced accuracy" in code_rendered_text
+    assert "Baseline robust tabular preprocessing" in code_rendered_text
+
+    project_dir = tmp_path / "projects" / "kaggle" / "playground-series-s6e6"
+    hypothesis = yaml.safe_load((project_dir / "hypotheses" / "000001" / "hypothesis.yaml").read_text(encoding="utf-8"))
+    legacy_rendered = render_template(
+        project_dir,
+        "root.materialize-legacy",
+        project_prompt_context(project_dir, hypothesis=hypothesis),
+    )["rendered"]
+    assert "# Task" in legacy_rendered
+    assert "# Data Overview" in legacy_rendered
+    assert "TML_RESULT_JSON" in legacy_rendered
+    assert "Baseline robust tabular preprocessing" in legacy_rendered
 
     probe = invoke(tmp_path, "prompt", "probe", "root", "hypothesis")
     assert probe.exit_code == 0, probe.output
@@ -435,6 +465,22 @@ def test_prompt_render_probe_and_diff_do_not_create_nodes(tmp_path: Path):
     diff = invoke(tmp_path, "prompt", "diff", "1", "code")
     assert diff.exit_code == 0, diff.output
     assert "saved request differs" in diff.output or "saved request matches" in diff.output
+
+
+def test_prompt_render_paths_do_not_collide_when_created_in_same_second(tmp_path: Path, monkeypatch):
+    env = fake_kaggle_cli(tmp_path)
+    assert invoke(tmp_path, "init", "project", "playground-series-s6e6", env=env).exit_code == 0
+    project_dir = tmp_path / "projects" / "kaggle" / "playground-series-s6e6"
+    tmp_root = tmp_path / "prompt-tmp"
+
+    monkeypatch.setattr(prompt_probe, "timestamp_id", lambda: "20260621T000000", raising=False)
+
+    first = prompt_probe.render_prompt(project_dir, tmp_root=tmp_root)
+    second = prompt_probe.render_prompt(project_dir, target="project", stage="metadata", tmp_root=tmp_root)
+
+    assert first != second
+    assert yaml.safe_load((first.parent / "request.json").read_text(encoding="utf-8"))["template_id"] == "root.hypothesis"
+    assert yaml.safe_load((second.parent / "request.json").read_text(encoding="utf-8"))["template_id"] == "project.metadata"
 
 
 def test_root_ensure_is_idempotent_for_failed_autogluon_attempt(tmp_path: Path):
