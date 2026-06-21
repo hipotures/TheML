@@ -29,7 +29,6 @@ class MockAiClient:
                 "family": "missingness",
                 "summary": "Create one binary missingness indicator per numeric raw column.",
                 "depends_on": [],
-                "main_inputs": ["numeric raw columns"],
                 "uses_aux": False,
                 "uses_id": False,
                 "uses_train_test_covariate_stats": False,

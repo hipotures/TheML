@@ -3,7 +3,7 @@ You are materializing one feature-group hypothesis for TheML legacy mode.
 {% include "blocks/task-context.md.j2" %}
 
 # Hypothesis
-{% for key in ["hypothesis_id", "title", "group_name", "family", "summary", "depends_on", "main_inputs", "uses_aux", "uses_id", "uses_train_test_covariate_stats", "strategy", "expected_signal", "risk"] %}
+{% for key in ["hypothesis_id", "title", "group_name", "family", "summary", "depends_on", "uses_aux", "uses_id", "uses_train_test_covariate_stats", "strategy", "expected_signal", "risk"] %}
 {% if hypothesis.get(key) is not none -%}
 - {{ key }}: {{ hypothesis.get(key) }}
 {% endif %}

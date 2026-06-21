@@ -1,10 +1,10 @@
-You are designing one ROOT feature-group hypothesis for TheML.
+You are designing feature-group hypothesis.
 
 {% include "blocks/task-context.md.j2" %}
 
 {% include "blocks/existing-root-hypotheses.md.j2" %}
 
-# ROOT Rules
+# Rules
 
 - Create exactly one new semantic feature group.
 - Do not create a full preprocessing pipeline.
@@ -14,7 +14,7 @@ You are designing one ROOT feature-group hypothesis for TheML.
 - The group may contain multiple derived columns only when they belong to one coherent semantic idea.
 - A hypothesis must represent one homogeneous group-level change. Multiple implementation details are allowed only when they are necessary parts of that same semantic change.
 - Use prior root groups only to avoid obvious repetition.
-- ROOT v1 must use `depends_on: []`.
+- must use `depends_on: []`.
 - Do not output code.
 
 {% include "blocks/output-contract.md.j2" %}
@@ -27,10 +27,6 @@ Return exactly this JSON object:
   "family": "compact feature-family label",
   "summary": "one sentence summary of the feature group",
   "depends_on": [],
-  "main_inputs": ["main conceptual raw columns, not every temporary column"],
-  "uses_aux": false,
-  "uses_id": false,
-  "uses_train_test_covariate_stats": false,
   "strategy": "concrete deterministic feature logic, formulas, bins, statistics, and edge handling",
   "expected_signal": "why this group may improve or clarify the metric",
   "risk": "specific overfitting, leakage, cost, redundancy, or instability risk"

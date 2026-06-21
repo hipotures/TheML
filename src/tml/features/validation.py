@@ -39,7 +39,6 @@ def validate_root_hypothesis(payload: dict[str, Any]) -> None:
             "family",
             "summary",
             "depends_on",
-            "main_inputs",
             "strategy",
             "expected_signal",
             "risk",

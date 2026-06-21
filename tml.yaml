@@ -15,7 +15,11 @@ models:
     model: gpt-5.4
     effort: low
     timeout_seconds: 30
-  hypothesis: mock
+  hypothesis:
+    provider: codex
+    model: gpt-5.4
+    effort: high
+    timeout_seconds: 600
   code: mock
   review: mock
   bugfix: mock
