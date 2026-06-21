@@ -9,7 +9,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from rich.tree import Tree
 
-from tml.cli.prompt_output import print_prompt_choices, print_prompt_render_summary
+from tml.cli.prompt_output import print_prompt_choices, print_prompt_probe_summary, print_prompt_render_summary
 from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.errors import TmlError
 from tml.core.kaggle import download_competition_data
@@ -237,6 +237,9 @@ def prompt_probe_cmd(ctx: typer.Context) -> None:
         ref = active_project_ref()
         overrides = _overrides(ctx.args)
         positional = _positional(ctx.args)
+        if not positional:
+            print_prompt_choices(console)
+            return
         tmp = _bool(overrides.get("tmp", True))
         model = str(overrides["model"]) if "model" in overrides else None
         target, stage = _prompt_target_stage(positional)
@@ -270,7 +273,7 @@ def prompt_probe_cmd(ctx: typer.Context) -> None:
                 model_override=model,
                 tmp_root=_tmp_root(),
             )
-        console.print(str(path))
+        print_prompt_probe_summary(console, path)
     except Exception as exc:
         _abort(exc)
 
