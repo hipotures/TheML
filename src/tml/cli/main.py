@@ -212,7 +212,9 @@ def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: s
             created = int(state["created"])
             timeout_seconds = int(state["timeout"])
             message = str(state["message"])
-        progress.update(task, description=message, total=timeout_seconds, completed=timeout_seconds)
+            started_at = float(state["started_at"])
+        elapsed = min(timeout_seconds, max(0.0, time.monotonic() - started_at))
+        progress.update(task, description=message, total=timeout_seconds, completed=elapsed)
     if isinstance(error, Exception):
         raise error
     return created
@@ -403,7 +405,9 @@ def _probe_with_progress(
             path = state["path"]
             timeout_seconds = int(state["timeout"])
             message = str(state["message"])
-        progress.update(task, description=message, total=timeout_seconds, completed=timeout_seconds)
+            started_at = float(state["started_at"])
+        elapsed = min(timeout_seconds, max(0.0, time.monotonic() - started_at))
+        progress.update(task, description=message, total=timeout_seconds, completed=elapsed)
     if isinstance(error, Exception):
         raise error
     if not isinstance(path, Path):

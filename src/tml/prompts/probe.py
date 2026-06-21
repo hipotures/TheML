@@ -10,6 +10,8 @@ from tml.core.config import active_mode, load_project_config, repo_models_for_pr
 from tml.core.errors import TmlError
 from tml.core.ids import run_id
 from tml.core.metadata import render_project_metadata_prompt
+from tml.features.validation import validate_group_code_source
+from tml.hypotheses.materialize import _parse_code
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
 from tml.utils.atomic import atomic_write_json, atomic_write_text
@@ -59,7 +61,7 @@ def probe_prompt(
         progress(f"Output dir: {out_dir}", timeout_seconds)
         progress(f"Request will be written to {out_dir / 'request.md'}", timeout_seconds)
         progress(f"Sending {role} prompt to {model}...", timeout_seconds)
-    run_model_invocation(
+    response = run_model_invocation(
         ModelInvocation(
             role=role,
             model=model,
@@ -77,6 +79,11 @@ def probe_prompt(
         providers=providers,
         role_options=role_options,
     )
+    if target and stage == "code":
+        mode = active_mode(load_project_config(project_dir))
+        code = _parse_code(response.text)
+        validate_group_code_source(code)
+        atomic_write_text(out_dir / f"{mode}-001.py", _probe_wrapper_source(mode, code, project_dir))
     return out_dir
 
 
@@ -156,3 +163,37 @@ def _request_json(project_dir: Path, rendered: dict[str, str], kind: str, model:
 def _tmp_dir(project_dir: Path, tmp_root: Path | None) -> Path:
     root = tmp_root or Path("/tmp")
     return root / "tml" / project_dir.name / run_id()
+
+
+def _probe_wrapper_source(mode: str, group_code: str, project_dir: Path) -> str:
+    project_literal = repr(str(project_dir.resolve()))
+    if mode == "legacy":
+        runner_import = "from tml.execution.executor import run_legacy_group_materialization"
+        runner_call = (
+            "run_legacy_group_materialization("
+            "code_path=Path(__file__), project_dir=project_dir, work_dir=work_dir)"
+        )
+    else:
+        runner_import = "from tml.execution.autogluon_wrapper import run_autogluon_materialization"
+        runner_call = (
+            "run_autogluon_materialization("
+            "code_path=Path(__file__), project_dir=project_dir, work_dir=work_dir)"
+        )
+    return (
+        "# TheML probe artifact.\n"
+        "# Generated feature-group code is below.\n"
+        f"# Fixed wrapper implementation: src/tml/execution/{'executor.py' if mode == 'legacy' else 'autogluon_wrapper.py'}.\n"
+        "# The __main__ block is a local preview wrapper so this file can be\n"
+        "# inspected or run manually without changing the real materialization.\n\n"
+        f"{group_code.rstrip()}\n\n\n"
+        "if __name__ == \"__main__\":\n"
+        "    import json\n"
+        "    from dataclasses import asdict\n"
+        "    from pathlib import Path\n\n"
+        f"    {runner_import}\n\n"
+        f"    project_dir = Path({project_literal})\n"
+        f"    work_dir = Path(__file__).with_suffix(\"\") / \"{mode}-probe-workdir\"\n"
+        f"    result = {runner_call}\n"
+        "    print(\"TML_PROBE_RESULT_JSON: \" + json.dumps(asdict(result), default=str, sort_keys=True))\n"
+        "    raise SystemExit(result.returncode)\n"
+    )

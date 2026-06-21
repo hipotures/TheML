@@ -51,6 +51,10 @@ def run_feature_groups(
         started_at = time.perf_counter()
         status = "ok"
         warnings: list[dict[str, Any]] = []
+        print(
+            f"TheML feature group: start name={name} depends_on={','.join(depends_on) or '-'}",
+            flush=True,
+        )
         try:
             block = group["fn"](raw.copy(), {k: v.copy() for k, v in deps.items()}, aux.copy(), runtime_ctx)
             block = _normalize_block(block, raw=raw, group_name=name)
@@ -74,15 +78,22 @@ def run_feature_groups(
             status = "failed"
             raise
         finally:
+            elapsed = time.perf_counter() - started_at
+            created_columns = int(len(local_blocks.get(name, pd.DataFrame()).columns))
+            print(
+                f"TheML feature group: {status} name={name} "
+                f"elapsed_s={elapsed:.3f} rows={len(raw)} cols={created_columns}",
+                flush=True,
+            )
             if log_path is not None:
                 _append_group_log(
                     log_path,
                     {
                         "group": name,
-                        "seconds": round(time.perf_counter() - started_at, 6),
+                        "seconds": round(elapsed, 6),
                         "rows": int(len(raw)),
                         "depends_on": depends_on,
-                        "created_columns_count": int(len(local_blocks.get(name, pd.DataFrame()).columns)),
+                        "created_columns_count": created_columns,
                         "created_columns_sample": list(local_blocks.get(name, pd.DataFrame()).columns[:20]),
                         "warnings": warnings,
                         "status": status,

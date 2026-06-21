@@ -1,4 +1,12 @@
-You are materializing one feature-group hypothesis for TheML legacy mode.
+Write legacy-wrapped preprocessing code for TheML.
+
+The generated file is imported by the fixed TheML legacy wrapper. Your job is
+only to define one semantic feature group for preprocessing. The wrapper will
+run the group executor, log group timing, assign final column prefixes,
+concatenate raw features with prefixed group outputs, train the fixed legacy
+baseline, compute the metric, and write artifacts.
+
+Do not write the wrapper.
 
 {% include "blocks/task-context.md.j2" %}
 
@@ -11,4 +19,11 @@ You are materializing one feature-group hypothesis for TheML legacy mode.
 
 {% include "blocks/group-code-contract.md.j2" %}
 
-Legacy-specific rule: do not write a complete runnable script, print `TML_RESULT_JSON`, read project data files, train sklearn models, or define `main()`. The external TheML legacy wrapper will run the group executor, train the fixed legacy baseline, compute the metric, and emit the result JSON.
+Legacy wrapper boundary:
+- Do not write a complete runnable script.
+- Do not print `TML_RESULT_JSON`.
+- Do not train sklearn models.
+- Do not create validation splits.
+- Do not define `main()`.
+- Do not read project data files.
+- The fixed TheML legacy wrapper handles all of those steps outside this generated file.

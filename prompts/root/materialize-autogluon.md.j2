@@ -1,4 +1,12 @@
-Write Python code for one feature group.
+Write AutoGluon-wrapped preprocessing code for TheML.
+
+The generated file is imported by the fixed TheML AutoGluon wrapper. Your job is
+only to define one semantic feature group for preprocessing. The wrapper will
+run the group executor, log group timing, assign final column prefixes,
+concatenate raw features with prefixed group outputs, attach the target, train
+AutoGluon, predict, and write artifacts.
+
+Do not write the wrapper.
 
 {% include "blocks/task-context.md.j2" %}
 
@@ -11,4 +19,12 @@ Write Python code for one feature group.
 
 {% include "blocks/group-code-contract.md.j2" %}
 
-AutoGluon-specific rule: do not train AutoGluon, instantiate `TabularPredictor`, call `.predict()`, create `submission.csv`, or define `preprocess(df)`. The external TheML AutoGluon wrapper will run the group executor, attach the target, train AutoGluon, ignore raw ID columns during fit, and write the submission.
+AutoGluon wrapper boundary:
+- Do not train AutoGluon.
+- Do not import or instantiate `TabularPredictor`.
+- Do not call `.fit()`, `.predict()`, `.predict_proba()`, or `.leaderboard()`.
+- Do not create `submission.csv`.
+- Do not define `main()`.
+- Do not define `preprocess(df)`.
+- Do not read `train.csv`, `test.csv`, `sample_submission.csv`, or `./input`.
+- The fixed TheML AutoGluon wrapper handles all of those steps outside this generated file.

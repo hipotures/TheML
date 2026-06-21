@@ -4,6 +4,11 @@ Return only Python code. Do not use markdown fences.
 
 Define semantic feature-group functions and `FEATURE_GROUPS`.
 
+This file is not a standalone solution script. It is imported by a fixed TheML
+wrapper. The wrapper executes the registered groups and is responsible for
+logging, timing, dependency ordering, final column prefixes, final DataFrame
+assembly, model training, prediction, scoring, and artifact writing.
+
 Each feature function must use this signature:
 
 ```python
@@ -20,10 +25,12 @@ Rules:
 - Return a pandas DataFrame containing only new local feature columns with `index=raw.index`.
 - Preserve row count, row order, and index exactly.
 - Do not return raw/input columns.
+- Do not mutate `raw`, `deps`, `aux`, or `ctx` in place.
 - Do not create columns starting with `G001_` or any `G\\d+_` prefix.
 - Outputs may be numeric, boolean, categorical, or string scalar columns. Do not return nested lists, dicts, tuples, or sets.
 - You may compute covariate-only train+test statistics from `raw`; do not use target labels, validation labels, predictions, or leaderboard feedback.
 - Do not read train/test/sample_submission files, write files, train models, create `main()`, sort dependency DAGs, assign final prefixes, concatenate final blocks, or implement orchestration.
+- Do not implement timing decorators or logging wrappers. The TheML group executor logs every group call and duration.
 
 Register groups like this:
 

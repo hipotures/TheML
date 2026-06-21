@@ -56,6 +56,7 @@ def print_prompt_render_summary(console: Console, path: Path) -> None:
 def print_prompt_probe_summary(console: Console, out_dir: Path) -> None:
     request = out_dir / "request.md"
     response = out_dir / "response.md"
+    code_artifacts = sorted(out_dir.glob("autogluon-*.py")) + sorted(out_dir.glob("legacy-*.py"))
     request_json = out_dir / "request.json"
     response_json = out_dir / "response.json"
     provider_raw = out_dir / "provider-raw.json"
@@ -95,6 +96,8 @@ def print_prompt_probe_summary(console: Console, out_dir: Path) -> None:
         table.add_row("Request", str(request))
     if response.exists():
         table.add_row("Response", str(response))
+    for artifact in code_artifacts:
+        table.add_row("Code", str(artifact))
     table.add_row("Output dir", str(out_dir))
     console.print(table)
     console.print(str(response if response.exists() else out_dir))
@@ -109,6 +112,8 @@ def _probe_action(role: str | None) -> str:
         return "Sent hypothesis prompt to configured model"
     if role == "code":
         return "Sent code-generation prompt to configured model"
+    if role == "materializations":
+        return "Sent materialization-code prompt to configured model"
     if role == "metadata":
         return "Sent metadata prompt to configured model"
     return "Sent prompt to configured model"
