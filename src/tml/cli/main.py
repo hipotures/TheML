@@ -19,6 +19,7 @@ from tml.core.project import default_download_data, default_project_kind, init_p
 from tml.db.reindex import reindex_project
 from tml.hypotheses.generate import GeneratedHypothesis, generate_missing_root_hypotheses
 from tml.hypotheses.materialize import materialize_missing
+from tml.hypotheses.model import hypothesis_dirs
 from tml.hypotheses.run import run_missing
 from tml.hypotheses.status import filesystem_counts
 from tml.prompts.diff import diff_prompt
@@ -118,7 +119,7 @@ def root_generate_cmd(ctx: typer.Context) -> None:
                 progress.update(task, description=message)
 
             created = generate_missing_root_hypotheses(ref.path, count=count, progress=report)
-        _print_generated_hypotheses(created)
+        _print_generated_hypotheses(ref.path, created)
     except Exception as exc:
         _abort(exc)
 
@@ -364,13 +365,30 @@ def _print_init_project_summary(root: Path, project_dir: Path, slug: str, *, dow
     console.print(f"[bold]Next:[/bold] uv run tml project use {slug}")
 
 
-def _print_generated_hypotheses(created: list[GeneratedHypothesis]) -> None:
+def _print_generated_hypotheses(project_dir: Path, created: list[GeneratedHypothesis]) -> None:
     table = Table(title="ROOT hypotheses generated", box=box.SIMPLE_HEAVY)
     table.add_column("Hypothesis", style="bold", no_wrap=True)
     table.add_column("Model", overflow="fold")
     table.add_column("Result", overflow="fold")
     if not created:
-        table.add_row("none", "n/a", "already satisfied")
+        table = Table(title="Existing ROOT hypotheses", box=box.SIMPLE_HEAVY)
+        table.add_column("ID", style="bold", no_wrap=True)
+        table.add_column("S", justify="center", no_wrap=True)
+        table.add_column("Created", no_wrap=True)
+        table.add_column("Summary", overflow="fold")
+        table.add_column("Model", overflow="fold")
+        for hdir in hypothesis_dirs(project_dir):
+            payload = read_yaml(hdir / "hypothesis.yaml")
+            if not isinstance(payload, dict):
+                continue
+            summary = _artifact_run_summary(hdir, "01-hypothesis")
+            table.add_row(
+                str(payload.get("hypothesis_id") or hdir.name),
+                _hypothesis_status_icon(payload),
+                str(payload.get("created_at") or ""),
+                _short_text(str(payload.get("summary") or ""), 30),
+                summary["model"] if summary else "",
+            )
         console.print(table)
         return
     for item in created:
@@ -381,6 +399,24 @@ def _print_generated_hypotheses(created: list[GeneratedHypothesis]) -> None:
             summary["result"] if summary else "unknown",
         )
     console.print(table)
+
+
+def _hypothesis_status_icon(payload: dict[str, object]) -> str:
+    if payload.get("enabled", True) is False:
+        return "x"
+    status = str(payload.get("status") or "").lower()
+    if status in {"failed", "error"}:
+        return "!"
+    if status in {"done", "completed", "ok"}:
+        return "+"
+    return "."
+
+
+def _short_text(value: str, limit: int) -> str:
+    text = " ".join(value.split())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
 
 
 def _metadata_run_summary(project_dir: Path) -> dict[str, str] | None:
