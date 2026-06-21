@@ -57,8 +57,10 @@ def print_prompt_probe_summary(console: Console, out_dir: Path) -> None:
     request = out_dir / "request.md"
     response = out_dir / "response.md"
     request_json = out_dir / "request.json"
+    response_json = out_dir / "response.json"
     provider_raw = out_dir / "provider-raw.json"
     request_meta = read_yaml(request_json) if request_json.exists() else {}
+    response_meta = read_yaml(response_json) if response_json.exists() else {}
     provider_meta = read_yaml(provider_raw) if provider_raw.exists() else {}
     raw_provider = provider_meta.get("raw", {}) if isinstance(provider_meta, dict) else {}
     role = _metadata_value(request_meta, "role") or _metadata_value(raw_provider, "role")
@@ -83,6 +85,12 @@ def print_prompt_probe_summary(console: Console, out_dir: Path) -> None:
         table.add_row("Model", str(model))
     if simulated is not None:
         table.add_row("Simulated", str(simulated).lower())
+    run_summary = _run_summary(response_meta)
+    if run_summary:
+        table.add_row("Run", run_summary)
+    error = _metadata_value(response_meta, "error")
+    if error:
+        table.add_row("Error", str(error))
     if request.exists():
         table.add_row("Request", str(request))
     if response.exists():
@@ -104,3 +112,33 @@ def _probe_action(role: str | None) -> str:
     if role == "metadata":
         return "Sent metadata prompt to configured model"
     return "Sent prompt to configured model"
+
+
+def _run_summary(response: object) -> str | None:
+    if not isinstance(response, dict):
+        return None
+    status = response.get("status")
+    if not status:
+        return None
+    result = str(status)
+    wall_ms = response.get("wall_ms")
+    if isinstance(wall_ms, int):
+        result = f"{result} in {wall_ms / 1000:.1f}s"
+    total_tokens = _run_total_tokens(response)
+    if total_tokens is not None:
+        result = f"{result}, totalTokens={total_tokens}"
+    return result
+
+
+def _run_total_tokens(response: dict[str, object]) -> int | None:
+    usage = response.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    token_usage = usage.get("tokenUsage")
+    if not isinstance(token_usage, dict):
+        return None
+    total = token_usage.get("total")
+    if not isinstance(total, dict):
+        return None
+    total_tokens = total.get("totalTokens")
+    return total_tokens if isinstance(total_tokens, int) else None
