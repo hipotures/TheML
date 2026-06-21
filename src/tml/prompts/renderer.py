@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,7 @@ def render_template(project_dir: Path, template_id: str, context: dict[str, Any]
     source, source_path = template_text(project_dir, template_id)
     prompt_source = _strip_front_matter(source)
     render_context = {"project_dir": str(project_dir), **context}
-    rendered = _render(prompt_source, render_context)
+    rendered = _normalize_blank_lines(_render(prompt_source, render_context))
     return {
         "template_id": template_id,
         "template_path": source_path,
@@ -32,6 +33,10 @@ def _strip_front_matter(source: str) -> str:
     if "template_id:" not in front_matter:
         return source
     return source[end + len("\n---\n") :]
+
+
+def _normalize_blank_lines(text: str) -> str:
+    return re.sub(r"\n[ \t]*\n(?:[ \t]*\n)+", "\n\n", text)
 
 
 def _render(source: str, context: dict[str, Any]) -> str:
@@ -71,8 +76,6 @@ def _render_simple(source: str, context: dict[str, Any]) -> str:
 
 
 def _template_expressions(source: str) -> list[str]:
-    import re
-
     return [match.strip() for match in re.findall(r"{{\s*([^}]+?)\s*}}", source)]
 
 

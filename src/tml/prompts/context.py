@@ -43,6 +43,15 @@ def _existing_hypothesis_memory(project_dir: Path, *, limit: int = 12) -> list[d
     memory: list[dict[str, object]] = []
     for hypothesis in enabled_hypotheses(project_dir)[-limit:]:
         entry = {key: hypothesis[key] for key in HYPOTHESIS_MEMORY_FIELDS if hypothesis.get(key)}
+        if entry.get("summary"):
+            entry["prompt_summary"] = _truncate_text(str(entry["summary"]), 250)
         if entry:
             memory.append(entry)
     return memory
+
+
+def _truncate_text(value: str, limit: int) -> str:
+    text = " ".join(value.split())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"

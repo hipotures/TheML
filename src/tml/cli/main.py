@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -35,6 +36,16 @@ project_app = typer.Typer(no_args_is_help=True)
 root_app = typer.Typer(no_args_is_help=True)
 prompt_app = typer.Typer(no_args_is_help=True)
 kaggle_app = typer.Typer(no_args_is_help=True)
+
+ROOT_HYPOTHESIS_COLUMNS = [
+    {"key": "id", "label": "ID", "style": "bold", "no_wrap": True},
+    {"key": "status", "label": "S", "justify": "center", "no_wrap": True},
+    {"key": "created_at", "label": "Created", "no_wrap": True},
+    {"key": "model", "label": "Model", "no_wrap": True},
+    {"key": "reasoning_tokens", "label": "Res/Tokens", "justify": "right", "no_wrap": True},
+    {"key": "duration", "label": "Gen", "no_wrap": True},
+    {"key": "summary", "label": "Summary", "overflow": "fold", "min_width": 40, "ratio": 1, "truncate": True},
+]
 
 app.add_typer(init_app, name="init")
 app.add_typer(project_app, name="project")
@@ -108,11 +119,13 @@ def root_generate_cmd(ctx: typer.Context) -> None:
         ref = active_project_ref()
         overrides = _overrides(ctx.args)
         count = int(overrides["count"]) if "count" in overrides else None
+        json_output = _bool(overrides.get("json", False)) or _bool(overrides.get("json_output", False))
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
-            transient=False,
+            transient=json_output,
+            disable=json_output,
         ) as progress:
             task = progress.add_task("Generating ROOT hypotheses...", total=None)
 
@@ -120,6 +133,9 @@ def root_generate_cmd(ctx: typer.Context) -> None:
                 progress.update(task, description=message)
 
             created = generate_missing_root_hypotheses(ref.path, count=count, progress=report)
+        if json_output:
+            _print_generated_hypotheses_json(ref.path, created)
+            return
         _print_generated_hypotheses(ref.path, created)
     except Exception as exc:
         _abort(exc)
@@ -132,7 +148,8 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
         mode = str(overrides.get("mode") or active_mode(config))
-        created = materialize_missing(ref.path, mode=mode)
+        hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
+        created = materialize_missing(ref.path, mode=mode, hypothesis_id=str(hypothesis_id) if hypothesis_id else None)
         console.print(f"Materializations created: {created}")
     except Exception as exc:
         _abort(exc)
@@ -367,43 +384,95 @@ def _print_init_project_summary(root: Path, project_dir: Path, slug: str, *, dow
 
 
 def _print_generated_hypotheses(project_dir: Path, created: list[GeneratedHypothesis]) -> None:
-    table = Table(title="ROOT hypotheses generated", box=box.SIMPLE_HEAVY)
-    table.add_column("Hypothesis", style="bold", no_wrap=True)
-    table.add_column("Model", overflow="fold")
-    table.add_column("Result", overflow="fold")
-    if not created:
-        table = Table(title="Existing ROOT hypotheses", box=box.SIMPLE_HEAVY)
-        table.add_column("ID", style="bold", no_wrap=True)
-        table.add_column("S", justify="center", no_wrap=True)
-        table.add_column("Created", no_wrap=True)
-        table.add_column("Summary", overflow="fold")
-        table.add_column("Model", no_wrap=True)
-        table.add_column("Gen", no_wrap=True)
-        summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
-        for hdir in hypothesis_dirs(project_dir):
-            payload = read_yaml(hdir / "hypothesis.yaml")
-            if not isinstance(payload, dict):
-                continue
-            payload["_hdir"] = str(hdir)
-            summary = _artifact_run_summary(hdir, "01-hypothesis")
-            table.add_row(
-                str(payload.get("hypothesis_id") or hdir.name),
-                _hypothesis_status_icon(payload),
-                str(payload.get("created_at") or ""),
-                _short_text(str(payload.get("summary") or ""), summary_limit),
-                summary["model"] if summary else "",
-                summary["duration"] if summary else "",
-            )
-        console.print(table)
-        return
-    for item in created:
-        summary = _artifact_run_summary(item.path, "01-hypothesis")
-        table.add_row(
-            item.hypothesis_id,
-            summary["model"] if summary else "unknown",
-            summary["result"] if summary else "unknown",
+    created_ids = {item.hypothesis_id for item in created}
+    _print_existing_root_hypotheses(project_dir, created_ids=created_ids)
+
+
+def _print_generated_hypotheses_json(project_dir: Path, created: list[GeneratedHypothesis]) -> None:
+    created_ids = {item.hypothesis_id for item in created}
+    payload = {
+        "created": sorted(created_ids),
+        "hypotheses": [
+            _root_hypothesis_json_row(hdir, created_ids=created_ids)
+            for hdir in hypothesis_dirs(project_dir)
+        ],
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def _print_existing_root_hypotheses(project_dir: Path, *, created_ids: set[str]) -> None:
+    table = Table(title="Existing ROOT hypotheses", box=box.SIMPLE_HEAVY)
+    for column in ROOT_HYPOTHESIS_COLUMNS:
+        table.add_column(
+            str(column["label"]),
+            style=str(column["style"]) if column.get("style") else None,
+            justify=str(column["justify"]) if column.get("justify") else "left",
+            no_wrap=bool(column.get("no_wrap", False)),
+            overflow=str(column["overflow"]) if column.get("overflow") else None,
+            min_width=int(column["min_width"]) if column.get("min_width") else None,
+            ratio=int(column["ratio"]) if column.get("ratio") else None,
         )
+    summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
+    rows = []
+    for hdir in hypothesis_dirs(project_dir):
+        row = _root_hypothesis_row(hdir, created_ids=created_ids)
+        if not row:
+            continue
+        rows.append(
+            (
+                bool(row["is_new"]),
+                _root_hypothesis_table_values(row, summary_limit=summary_limit),
+            )
+        )
+    old_rows = [row for is_new, row in rows if not is_new]
+    new_rows = [row for is_new, row in rows if is_new]
+    for row in old_rows:
+        table.add_row(*row)
+    if old_rows and new_rows:
+        table.add_row("NEW", *["" for _ in ROOT_HYPOTHESIS_COLUMNS[1:]], style="reverse")
+    for row in new_rows:
+        table.add_row(*row, style="bold")
     console.print(table)
+
+
+def _root_hypothesis_json_row(hdir: Path, *, created_ids: set[str]) -> dict[str, object]:
+    row = _root_hypothesis_row(hdir, created_ids=created_ids)
+    if not row:
+        return {}
+    return {
+        "is_new": bool(row["is_new"]),
+        **{str(column["key"]): row.get(str(column["key"]), "") for column in ROOT_HYPOTHESIS_COLUMNS},
+    }
+
+
+def _root_hypothesis_table_values(row: dict[str, object], *, summary_limit: int) -> list[str]:
+    values = []
+    for column in ROOT_HYPOTHESIS_COLUMNS:
+        key = str(column["key"])
+        value = str(row.get(key, ""))
+        if column.get("truncate"):
+            value = _short_text(value, summary_limit)
+        values.append(value)
+    return values
+
+
+def _root_hypothesis_row(hdir: Path, *, created_ids: set[str]) -> dict[str, object]:
+    payload = read_yaml(hdir / "hypothesis.yaml")
+    if not isinstance(payload, dict):
+        return {}
+    payload["_hdir"] = str(hdir)
+    summary = _artifact_run_summary(hdir, "01-hypothesis")
+    hypothesis_id = str(payload.get("hypothesis_id") or hdir.name)
+    return {
+        "id": hypothesis_id,
+        "is_new": hypothesis_id in created_ids,
+        "status": _hypothesis_status_icon(payload),
+        "created_at": str(payload.get("created_at") or ""),
+        "model": summary["model"] if summary else "",
+        "reasoning_tokens": summary["reasoning_tokens"] if summary else "",
+        "duration": summary["duration"] if summary else "",
+        "summary": str(payload.get("summary") or ""),
+    }
 
 
 def _hypothesis_status_icon(payload: dict[str, object]) -> str:
@@ -509,12 +578,32 @@ def _run_summary_from_paths(request_path: Path, response_path: Path) -> dict[str
         duration = f"{wall_ms / 1000:.1f}s"
         result = f"{status} in {duration}"
     total_tokens = _run_total_tokens(response)
-    if total_tokens is not None:
-        result = f"{result}, totalTokens={total_tokens}"
-    return {"model": model, "result": result, "duration": duration}
+    reasoning_tokens = _run_reasoning_tokens(response)
+    token_summary = ""
+    if reasoning_tokens is not None and total_tokens is not None:
+        token_summary = f"{reasoning_tokens}/{total_tokens}"
+    elif total_tokens is not None:
+        token_summary = str(total_tokens)
+    return {"model": model, "result": result, "duration": duration, "reasoning_tokens": token_summary}
 
 
 def _run_total_tokens(response: dict[str, object]) -> int | None:
+    total = _run_total_token_usage(response)
+    if total is None:
+        return None
+    total_tokens = total.get("totalTokens")
+    return total_tokens if isinstance(total_tokens, int) else None
+
+
+def _run_reasoning_tokens(response: dict[str, object]) -> int | None:
+    total = _run_total_token_usage(response)
+    if total is None:
+        return None
+    reasoning_tokens = total.get("reasoningOutputTokens")
+    return reasoning_tokens if isinstance(reasoning_tokens, int) else None
+
+
+def _run_total_token_usage(response: dict[str, object]) -> dict[str, object] | None:
     usage = response.get("usage")
     if not isinstance(usage, dict):
         return None
@@ -524,8 +613,7 @@ def _run_total_tokens(response: dict[str, object]) -> int | None:
     total = token_usage.get("total")
     if not isinstance(total, dict):
         return None
-    total_tokens = total.get("totalTokens")
-    return total_tokens if isinstance(total_tokens, int) else None
+    return total
 
 
 def _print_kaggle_download_summary(root: Path, slug: str, data_dir: Path) -> None:

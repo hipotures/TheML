@@ -10,14 +10,19 @@
 {% set metric = target.get("autogluon_metric") or target.get("sklearn_metric") %}
 {% if target.get("id_column") or target.get("target_column") or target.get("problem_type") or metric or target.get("submission_kind") %}
 # Project Target
-{% if target.get("id_column") %}- ID column: {{ target.get("id_column") }}
-{% endif %}
-{% if target.get("target_column") %}- Target column: {{ target.get("target_column") }}
-{% endif %}
-{% if target.get("problem_type") %}- Problem type: {{ target.get("problem_type") }}
-{% endif %}
-{% if metric %}- Evaluation metric: {{ metric }}
-{% endif %}
-{% if target.get("submission_kind") %}- Submission kind: {{ target.get("submission_kind") }}
-{% endif %}
+{% if target.get("id_column") -%}
+- ID column: {{ target.get("id_column") }}
+{% endif -%}
+{% if target.get("target_column") -%}
+- Target column: {{ target.get("target_column") }}
+{% endif -%}
+{% if target.get("problem_type") -%}
+- Problem type: {{ target.get("problem_type") }}
+{% endif -%}
+{% if metric -%}
+- Evaluation metric: {{ metric }}
+{% endif -%}
+{% if target.get("submission_kind") -%}
+- Submission kind: {{ target.get("submission_kind") }}
+{% endif -%}
 {% endif %}

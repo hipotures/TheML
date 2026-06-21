@@ -17,12 +17,15 @@ from tml.utils.yaml_io import read_yaml, write_yaml
 from .model import hypothesis_dirs
 
 
-def materialize_missing(project_dir: Path, mode: str) -> int:
+def materialize_missing(project_dir: Path, mode: str, hypothesis_id: str | None = None) -> int:
     models = repo_models_for_project(project_dir)
     model, role_options = resolve_role_model(models, "code")
     providers = repo_providers_for_project(project_dir)
     created = 0
+    target_hypothesis_id = hypothesis_id.zfill(6) if hypothesis_id else None
     for hdir in hypothesis_dirs(project_dir):
+        if target_hypothesis_id and hdir.name != target_hypothesis_id:
+            continue
         mat_dir = hdir / "materializations"
         mat_dir.mkdir(parents=True, exist_ok=True)
         target = mat_dir / f"{mode}-001.py"

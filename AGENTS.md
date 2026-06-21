@@ -54,6 +54,8 @@ uv run <command>
 - Use Rich progress bars or spinners for long-running operations such as downloads, extraction, compression, indexing, training, and bulk artifact generation.
 - Keep plain text only when machine-readable output is explicitly requested.
 - Flush or live-update long-running output so the terminal does not appear idle while work is in progress.
+- Do not tune Rich table column widths based on Codex tool output screenshots/logs; the user's real terminal renders differently. Only change column layout or widths when explicitly requested.
+- When verifying CLI data for yourself, prefer JSON output flags such as `json=true`/`json_output=true` over Rich table output whenever available.
 
 ## Testing policy
 - Do not create, expand, or modify test files unless the user explicitly asks for tests in that specific request.

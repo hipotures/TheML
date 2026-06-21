@@ -6,7 +6,7 @@ defaults:
   prompt_output: tmp
   probe_output: tmp
 env:
-  TML_WIDE_TERMINAL: 50
+  TML_WIDE_TERMINAL: 80
 active_project:
   kind: kaggle
   slug: playground-series-s6e6
