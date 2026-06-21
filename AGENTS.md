@@ -55,11 +55,15 @@ uv run <command>
 - Keep plain text only when machine-readable output is explicitly requested.
 - Flush or live-update long-running output so the terminal does not appear idle while work is in progress.
 
+## Testing policy
+- Do not create, expand, or modify test files unless the user explicitly asks for tests in that specific request.
+- Do not add tests as a default safety step for code, prompt, documentation, or configuration changes.
+- Do not run test suites unless the user explicitly asks to run tests.
+
 ## Git workflow
 - If you modify files in a Git repository, do not finish the task with uncommitted changes unless the user explicitly says not to commit.
 - Any task that changes files must end in one of two states: changes committed, or an explicit explanation why they were not committed.
 - Before committing, run relevant verification and inspect `git status --short`.
-- Do not create or expand tests for every code change by default. Keep test work proportional to risk and user intent.
 - If the user asks for `git push`, first ask whether they want to check test coverage and add missing tests before pushing.
 - Commit only changes made for the current task.
 - If changes in `research_hypotheses/` are detected or created, you must commit those `research_hypotheses/` changes in a separate commit from code, script, or documentation changes outside `research_hypotheses/`.
