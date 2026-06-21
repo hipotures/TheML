@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import typer
@@ -376,7 +377,9 @@ def _print_generated_hypotheses(project_dir: Path, created: list[GeneratedHypoth
         table.add_column("S", justify="center", no_wrap=True)
         table.add_column("Created", no_wrap=True)
         table.add_column("Summary", overflow="fold")
-        table.add_column("Model", overflow="fold")
+        table.add_column("Model", no_wrap=True)
+        table.add_column("Gen", no_wrap=True)
+        summary_limit = 60 if _env_flag("TML_WIDE_TERMINAL") else 30
         for hdir in hypothesis_dirs(project_dir):
             payload = read_yaml(hdir / "hypothesis.yaml")
             if not isinstance(payload, dict):
@@ -387,8 +390,9 @@ def _print_generated_hypotheses(project_dir: Path, created: list[GeneratedHypoth
                 str(payload.get("hypothesis_id") or hdir.name),
                 _hypothesis_status_icon(payload),
                 str(payload.get("created_at") or ""),
-                _short_text(str(payload.get("summary") or ""), 30),
+                _short_text(str(payload.get("summary") or ""), summary_limit),
                 summary["model"] if summary else "",
+                summary["duration"] if summary else "",
             )
         console.print(table)
         return
@@ -439,6 +443,37 @@ def _short_text(value: str, limit: int) -> str:
     return text[: max(0, limit - 1)].rstrip() + "…"
 
 
+def _env_flag(name: str) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        value = _dotenv_value(name)
+    if value is None:
+        value = _config_env_value(name)
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _dotenv_value(name: str) -> str | None:
+    path = workspace_root() / ".env"
+    if not path.exists():
+        return None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        if key.strip() == name:
+            return value.strip().strip("\"'")
+    return None
+
+
+def _config_env_value(name: str) -> object | None:
+    config = read_yaml(workspace_root() / "tml.yaml")
+    env = config.get("env") if isinstance(config, dict) else None
+    if not isinstance(env, dict):
+        return None
+    return env.get(name)
+
+
 def _metadata_run_summary(project_dir: Path) -> dict[str, str] | None:
     request_path = project_dir / "logs" / "project-metadata" / "request.json"
     response_path = project_dir / "logs" / "project-metadata" / "response.json"
@@ -463,19 +498,17 @@ def _run_summary_from_paths(request_path: Path, response_path: Path) -> dict[str
     if not isinstance(request, dict) or not isinstance(response, dict):
         return None
     model = str(request.get("model") or response.get("model") or "unknown")
-    role_options = request.get("role_options") if isinstance(request.get("role_options"), dict) else {}
-    timeout = role_options.get("timeout_seconds") if isinstance(role_options, dict) else None
-    if timeout is not None:
-        model = f"{model} (timeout={timeout}s)"
     status = str(response.get("status") or "unknown")
     wall_ms = response.get("wall_ms")
+    duration = ""
     result = status
     if isinstance(wall_ms, int):
-        result = f"{status} in {wall_ms / 1000:.1f}s"
+        duration = f"{wall_ms / 1000:.1f}s"
+        result = f"{status} in {duration}"
     total_tokens = _run_total_tokens(response)
     if total_tokens is not None:
         result = f"{result}, totalTokens={total_tokens}"
-    return {"model": model, "result": result}
+    return {"model": model, "result": result, "duration": duration}
 
 
 def _run_total_tokens(response: dict[str, object]) -> int | None:
