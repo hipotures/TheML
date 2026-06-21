@@ -4,6 +4,18 @@ from pathlib import Path
 from typing import Any
 
 from tml.core.config import load_project_config
+from tml.hypotheses.model import enabled_hypotheses
+
+
+HYPOTHESIS_MEMORY_FIELDS = (
+    "hypothesis_id",
+    "title",
+    "summary",
+    "feature_family",
+    "feature_strategy",
+    "expected_signal",
+    "risk",
+)
 
 
 def project_prompt_context(project_dir: Path, **extra: Any) -> dict[str, Any]:
@@ -16,6 +28,17 @@ def project_prompt_context(project_dir: Path, **extra: Any) -> dict[str, Any]:
         "project": project,
         "task_text": task_text,
         "data_overview": data_overview,
+        "existing_hypotheses": _existing_hypothesis_memory(project_dir),
+        "hypothesis_count": len(enabled_hypotheses(project_dir)),
         "data_dir": str(project.get("data_dir", "data")),
         **extra,
     }
+
+
+def _existing_hypothesis_memory(project_dir: Path, *, limit: int = 12) -> list[dict[str, object]]:
+    memory: list[dict[str, object]] = []
+    for hypothesis in enabled_hypotheses(project_dir)[-limit:]:
+        entry = {key: hypothesis[key] for key in HYPOTHESIS_MEMORY_FIELDS if hypothesis.get(key)}
+        if entry:
+            memory.append(entry)
+    return memory

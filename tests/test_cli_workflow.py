@@ -426,6 +426,9 @@ def test_prompt_render_probe_and_diff_do_not_create_nodes(tmp_path: Path):
     assert '"feature_family"' in rendered_text
     assert '"materialization_hint"' in rendered_text
     assert '"expected_signal"' in rendered_text
+    assert "# Existing Modeling Hypotheses" in rendered_text
+    assert "Baseline robust tabular preprocessing" in rendered_text
+    assert "Do not repeat" in rendered_text
 
     code_render = invoke(tmp_path, "prompt", "render", "1", "code", "tmp=true")
     assert code_render.exit_code == 0, code_render.output

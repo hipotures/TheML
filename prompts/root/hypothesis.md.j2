@@ -15,6 +15,23 @@ project.
 - Evaluation metric: {{ target.get("autogluon_metric") or target.get("sklearn_metric") or "unknown" }}
 - Submission kind: {{ target.get("submission_kind") or "unknown" }}
 
+# Existing Modeling Hypotheses
+{% if existing_hypotheses %}
+Use this as memory of previous attempts. Do not repeat the same feature family,
+modeling strategy, or materialization plan unless the new hypothesis makes a
+specific, testable change.
+{% for item in existing_hypotheses %}
+- {{ item.get("hypothesis_id") or "unknown" }}: {{ item.get("title") or "Untitled" }}
+  {% if item.get("summary") %}Summary: {{ item.get("summary") }}{% endif %}
+  {% if item.get("feature_family") %}Feature family: {{ item.get("feature_family") }}{% endif %}
+  {% if item.get("feature_strategy") %}Feature strategy: {{ item.get("feature_strategy") }}{% endif %}
+  {% if item.get("expected_signal") %}Expected signal: {{ item.get("expected_signal") }}{% endif %}
+  {% if item.get("risk") %}Risk: {{ item.get("risk") }}{% endif %}
+{% endfor %}
+{% else %}
+No previous hypotheses are recorded.
+{% endif %}
+
 Return only valid JSON. Do not use markdown fences.
 
 Base the hypothesis on the task description and Data Overview above. Do not
