@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+import time
 from pathlib import Path
 
 import typer
 from rich import box
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn
 from rich.table import Table
 from rich.tree import Tree
 
@@ -149,10 +151,71 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
         overrides = _overrides(ctx.args)
         mode = str(overrides.get("mode") or active_mode(config))
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
-        created = materialize_missing(ref.path, mode=mode, hypothesis_id=str(hypothesis_id) if hypothesis_id else None)
+        created = _materialize_with_progress(
+            ref.path,
+            mode=mode,
+            hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
+        )
         console.print(f"Materializations created: {created}")
     except Exception as exc:
         _abort(exc)
+
+
+def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | None) -> int:
+    state: dict[str, object] = {
+        "message": "Preparing materialization...",
+        "timeout": 1,
+        "started_at": time.monotonic(),
+        "created": 0,
+        "error": None,
+    }
+    lock = threading.Lock()
+
+    def report(message: str, timeout_seconds: int | None = None) -> None:
+        with lock:
+            state["message"] = message
+            state["timeout"] = max(1, int(timeout_seconds or 1))
+            state["started_at"] = time.monotonic()
+
+    def run() -> None:
+        try:
+            created = materialize_missing(project_dir, mode=mode, hypothesis_id=hypothesis_id, progress=report)
+            with lock:
+                state["created"] = created
+        except Exception as exc:  # pragma: no cover - re-raised in caller thread
+            with lock:
+                state["error"] = exc
+
+    worker = threading.Thread(target=run, daemon=True)
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("{task.completed:.0f}/{task.total:.0f}s"),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        console=console,
+        transient=False,
+    ) as progress:
+        task = progress.add_task("Preparing materialization...", total=1)
+        worker.start()
+        while worker.is_alive():
+            with lock:
+                message = str(state["message"])
+                timeout_seconds = int(state["timeout"])
+                started_at = float(state["started_at"])
+            elapsed = min(timeout_seconds, max(0.0, time.monotonic() - started_at))
+            progress.update(task, description=message, total=timeout_seconds, completed=elapsed)
+            time.sleep(0.25)
+        worker.join()
+        with lock:
+            error = state["error"]
+            created = int(state["created"])
+            timeout_seconds = int(state["timeout"])
+            message = str(state["message"])
+        progress.update(task, description=message, total=timeout_seconds, completed=timeout_seconds)
+    if isinstance(error, Exception):
+        raise error
+    return created
 
 
 @root_app.command("run", context_settings=EXTRA)

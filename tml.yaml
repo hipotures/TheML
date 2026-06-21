@@ -22,7 +22,11 @@ models:
     model: gpt-5.4
     effort: high
     timeout_seconds: 600
-  code: mock
+  materializations:
+    provider: codex
+    model: gpt-5.3-codex-spark
+    effort: high
+    timeout_seconds: 900
   review: mock
   bugfix: mock
 providers:

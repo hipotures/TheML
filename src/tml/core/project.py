@@ -27,7 +27,7 @@ ROOT_CONFIG_DEFAULTS: dict[str, Any] = {
     "models": {
         "metadata": "mock",
         "hypothesis": "mock",
-        "code": "mock",
+        "materializations": "mock",
         "review": "mock",
         "bugfix": "mock",
     },

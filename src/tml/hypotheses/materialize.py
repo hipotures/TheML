@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -17,9 +18,14 @@ from tml.utils.yaml_io import read_yaml, write_yaml
 from .model import hypothesis_dirs
 
 
-def materialize_missing(project_dir: Path, mode: str, hypothesis_id: str | None = None) -> int:
+def materialize_missing(
+    project_dir: Path,
+    mode: str,
+    hypothesis_id: str | None = None,
+    progress: Callable[[str, int | None], None] | None = None,
+) -> int:
     models = repo_models_for_project(project_dir)
-    model, role_options = resolve_role_model(models, "code")
+    model, role_options = resolve_role_model(models, "materializations", fallback_role="code")
     providers = repo_providers_for_project(project_dir)
     created = 0
     target_hypothesis_id = hypothesis_id.zfill(6) if hypothesis_id else None
@@ -31,6 +37,9 @@ def materialize_missing(project_dir: Path, mode: str, hypothesis_id: str | None 
         target = mat_dir / f"{mode}-001.py"
         if target.exists():
             continue
+        timeout_seconds = int(role_options.get("timeout_seconds") or 900)
+        if progress is not None:
+            progress(f"Materializing {hdir.name} ({mode}) with {model}...", timeout_seconds)
         hypothesis = read_yaml(hdir / "hypothesis.yaml")
         template_id = f"root.materialize-{mode}"
         rendered = render_template(
@@ -41,7 +50,7 @@ def materialize_missing(project_dir: Path, mode: str, hypothesis_id: str | None 
         prompt = f"{mode}\n\n{rendered['rendered']}"
         response = run_model_invocation(
             ModelInvocation(
-                role="code",
+                role="materializations",
                 model=model,
                 prompt=prompt,
                 template_id=rendered["template_id"],
@@ -51,6 +60,7 @@ def materialize_missing(project_dir: Path, mode: str, hypothesis_id: str | None 
                 cwd=repo_root_for_project(project_dir),
                 sandbox="read_only",
                 metadata={"mode": mode},
+                progress=(lambda message: progress(message, timeout_seconds)) if progress is not None else None,
             ),
             artifact_dir=mat_dir,
             providers=providers,

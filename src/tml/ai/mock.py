@@ -36,7 +36,7 @@ class MockAiClient:
                 "expected_signal": "Missingness patterns can expose acquisition or measurement artifacts without using labels.",
                 "risk": "May add redundant constant columns when numeric columns have no missing values.",
             }
-        elif request.role == "code":
+        elif request.role in {"code", "materializations"}:
             payload = {"code": legacy_code() if "legacy" in request.prompt else autogluon_code()}
         elif request.role == "metadata":
             payload = project_metadata(request.prompt)
