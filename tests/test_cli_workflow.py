@@ -277,6 +277,7 @@ def test_init_project_uses_kaggle_pages_prompt_to_fill_task_and_config(tmp_path:
 
     project_dir = tmp_path / "projects" / "kaggle" / "playground-series-s6e6"
     task_text = (project_dir / "task.md").read_text(encoding="utf-8")
+    assert not task_text.startswith("# playground-series-s6e6")
     assert "## Goal" in task_text
     assert "Predict the stellar class" in task_text
     assert "## Evaluation" in task_text
@@ -421,6 +422,7 @@ def test_prompt_render_probe_and_diff_do_not_create_nodes(tmp_path: Path):
     rendered_path = rendered_output_path(render)
     assert rendered_path.exists()
     rendered_text = rendered_path.read_text(encoding="utf-8")
+    assert "# playground-series-s6e6" not in rendered_text
     assert "# Data Overview" in rendered_text
     assert "Return one modeling hypothesis" in rendered_text
     assert '"feature_family"' in rendered_text
@@ -434,6 +436,7 @@ def test_prompt_render_probe_and_diff_do_not_create_nodes(tmp_path: Path):
     assert code_render.exit_code == 0, code_render.output
     code_rendered_path = rendered_output_path(code_render)
     code_rendered_text = code_rendered_path.read_text(encoding="utf-8")
+    assert "# playground-series-s6e6" not in code_rendered_text
     assert "preprocess(df)" in code_rendered_text
     assert "# Task" in code_rendered_text
     assert "# Data Overview" in code_rendered_text
@@ -447,6 +450,7 @@ def test_prompt_render_probe_and_diff_do_not_create_nodes(tmp_path: Path):
         "root.materialize-legacy",
         project_prompt_context(project_dir, hypothesis=hypothesis),
     )["rendered"]
+    assert "# playground-series-s6e6" not in legacy_rendered
     assert "# Task" in legacy_rendered
     assert "# Data Overview" in legacy_rendered
     assert "TML_RESULT_JSON" in legacy_rendered

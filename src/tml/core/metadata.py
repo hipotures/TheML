@@ -213,7 +213,7 @@ def normalize_metric(target: dict[str, Any]) -> dict[str, Any]:
 
 
 def metadata_task_markdown(metadata: dict[str, Any], slug: str) -> str:
-    parts = [f"# {slug}", ""]
+    parts: list[str] = []
     for title, key in (
         ("Goal", "goal"),
         ("Evaluation", "evaluation"),

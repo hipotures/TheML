@@ -1,5 +1,3 @@
-# playground-series-s6e6
-
 ## Goal
 Predict the stellar class for each test-set object.
 
