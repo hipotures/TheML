@@ -28,6 +28,7 @@ from tml.hypotheses.run import run_missing
 from tml.hypotheses.status import filesystem_counts
 from tml.prompts.diff import diff_prompt
 from tml.prompts.probe import probe_prompt, render_prompt
+from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml
 
 
@@ -243,7 +244,12 @@ def root_run_cmd(ctx: typer.Context) -> None:
             hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
             profile_overrides=run_overrides,
         )
-        console.print(f"ROOT nodes executed: {ran}")
+        _print_root_run_summary(
+            ref.path,
+            mode=active_run_mode,
+            executed_count=ran,
+            hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
+        )
     except Exception as exc:
         _abort(exc)
 
@@ -661,6 +667,109 @@ def _root_materialization_row(hdir: Path, *, mode: str, summary_limit: int) -> l
         run["duration"] if run else "",
         _short_text(str(hypothesis.get("summary") or ""), summary_limit),
     ]
+
+
+def _print_root_run_summary(
+    project_dir: Path,
+    *,
+    mode: str,
+    executed_count: int,
+    hypothesis_id: str | None,
+) -> None:
+    target_id = hypothesis_id.zfill(6) if hypothesis_id else None
+    config = load_project_config(project_dir)
+    profile_id = active_profile_id(config, mode)
+    table = Table(title=f"ROOT run (executed: {executed_count})", box=box.SIMPLE_HEAVY)
+    table.add_column("Run", justify="center", no_wrap=True)
+    table.add_column("ID", style="bold", no_wrap=True)
+    table.add_column("S", justify="center", no_wrap=True)
+    table.add_column("Mode", no_wrap=True)
+    table.add_column("Profile", no_wrap=True)
+    table.add_column("Score", justify="right", no_wrap=True)
+    table.add_column("Node", no_wrap=True)
+    table.add_column("Summary", overflow="fold", min_width=36, ratio=1)
+    summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
+    for hdir in hypothesis_dirs(project_dir):
+        row = _root_run_row(
+            hdir,
+            project_dir=project_dir,
+            mode=mode,
+            profile_id=profile_id,
+            summary_limit=summary_limit,
+            is_target=(target_id is None or hdir.name == target_id),
+        )
+        if row:
+            table.add_row(*row)
+    console.print(table)
+
+
+def _root_run_row(
+    hdir: Path,
+    *,
+    project_dir: Path,
+    mode: str,
+    profile_id: str,
+    summary_limit: int,
+    is_target: bool,
+) -> list[str] | None:
+    hypothesis = read_yaml(hdir / "hypothesis.yaml")
+    if not isinstance(hypothesis, dict):
+        return None
+    hid = str(hypothesis.get("hypothesis_id") or hdir.name)
+    materialization = hdir / "materializations" / f"{mode}-001.py"
+    code_hash = sha256_file(materialization) if materialization.exists() else ""
+    state = _current_run_state(project_dir, hypothesis_id=hid, mode=mode, profile_id=profile_id, code_hash=code_hash)
+    if state:
+        status = "▶" if state["status"] == "complete" else "⚠"
+        score = _format_score(state.get("metric"))
+        node = str(state.get("node_id") or "")
+    elif materialization.exists():
+        status = "⌘"
+        score = ""
+        node = ""
+    else:
+        status = "◇"
+        score = ""
+        node = ""
+    return [
+        "●" if is_target else "",
+        hid,
+        status,
+        mode,
+        profile_id,
+        score,
+        node,
+        _short_text(str(hypothesis.get("summary") or ""), summary_limit),
+    ]
+
+
+def _current_run_state(
+    project_dir: Path,
+    *,
+    hypothesis_id: str,
+    mode: str,
+    profile_id: str,
+    code_hash: str,
+) -> dict[str, object] | None:
+    if not code_hash:
+        return None
+    for filename in ("node.done.yaml", "failed.yaml"):
+        for path in sorted((project_dir / "runs").glob(f"*/artifacts/*/{filename}"), reverse=True):
+            payload = read_yaml(path)
+            if (
+                payload.get("hypothesis_id") == hypothesis_id
+                and payload.get("mode") == mode
+                and payload.get("profile_id") == profile_id
+                and payload.get("code_hash") == code_hash
+            ):
+                return payload
+    return None
+
+
+def _format_score(value: object) -> str:
+    if isinstance(value, int | float):
+        return f"{float(value):.6f}"
+    return ""
 
 
 def _root_hypothesis_json_row(hdir: Path, *, created_ids: set[str]) -> dict[str, object]:
