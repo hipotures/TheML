@@ -889,6 +889,63 @@ def branch_rows(project_dir: Path, *, mode: str, profile_id: str, branch_id: str
     return [dict(row) for row in rows]
 
 
+def solution_tree_root_rows(project_dir: Path, *, mode: str, profile_id: str) -> list[dict[str, Any]]:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT
+              h.hypothesis_id, h.summary, h.created_at, h.model,
+              h.reasoning_tokens, h.total_tokens, h.generation_seconds,
+              m.code_hash, m.status AS materialization_status,
+              n.node_id, n.status AS node_status, n.run_seconds,
+              e.metric
+            FROM hypotheses h
+            LEFT JOIN materializations m
+              ON m.hypothesis_id=h.hypothesis_id AND m.mode=? AND m.active=1
+            LEFT JOIN evaluations e
+              ON e.kind='root'
+             AND e.hypothesis_id=h.hypothesis_id
+             AND e.mode=?
+             AND e.profile_id=?
+             AND e.code_hash=m.code_hash
+            LEFT JOIN nodes n ON n.node_id=e.node_id
+            ORDER BY h.hypothesis_id
+            """,
+            (mode, mode, profile_id),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def solution_tree_branch_rows(project_dir: Path, *, mode: str, profile_id: str) -> list[dict[str, Any]]:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT
+              b.branch_id, b.parent_ref, b.source_ref, b.mode,
+              b.status AS branch_status, b.created_at, b.materialization_file,
+              b.code_hash, b.composition_hash, b.summary,
+              be.parent_kind, be.parent_id, be.edge_kind,
+              n.node_id, n.status AS node_status, n.run_seconds,
+              e.metric
+            FROM branches b
+            LEFT JOIN branch_edges be ON be.branch_id=b.branch_id
+            LEFT JOIN evaluations e
+              ON e.kind='branch'
+             AND e.branch_id=b.branch_id
+             AND e.mode=b.mode
+             AND e.profile_id=?
+             AND e.code_hash=b.code_hash
+            LEFT JOIN nodes n ON n.node_id=e.node_id
+            WHERE b.mode=?
+            ORDER BY b.branch_id
+            """,
+            (profile_id, mode),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def branch_component_rows(project_dir: Path, branch_id: str) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
     with connect(db_path) as conn:

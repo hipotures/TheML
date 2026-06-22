@@ -37,6 +37,8 @@ from tml.db.state import (
     root_hypothesis_rows,
     root_run_rows,
     run_request_status,
+    solution_tree_branch_rows,
+    solution_tree_root_rows,
     submission_by_sha_prefix,
     submission_rows,
 )
@@ -113,6 +115,21 @@ def use_project_cmd(slug: str) -> None:
     try:
         ref = use_project(workspace_root(), slug)
         console.print(f"Active project: {ref.slug}")
+    except Exception as exc:
+        _abort(exc)
+
+
+@app.command("tree", context_settings=EXTRA)
+def tree_cmd(ctx: typer.Context) -> None:
+    try:
+        _reject_positional(ctx.args, "tml tree")
+        overrides = _overrides(ctx.args)
+        ref = active_project_ref()
+        ensure_root_baseline(ref.path)
+        _validate_override_keys(overrides, {"mode"}, "tml tree")
+        config = load_project_config(ref.path)
+        mode = _optional_text(overrides.get("mode")) or active_mode(config)
+        _print_solution_tree(ref.path, mode=mode)
     except Exception as exc:
         _abort(exc)
 
@@ -1496,6 +1513,127 @@ def _branch_status_row(db_row: dict[str, object], *, summary_limit: int) -> list
         node,
         _short_text(str(db_row.get("summary") or ""), summary_limit),
     ]
+
+
+def _print_solution_tree(project_dir: Path, *, mode: str) -> None:
+    config = load_project_config(project_dir)
+    profile_id = active_profile_id(config, mode)
+    root_rows = solution_tree_root_rows(project_dir, mode=mode, profile_id=profile_id)
+    branch_db_rows = solution_tree_branch_rows(project_dir, mode=mode, profile_id=profile_id)
+    best_metric = _best_tree_metric([*root_rows, *branch_db_rows])
+    root_by_id = {str(row.get("hypothesis_id") or ""): row for row in root_rows}
+    baseline = root_by_id.get("000000") or {"hypothesis_id": "000000"}
+    tree = Tree(_solution_tree_label("root", baseline, best_metric=best_metric), guide_style="bright_black")
+
+    children: dict[str, list[dict[str, object]]] = {"root:000000": []}
+    known_keys = {"root:000000"}
+    for row in root_rows:
+        hid = str(row.get("hypothesis_id") or "")
+        if hid == "000000":
+            continue
+        key = f"root:{hid}"
+        known_keys.add(key)
+        children.setdefault("root:000000", []).append({"kind": "root", "key": key, "row": row})
+        children.setdefault(key, [])
+
+    branch_entries: list[dict[str, object]] = []
+    for row in branch_db_rows:
+        bid = _normalize_branch_display(row.get("branch_id"))
+        key = f"branch:{bid}"
+        known_keys.add(key)
+        children.setdefault(key, [])
+        branch_entries.append({"kind": "branch", "key": key, "row": row})
+
+    for entry in branch_entries:
+        row = entry["row"]
+        assert isinstance(row, dict)
+        parent_key = _solution_tree_parent_key(row)
+        if parent_key not in known_keys:
+            parent_key = "root:000000"
+        children.setdefault(parent_key, []).append(entry)
+
+    def append_children(parent_tree: Tree, parent_key: str, visited: set[str]) -> None:
+        for child in sorted(children.get(parent_key, []), key=_solution_tree_sort_key):
+            key = str(child["key"])
+            if key in visited:
+                continue
+            row = child["row"]
+            assert isinstance(row, dict)
+            subtree = parent_tree.add(_solution_tree_label(str(child["kind"]), row, best_metric=best_metric))
+            append_children(subtree, key, {*visited, key})
+
+    append_children(tree, "root:000000", {"root:000000"})
+    console.print(tree)
+
+
+def _solution_tree_parent_key(row: dict[str, object]) -> str:
+    parent_kind = str(row.get("parent_kind") or "").lower()
+    parent_id = str(row.get("parent_id") or row.get("parent_ref") or "").strip()
+    if parent_kind == "branch" or parent_id.upper().startswith("B"):
+        return f"branch:{_normalize_branch_display(parent_id)}"
+    if parent_id.isdigit():
+        return f"root:{parent_id.zfill(6)}"
+    return f"root:{parent_id}"
+
+
+def _solution_tree_sort_key(entry: dict[str, object]) -> tuple[int, int, str]:
+    kind = str(entry.get("kind") or "")
+    row = entry.get("row")
+    if not isinstance(row, dict):
+        return (9, 0, "")
+    if kind == "root":
+        hid = str(row.get("hypothesis_id") or "")
+        return (0, int(hid) if hid.isdigit() else 0, hid)
+    bid = _normalize_branch_display(row.get("branch_id"))
+    suffix = bid[1:] if bid.upper().startswith("B") else bid
+    return (1, int(suffix) if suffix.isdigit() else 0, bid)
+
+
+def _solution_tree_label(kind: str, row: dict[str, object], *, best_metric: float | None) -> Text:
+    identifier = str(row.get("hypothesis_id") or "") if kind == "root" else _normalize_branch_display(row.get("branch_id"))
+    node_status = str(row.get("node_status") or "")
+    metric = _metric_value(row.get("metric"))
+    runtime_suffix = _tree_runtime_suffix(row)
+    if node_status:
+        if node_status == "complete" and metric is not None:
+            line = Text()
+            line.append("▶ ", style="green")
+            metric_style = "bold yellow" if best_metric is not None and metric == best_metric else "green"
+            line.append(f"{metric:.5f}·{identifier}{runtime_suffix}", style=metric_style)
+            return line
+        if node_status == "failed":
+            return Text(f"⚠ bug·{identifier}{runtime_suffix}", style="bold red")
+        if node_status == "started":
+            return Text(f"● {identifier}{runtime_suffix}", style="cyan")
+        return Text(f"{node_status.upper()}·{identifier}{runtime_suffix}", style="yellow")
+
+    if kind == "branch":
+        if str(row.get("branch_status") or "") == "materialized":
+            return Text(f"⌘ {identifier}", style="cyan")
+        return Text(f"◇ {identifier}", style="dim")
+
+    if row.get("code_hash"):
+        materialization_status = str(row.get("materialization_status") or "")
+        style = "bold yellow" if materialization_status == "fixed" else "cyan"
+        return Text(f"⌘ {identifier}", style=style)
+    return Text(f"◇ {identifier}", style="dim")
+
+
+def _tree_runtime_suffix(row: dict[str, object]) -> str:
+    text = _seconds_text(row.get("run_seconds"))
+    return f"·{text}" if text else ""
+
+
+def _metric_value(value: object) -> float | None:
+    if isinstance(value, int | float):
+        return float(value)
+    return None
+
+
+def _best_tree_metric(rows: list[dict[str, object]]) -> float | None:
+    values = [_metric_value(row.get("metric")) for row in rows]
+    present = [value for value in values if value is not None]
+    return max(present) if present else None
 
 
 def _print_root_run_request_status(project_dir: Path, *, mode: str, hypothesis_id: str | None) -> None:
