@@ -43,7 +43,7 @@ from tml.hypotheses.generate import (
     root_generation_plan,
 )
 from tml.hypotheses.materialize import RootMaterializationPlan, materialize_missing, root_materialization_plan
-from tml.hypotheses.run import run_missing
+from tml.hypotheses.run import RootRunPlan, root_run_plan, run_missing
 from tml.prompts.diff import diff_prompt
 from tml.prompts.probe import probe_prompt, render_prompt
 from tml.utils.yaml_io import read_yaml
@@ -314,7 +314,19 @@ def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: s
     return created
 
 
-@root_app.command("run", context_settings=EXTRA)
+@root_app.command(
+    "run",
+    context_settings=EXTRA,
+    help=(
+        "Run missing ROOT materializations for the active project.\n\n"
+        "Accepted key=value parameters:\n"
+        "  mode=<name>        Run mode; defaults to the active mode.\n"
+        "  hypothesis=<id>    Run only one hypothesis.\n"
+        "  id=<id>            Alias for hypothesis=<id>.\n"
+        "  yes=true           Skip the confirmation prompt.\n"
+        "Profile override parameters are accepted for the active mode."
+    ),
+)
 def root_run_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
@@ -323,22 +335,45 @@ def root_run_cmd(ctx: typer.Context) -> None:
         mode = str(overrides["mode"]) if "mode" in overrides else None
         config = load_project_config(ref.path)
         active_run_mode = mode or active_mode(config)
-        allowed = {"mode", "hypothesis", "id"} | _profile_override_keys(ref.path, active_run_mode)
+        allowed = {"mode", "hypothesis", "id", "yes"} | _profile_override_keys(ref.path, active_run_mode)
         _validate_override_keys(overrides, allowed, "tml root run")
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
-        run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "hypothesis", "id"}}
+        hypothesis_id_text = str(hypothesis_id) if hypothesis_id else None
+        assume_yes = _bool(overrides.get("yes", False))
+        run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "hypothesis", "id", "yes"}}
+        plan = root_run_plan(
+            ref.path,
+            mode=mode,
+            hypothesis_id=hypothesis_id_text,
+            profile_overrides=run_overrides,
+        )
+        _print_root_run_plan(ref.slug, plan, hypothesis_id=hypothesis_id_text)
+        if plan.iteration_count == 0:
+            console.print("No ROOT runs to execute.")
+            _print_root_run_request_status(ref.path, mode=active_run_mode, hypothesis_id=hypothesis_id_text)
+            _print_root_run_summary(
+                ref.path,
+                mode=active_run_mode,
+                executed_ids=set(),
+                hypothesis_id=hypothesis_id_text,
+            )
+            return
+        if not assume_yes and not Confirm.ask("Start ROOT run?", default=False, console=console):
+            console.print("ROOT run cancelled.")
+            return
         executed_ids = run_missing(
             ref.path,
             mode=mode,
-            hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
+            hypothesis_id=hypothesis_id_text,
             profile_overrides=run_overrides,
+            progress=console.print,
         )
-        _print_root_run_request_status(ref.path, mode=active_run_mode, hypothesis_id=str(hypothesis_id) if hypothesis_id else None)
+        _print_root_run_request_status(ref.path, mode=active_run_mode, hypothesis_id=hypothesis_id_text)
         _print_root_run_summary(
             ref.path,
             mode=active_run_mode,
             executed_ids=set(executed_ids),
-            hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
+            hypothesis_id=hypothesis_id_text,
         )
     except Exception as exc:
         _abort(exc)
@@ -761,6 +796,31 @@ def _print_root_materialization_plan(
     console.print(table)
 
 
+def _print_root_run_plan(project_slug: str, plan: RootRunPlan, *, hypothesis_id: str | None) -> None:
+    ids = plan.hypothesis_ids
+    if len(ids) > 8:
+        id_text = f"{ids[0]}..{ids[-1]}"
+    else:
+        id_text = ", ".join(ids) if ids else "none"
+    table = Table(title="ROOT run plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Mode", plan.mode)
+    table.add_row("Active profile", plan.profile_id)
+    table.add_row("Profile hash", plan.profile_hash)
+    table.add_row("Execution timeout seconds", str(plan.execution_timeout_seconds))
+    table.add_row("Run", plan.run_id or "new")
+    table.add_row("Run path", plan.run_path)
+    table.add_row("Next node step", str(plan.next_node_step))
+    table.add_row("Hypothesis filter", str(hypothesis_id).zfill(6) if hypothesis_id else "all")
+    table.add_row("Candidate materializations", str(plan.candidate_count))
+    table.add_row("Already evaluated", str(plan.already_evaluated_count))
+    table.add_row("Iterations to run", str(plan.iteration_count))
+    table.add_row("Hypothesis IDs", id_text)
+    console.print(table)
+
+
 def _print_generated_hypotheses(project_dir: Path, created: list[GeneratedHypothesis]) -> None:
     created_ids = {item.hypothesis_id for item in created}
     _print_existing_root_hypotheses(project_dir, created_ids=created_ids)
@@ -872,7 +932,8 @@ def _print_root_run_summary(
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
     old_rows: list[list[str]] = []
     new_rows: list[list[str]] = []
-    for db_row in root_run_rows(project_dir, mode=mode, profile_id=profile_id):
+    target_id = hypothesis_id.zfill(6) if hypothesis_id else None
+    for db_row in root_run_rows(project_dir, mode=mode, profile_id=profile_id, hypothesis_id=target_id):
         row = _root_run_row(db_row, summary_limit=summary_limit)
         hypothesis_id_value = str(db_row.get("hypothesis_id") or "")
         if hypothesis_id_value in executed_ids:

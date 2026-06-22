@@ -386,6 +386,13 @@ def active_or_create_run(project_dir: Path) -> Path:
     return run_dir
 
 
+def latest_run_id(project_dir: Path) -> str | None:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        row = conn.execute("SELECT run_id FROM runs ORDER BY run_id DESC LIMIT 1").fetchone()
+    return str(row["run_id"]) if row else None
+
+
 def next_node_step(project_dir: Path, run_id_value: str) -> int:
     db_path = ensure_project_db(project_dir)
     with connect(db_path) as conn:
@@ -516,7 +523,13 @@ def materialization_rows(project_dir: Path, *, mode: str, hypothesis_id: str | N
     return [dict(row) for row in rows]
 
 
-def root_run_rows(project_dir: Path, *, mode: str, profile_id: str) -> list[dict[str, Any]]:
+def root_run_rows(
+    project_dir: Path,
+    *,
+    mode: str,
+    profile_id: str,
+    hypothesis_id: str | None = None,
+) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
     sql = """
         SELECT
@@ -530,10 +543,14 @@ def root_run_rows(project_dir: Path, *, mode: str, profile_id: str) -> list[dict
         LEFT JOIN evaluations e ON e.hypothesis_id=h.hypothesis_id
           AND e.mode=? AND e.profile_id=? AND e.code_hash=m.code_hash
         LEFT JOIN nodes n ON n.node_id=e.node_id
-        ORDER BY h.hypothesis_id
     """
+    params: list[Any] = [mode, mode, profile_id]
+    if hypothesis_id:
+        sql += " WHERE h.hypothesis_id=?"
+        params.append(hypothesis_id.zfill(6))
+    sql += " ORDER BY h.hypothesis_id"
     with connect(db_path) as conn:
-        rows = conn.execute(sql, (mode, mode, profile_id)).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
 
 
