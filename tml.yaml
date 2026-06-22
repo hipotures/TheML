@@ -11,6 +11,10 @@ active_project:
   kind: kaggle
   slug: playground-series-s6e6
 active_run: null
+root:
+  active_profiles:
+    autogluon: ag-medium-10m-v1
+    legacy: legacy-root-start-v1
 models:
   metadata:
     provider: codex

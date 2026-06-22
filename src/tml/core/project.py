@@ -8,7 +8,6 @@ from typing import Any
 from tml.core.gitignore import ensure_project_gitignore, ensure_root_gitignore
 from tml.core.paths import ProjectRef, context_path, find_project
 from tml.core.metadata import detect_project_metadata, metadata_task_markdown
-from tml.core.profiles import DEFAULT_AUTOGLUON_PROFILE_ID, LEGACY_PROFILE_ID
 from tml.utils.atomic import atomic_write_text
 from tml.utils.yaml_io import read_yaml, write_yaml
 
@@ -271,15 +270,7 @@ def _ensure_project_config(
             "target_count": current_root.get("target_count") or 20,
             "active_mode": current_root.get("active_mode")
             or str(root_config.get("defaults", {}).get("root_mode") or "autogluon"),
-            "active_profiles": {
-                **active_profiles,
-                "autogluon": active_profiles.get("autogluon") or DEFAULT_AUTOGLUON_PROFILE_ID,
-                "legacy": (
-                    LEGACY_PROFILE_ID
-                    if active_profiles.get("legacy") in {None, "legacy-root-start-v1"}
-                    else active_profiles.get("legacy")
-                ),
-            },
+            **({"active_profiles": active_profiles} if active_profiles else {}),
         },
         "created_at": existing.get("created_at") or datetime.now().isoformat(timespec="seconds"),
     }
@@ -293,12 +284,7 @@ def _ensure_project_profile_defaults(project_yaml: Path) -> None:
     if not isinstance(root, dict):
         root = {}
         config["root"] = root
-    active_profiles = root.setdefault("active_profiles", {})
-    if not isinstance(active_profiles, dict):
-        active_profiles = {}
-        root["active_profiles"] = active_profiles
-    if active_profiles.get("autogluon") is None:
-        active_profiles["autogluon"] = DEFAULT_AUTOGLUON_PROFILE_ID
-    if active_profiles.get("legacy") in {None, "legacy-root-start-v1"}:
-        active_profiles["legacy"] = LEGACY_PROFILE_ID
+    active_profiles = root.get("active_profiles")
+    if active_profiles is not None and not isinstance(active_profiles, dict):
+        root.pop("active_profiles", None)
     write_yaml(project_yaml, config)
