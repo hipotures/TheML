@@ -299,7 +299,8 @@ def reindex_cmd(scope: str | None = None, run_id: str | None = None) -> None:
         counts = reindex_project(ref.path, ref.db_path)
         console.print(
             f"Reindexed {counts['hypotheses']} hypotheses, "
-            f"{counts['materializations']} materializations, {counts['nodes']} nodes"
+            f"{counts['materializations']} materializations, {counts['nodes']} nodes, "
+            f"{counts['submissions']} submissions"
         )
     except Exception as exc:
         _abort(exc)

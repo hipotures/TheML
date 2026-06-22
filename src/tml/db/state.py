@@ -9,6 +9,7 @@ from tml.utils.yaml_io import read_yaml
 
 from .connect import connect
 from .migrate import migrate
+from .submissions import build_submission_row, upsert_submission
 
 
 def project_db_path(project_dir: Path) -> Path:
@@ -174,6 +175,7 @@ def upsert_node_result(
     _ = error
     db_path = ensure_project_db(project_dir)
     start = read_yaml(node_dir / "node.start.yaml")
+    manifest = read_yaml(node_dir / "artifact-manifest.yaml")
     run_seconds = _elapsed_seconds(start.get("created_at"), finished_at)
     with connect(db_path) as conn:
         conn.execute(
@@ -219,7 +221,25 @@ def upsert_node_result(
                 "artifact-manifest.yaml",
                 "node.done.yaml",
                 "failed.yaml",
+                "artifacts/submission.csv.gz",
+                "artifacts/submission.csv",
+                "artifacts/test_predictions.csv.gz",
+                "artifacts/validation_predictions.csv.gz",
             ],
+        )
+        upsert_submission(
+            conn,
+            build_submission_row(
+                project_dir=project_dir,
+                node_dir=node_dir,
+                start=start,
+                manifest=manifest,
+                status=status,
+                metric=metric,
+                code_hash=code_hash,
+                finished_at=finished_at,
+                run_seconds=run_seconds,
+            ),
         )
         conn.commit()
 
@@ -383,6 +403,28 @@ def best_score(project_dir: Path) -> float | None:
         row = conn.execute("SELECT max(metric) AS best FROM evaluations WHERE metric IS NOT NULL").fetchone()
     value = row["best"] if row else None
     return float(value) if value is not None else None
+
+
+def submission_rows(project_dir: Path) -> list[dict[str, Any]]:
+    db_path = ensure_project_db(project_dir)
+    sql = """
+        SELECT
+          s.*,
+          RANK() OVER (
+            ORDER BY CASE WHEN s.local_score IS NULL THEN 1 ELSE 0 END, s.local_score DESC
+          ) AS cv_rank,
+          RANK() OVER (
+            ORDER BY CASE WHEN s.public_score IS NULL THEN 1 ELSE 0 END, s.public_score DESC
+          ) AS computed_public_rank
+        FROM submissions s
+        ORDER BY
+          CASE WHEN s.local_score IS NULL THEN 1 ELSE 0 END,
+          s.local_score DESC,
+          s.created_at DESC
+    """
+    with connect(db_path) as conn:
+        rows = conn.execute(sql).fetchall()
+    return [dict(row) for row in rows]
 
 
 def materialization_rows(project_dir: Path, *, mode: str, hypothesis_id: str | None = None) -> list[dict[str, Any]]:

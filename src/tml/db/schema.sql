@@ -76,6 +76,36 @@ CREATE TABLE IF NOT EXISTS artifacts (
   PRIMARY KEY (node_id, path)
 );
 
+CREATE TABLE IF NOT EXISTS submissions (
+  node_id TEXT NOT NULL,
+  submission_path TEXT NOT NULL,
+  submission_sha256 TEXT NOT NULL,
+  submission_size INTEGER NOT NULL,
+  submission_mtime_ns INTEGER NOT NULL,
+  run_id TEXT,
+  step INTEGER,
+  hypothesis_id TEXT,
+  mode TEXT,
+  profile_id TEXT,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL,
+  submit_status TEXT NOT NULL,
+  local_score REAL,
+  public_score REAL,
+  public_rank INTEGER,
+  metric TEXT,
+  code_hash TEXT,
+  run_seconds INTEGER,
+  created_at TEXT,
+  finished_at TEXT,
+  artifact_dir TEXT NOT NULL,
+  PRIMARY KEY (node_id, submission_path)
+);
+
+CREATE INDEX IF NOT EXISTS idx_submissions_sha256 ON submissions(submission_sha256);
+CREATE INDEX IF NOT EXISTS idx_submissions_local_score ON submissions(local_score);
+CREATE INDEX IF NOT EXISTS idx_submissions_public_score ON submissions(public_score);
+
 CREATE TABLE IF NOT EXISTS prompt_calls (
   call_id TEXT PRIMARY KEY,
   path TEXT NOT NULL,

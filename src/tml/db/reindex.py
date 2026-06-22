@@ -10,6 +10,7 @@ from tml.utils.yaml_io import read_yaml
 
 from .connect import connect
 from .migrate import migrate
+from .submissions import build_submission_row, upsert_submission
 
 
 def reindex_project(project_dir: Path, db_path: Path) -> dict[str, int]:
@@ -25,6 +26,7 @@ def reindex_project(project_dir: Path, db_path: Path) -> dict[str, int]:
             "nodes",
             "evaluations",
             "artifacts",
+            "submissions",
             "prompt_calls",
         ):
             conn.execute(f"DELETE FROM {table}")
@@ -40,6 +42,7 @@ def reindex_project(project_dir: Path, db_path: Path) -> dict[str, int]:
             "hypotheses": conn.execute("SELECT count(*) FROM hypotheses").fetchone()[0],
             "materializations": conn.execute("SELECT count(*) FROM materializations").fetchone()[0],
             "nodes": conn.execute("SELECT count(*) FROM nodes").fetchone()[0],
+            "submissions": conn.execute("SELECT count(*) FROM submissions").fetchone()[0],
         }
     return counts
 
@@ -166,6 +169,20 @@ def _index_runs(conn, project_dir: Path) -> None:
                         "INSERT OR IGNORE INTO artifacts(node_id, path, kind) VALUES (?, ?, ?)",
                         (node_id, str(artifact.relative_to(node_dir)), artifact.suffix.lstrip(".") or "file"),
                     )
+            upsert_submission(
+                conn,
+                build_submission_row(
+                    project_dir=project_dir,
+                    node_dir=node_dir,
+                    start=start,
+                    manifest=manifest,
+                    status=status,
+                    metric=manifest.get("metric"),
+                    code_hash=manifest.get("code_hash"),
+                    finished_at=finished_at,
+                    run_seconds=_elapsed_seconds(created_at, finished_at),
+                ),
+            )
 
 
 def classify_node(node_dir: Path) -> str:
