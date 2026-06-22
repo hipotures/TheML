@@ -723,7 +723,7 @@ def _root_run_row(
     return [
         str(db_row.get("hypothesis_id") or ""),
         status,
-        str(db_row.get("created_at") or ""),
+        _short_datetime(db_row.get("created_at")),
         str(db_row.get("model") or ""),
         _token_summary(db_row),
         _seconds_text(db_row.get("generation_seconds")),
@@ -758,6 +758,15 @@ def _seconds_text(value: object) -> str:
     return ""
 
 
+def _short_datetime(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    text = value.strip()
+    if len(text) >= 16 and text[4] == "-" and text[7] == "-" and text[10] == "T":
+        return text[5:16]
+    return text
+
+
 def _root_hypothesis_json_row(db_row: dict[str, object], *, created_ids: set[str]) -> dict[str, object]:
     row = _root_hypothesis_row(db_row, created_ids=created_ids)
     if not row:
@@ -785,7 +794,7 @@ def _root_hypothesis_row(db_row: dict[str, object], *, created_ids: set[str]) ->
         "id": hypothesis_id,
         "is_new": hypothesis_id in created_ids,
         "status": str(db_row.get("status_icon") or ""),
-        "created_at": str(db_row.get("created_at") or ""),
+        "created_at": _short_datetime(db_row.get("created_at")),
         "model": str(db_row.get("model") or ""),
         "reasoning_tokens": _token_summary(db_row),
         "duration": _seconds_text(db_row.get("generation_seconds")),
