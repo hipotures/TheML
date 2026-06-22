@@ -1,12 +1,12 @@
 materializations:
   autogluon:
-    active: autogluon-002.py
-    sha256: 5855c2f07524fef98882a36994fce5528d9bc6c578bde64e2b39224cf8abdeb7
-    created_at: '2026-06-22T16:07:31'
+    active: autogluon-003.py
+    sha256: 96bfa4f4c4c413d0f3f7c32a3306d8ef084df27d8a5e336d9450a061cfef3e98
+    created_at: '2026-06-22T16:43:28'
 feature_group:
   logical_name: catalog_template_residuals
   version_id: catalog_template_residuals@000005
   source_hypothesis_id: '000005'
   operation: create_new_root_group
   depends_on: []
-  code_artifact: autogluon-002.py
+  code_artifact: autogluon-003.py
