@@ -226,8 +226,14 @@ def root_run_cmd(ctx: typer.Context) -> None:
         ref = active_project_ref()
         overrides = _overrides(ctx.args)
         mode = str(overrides["mode"]) if "mode" in overrides else None
-        run_overrides = {key: value for key, value in overrides.items() if key != "mode"}
-        ran = run_missing(ref.path, mode=mode, profile_overrides=run_overrides)
+        hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
+        run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "hypothesis", "id"}}
+        ran = run_missing(
+            ref.path,
+            mode=mode,
+            hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
+            profile_overrides=run_overrides,
+        )
         console.print(f"ROOT nodes executed: {ran}")
     except Exception as exc:
         _abort(exc)

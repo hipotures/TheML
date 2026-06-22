@@ -20,6 +20,7 @@ def run_missing(
     project_dir: Path,
     mode: str | None = None,
     *,
+    hypothesis_id: str | None = None,
     profile_overrides: dict[str, object] | None = None,
 ) -> int:
     config = load_project_config(project_dir)
@@ -28,8 +29,11 @@ def run_missing(
     run = _active_or_create_run(project_dir)
     ran = 0
     next_step = _next_step(run)
+    target_hypothesis_id = hypothesis_id.zfill(6) if hypothesis_id else None
     for hdir in hypothesis_dirs(project_dir):
         hid = hdir.name
+        if target_hypothesis_id and hid != target_hypothesis_id:
+            continue
         materialization = hdir / "materializations" / f"{mode}-001.py"
         if not materialization.exists():
             continue
