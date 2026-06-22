@@ -124,12 +124,12 @@ def root_status_cmd(ctx: typer.Context) -> None:
         console.print(f"Active project: {ref.slug}")
         console.print(f"Target ROOT count: {config.get('root', {}).get('target_count', 20)}")
         console.print(f"Active mode: {mode}")
-        console.print(f"Active profile: {profile_id} ({active_hash})")
+        console.print(f"Active profile: {profile_id} ({active_hash[:8]})")
         console.print(f"Hypotheses: {counts['hypotheses']}")
         console.print(f"Materialized: {counts['materialized']}")
         console.print(f"Evaluated: {counts['evaluated']}")
         console.print(f"Incomplete nodes: {counts['incomplete']}")
-        console.print(f"Best ROOT score: {best if best is not None else 'n/a'}")
+        console.print(f"Best ROOT score: {f'{best:.6f}' if best is not None else 'n/a'}")
         _print_existing_root_hypotheses(ref.path, created_ids=set())
     except Exception as exc:
         _abort(exc)
@@ -140,6 +140,8 @@ def root_status_cmd(ctx: typer.Context) -> None:
     context_settings=EXTRA,
     help=(
         "Generate missing ROOT hypotheses for the active project.\n\n"
+        "Accepted positional arguments:\n"
+        "  status            Print the existing ROOT hypothesis table without generating.\n\n"
         "Accepted key=value parameters:\n"
         "  count=<n>          Generate until ROOT hypothesis n exists.\n"
         "  yes=true           Skip the confirmation prompt.\n"
@@ -151,9 +153,12 @@ def root_status_cmd(ctx: typer.Context) -> None:
 def root_generate_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
-        _reject_positional(ctx.args, "tml root generate")
+        status_only = _command_status_requested(ctx.args, "tml root generate")
         overrides = _overrides(ctx.args)
         _validate_override_keys(overrides, {"count", "json", "json_output", "yes"}, "tml root generate")
+        if status_only:
+            _print_generated_hypotheses(ref.path, [])
+            return
         count = int(overrides["count"]) if "count" in overrides else None
         json_output = _bool(overrides.get("json", False)) or _bool(overrides.get("json_output", False))
         assume_yes = _bool(overrides.get("yes", False))
@@ -219,6 +224,8 @@ def root_generate_cmd(ctx: typer.Context) -> None:
     context_settings=EXTRA,
     help=(
         "Materialize missing ROOT hypothesis code for the active project.\n\n"
+        "Accepted positional arguments:\n"
+        "  status            Print the ROOT materialization table without materializing.\n\n"
         "Accepted key=value parameters:\n"
         "  mode=<name>        Materialization mode; defaults to the active mode.\n"
         "  hypothesis=<id>    Materialize only one hypothesis.\n"
@@ -229,13 +236,16 @@ def root_generate_cmd(ctx: typer.Context) -> None:
 def root_materialize_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
-        _reject_positional(ctx.args, "tml root materialize")
+        status_only = _command_status_requested(ctx.args, "tml root materialize")
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
         _validate_override_keys(overrides, {"mode", "hypothesis", "id", "yes"}, "tml root materialize")
         mode = str(overrides.get("mode") or active_mode(config))
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         hypothesis_id_text = str(hypothesis_id) if hypothesis_id else None
+        if status_only:
+            _print_root_materializations(ref.path, mode=mode, created_count=None, hypothesis_id=hypothesis_id_text)
+            return
         assume_yes = _bool(overrides.get("yes", False))
         plan = root_materialization_plan(ref.path, mode=mode, hypothesis_id=hypothesis_id_text)
         _print_root_materialization_plan(ref.slug, plan, hypothesis_id=hypothesis_id_text)
@@ -261,6 +271,8 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
     context_settings=EXTRA,
     help=(
         "Generate fixed versions for failed ROOT materializations.\n\n"
+        "Accepted positional arguments:\n"
+        "  status            Print the ROOT materialization table without fixing.\n\n"
         "Accepted key=value parameters:\n"
         "  mode=<name>        Materialization mode; defaults to the active mode.\n"
         "  hypothesis=<id>    Fix only one hypothesis.\n"
@@ -271,13 +283,16 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
 def root_bugfix_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
-        _reject_positional(ctx.args, "tml root bugfix")
+        status_only = _command_status_requested(ctx.args, "tml root bugfix")
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
         _validate_override_keys(overrides, {"mode", "hypothesis", "id", "yes"}, "tml root bugfix")
         mode = str(overrides.get("mode") or active_mode(config))
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         hypothesis_id_text = str(hypothesis_id) if hypothesis_id else None
+        if status_only:
+            _print_root_materializations(ref.path, mode=mode, created_count=None, hypothesis_id=hypothesis_id_text)
+            return
         assume_yes = _bool(overrides.get("yes", False))
         plan = root_bugfix_plan(ref.path, mode=mode, hypothesis_id=hypothesis_id_text)
         _print_root_bugfix_plan(ref.slug, plan, hypothesis_id=hypothesis_id_text)
@@ -421,6 +436,8 @@ def _bugfix_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | 
     context_settings=EXTRA,
     help=(
         "Run missing ROOT materializations for the active project.\n\n"
+        "Accepted positional arguments:\n"
+        "  status            Print the ROOT run table without executing.\n\n"
         "Accepted key=value parameters:\n"
         "  mode=<name>        Run mode; defaults to the active mode.\n"
         "  hypothesis=<id>    Run only one hypothesis.\n"
@@ -432,7 +449,7 @@ def _bugfix_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | 
 def root_run_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
-        _reject_positional(ctx.args, "tml root run")
+        status_only = _command_status_requested(ctx.args, "tml root run")
         overrides = _overrides(ctx.args)
         mode = str(overrides["mode"]) if "mode" in overrides else None
         config = load_project_config(ref.path)
@@ -441,6 +458,16 @@ def root_run_cmd(ctx: typer.Context) -> None:
         _validate_override_keys(overrides, allowed, "tml root run")
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         hypothesis_id_text = str(hypothesis_id) if hypothesis_id else None
+        if status_only:
+            _print_root_run_request_status(ref.path, mode=active_run_mode, hypothesis_id=hypothesis_id_text)
+            _print_root_run_summary(
+                ref.path,
+                mode=active_run_mode,
+                executed_ids=set(),
+                hypothesis_id=hypothesis_id_text,
+                executed_count=None,
+            )
+            return
         assume_yes = _bool(overrides.get("yes", False))
         run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "hypothesis", "id", "yes"}}
         plan = root_run_plan(
@@ -458,6 +485,7 @@ def root_run_cmd(ctx: typer.Context) -> None:
                 mode=active_run_mode,
                 executed_ids=set(),
                 hypothesis_id=hypothesis_id_text,
+                executed_count=0,
             )
             return
         if not assume_yes and not Confirm.ask("Start ROOT run?", default=False, console=console):
@@ -476,6 +504,7 @@ def root_run_cmd(ctx: typer.Context) -> None:
             mode=active_run_mode,
             executed_ids=set(executed_ids),
             hypothesis_id=hypothesis_id_text,
+            executed_count=len(executed_ids),
         )
     except Exception as exc:
         _abort(exc)
@@ -766,6 +795,15 @@ def _reject_positional(args: list[str], command: str) -> None:
         raise TmlError(f"Unexpected argument for {command}: {positional[0]}")
 
 
+def _command_status_requested(args: list[str], command: str) -> bool:
+    positional = _positional(args)
+    if not positional:
+        return False
+    if positional == ["status"]:
+        return True
+    raise TmlError(f"Unexpected argument for {command}: {positional[0]}")
+
+
 def _profile_override_keys(project_dir: Path, mode: str) -> set[str]:
     config = load_project_config(project_dir)
     profile_id = active_profile_id(config, mode)
@@ -1020,11 +1058,12 @@ def _print_root_materializations(
     project_dir: Path,
     *,
     mode: str,
-    created_count: int,
+    created_count: int | None,
     hypothesis_id: str | None,
 ) -> None:
     target_id = hypothesis_id.zfill(6) if hypothesis_id else None
-    table = Table(title=f"ROOT materializations (created: {created_count})", box=box.SIMPLE_HEAVY)
+    title = "ROOT materializations" if created_count is None else f"ROOT materializations (created: {created_count})"
+    table = Table(title=title, box=box.SIMPLE_HEAVY)
     table.add_column("ID", style="bold", no_wrap=True)
     table.add_column("S", no_wrap=True)
     table.add_column("Mode", no_wrap=True)
@@ -1035,8 +1074,14 @@ def _print_root_materializations(
     table.add_column("Gen", justify="right", no_wrap=True)
     table.add_column("Summary", overflow="fold", min_width=40, ratio=1)
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
-    for row_index, db_row in enumerate(materialization_rows(project_dir, mode=mode, hypothesis_id=target_id)):
-        row_style = _zebra_style(row_index)
+    group_index = -1
+    previous_hypothesis_id: str | None = None
+    for db_row in materialization_rows(project_dir, mode=mode, hypothesis_id=target_id):
+        current_hypothesis_id = str(db_row.get("hypothesis_id") or "")
+        if current_hypothesis_id != previous_hypothesis_id:
+            group_index += 1
+            previous_hypothesis_id = current_hypothesis_id
+        row_style = _zebra_style(group_index)
         table.add_row(*_root_materialization_row(db_row, summary_limit=summary_limit), style=row_style)
     console.print(table)
 
@@ -1070,7 +1115,7 @@ def _materialization_status_text(status: str) -> Text:
 
 
 def _zebra_style(index: int, *, extra: str | None = None) -> str | None:
-    background = "on grey15" if index % 2 else None
+    background = "on grey23" if index % 2 else None
     if extra and background:
         return f"{extra} {background}"
     return extra or background
@@ -1082,10 +1127,13 @@ def _print_root_run_summary(
     mode: str,
     executed_ids: set[str],
     hypothesis_id: str | None,
+    executed_count: int | None = None,
 ) -> None:
     config = load_project_config(project_dir)
     profile_id = active_profile_id(config, mode)
-    table = Table(title=f"ROOT run (executed: {len(executed_ids)})", box=box.SIMPLE_HEAVY)
+    count = len(executed_ids) if executed_count is None and executed_ids else executed_count
+    title = "ROOT run" if count is None else f"ROOT run (executed: {count})"
+    table = Table(title=title, box=box.SIMPLE_HEAVY)
     table.add_column("ID", style="bold", no_wrap=True)
     table.add_column("S", justify="center", no_wrap=True)
     table.add_column("Created", no_wrap=True)
@@ -1107,10 +1155,13 @@ def _print_root_run_summary(
             new_rows.append(row)
         else:
             old_rows.append(row)
+    displayed_index = 0
     for row in old_rows:
-        table.add_row(*row)
+        table.add_row(*row, style=_zebra_style(displayed_index))
+        displayed_index += 1
     for row in new_rows:
-        table.add_row(*row, style="bold")
+        table.add_row(*row, style=_zebra_style(displayed_index, extra="bold"))
+        displayed_index += 1
     console.print(table)
 
 
