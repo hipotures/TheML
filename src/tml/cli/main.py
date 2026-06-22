@@ -685,6 +685,7 @@ def _print_root_generation_plan(project_slug: str, plan: RootGenerationPlan) -> 
     table.add_row("Reasoning effort", str(plan.reasoning_effort or "default"))
     table.add_row("Timeout seconds", str(plan.timeout_seconds or "n/a"))
     table.add_row("Sandbox", plan.sandbox)
+    table.add_row("Web search", "enabled" if plan.web_search_enabled else "disabled")
     table.add_row("Target ROOT count", str(plan.target))
     table.add_row("Next hypothesis number", str(plan.next_number))
     table.add_row("Iterations to run", str(plan.iteration_count))

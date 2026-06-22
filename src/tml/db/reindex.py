@@ -64,13 +64,15 @@ def _index_hypotheses(conn, project_dir: Path) -> None:
         payload = read_yaml(path)
         hid = str(payload.get("hypothesis_id") or path.parent.name)
         run_summary = _run_summary(path.parent / "01-hypothesis.request.json", path.parent / "01-hypothesis.response.json")
+        web_search = _web_search_summary(path.parent / "01-hypothesis.request.json", path.parent / "01-hypothesis.web_search.md")
         conn.execute(
             """
             INSERT INTO hypotheses(
               hypothesis_id, title, summary, created_at, model, reasoning_tokens,
-              total_tokens, generation_seconds, enabled, path
+              total_tokens, generation_seconds, web_search_enabled,
+              web_search_has_results, enabled, path
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 hid,
@@ -81,6 +83,8 @@ def _index_hypotheses(conn, project_dir: Path) -> None:
                 run_summary.get("reasoning_tokens"),
                 run_summary.get("total_tokens"),
                 run_summary.get("generation_seconds"),
+                1 if web_search["enabled"] else 0,
+                1 if web_search["has_results"] else 0,
                 1 if payload.get("enabled", True) else 0,
                 _project_path(project_dir, path),
             ),
@@ -228,6 +232,14 @@ def _run_summary(request_path: Path, response_path: Path) -> dict[str, Any]:
         "total_tokens": total.get("totalTokens"),
         "generation_seconds": round(wall_ms / 1000) if isinstance(wall_ms, int) else None,
     }
+
+
+def _web_search_summary(request_path: Path, summary_path: Path) -> dict[str, bool]:
+    request = read_yaml(request_path) if request_path.exists() else {}
+    metadata = request.get("metadata") if isinstance(request, dict) and isinstance(request.get("metadata"), dict) else {}
+    enabled = bool(metadata.get("web_search_enabled"))
+    has_results = summary_path.exists() and bool(summary_path.read_text(encoding="utf-8", errors="replace").strip())
+    return {"enabled": enabled, "has_results": has_results}
 
 
 def _token_total(response: dict[str, Any]) -> dict[str, Any]:

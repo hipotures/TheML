@@ -45,14 +45,16 @@ def upsert_hypothesis(project_dir: Path, hdir: Path) -> None:
     payload = read_yaml(hdir / "hypothesis.yaml")
     hid = str(payload.get("hypothesis_id") or hdir.name)
     summary = _run_summary(hdir / "01-hypothesis.request.json", hdir / "01-hypothesis.response.json")
+    web_search = _web_search_summary(hdir / "01-hypothesis.request.json", hdir / "01-hypothesis.web_search.md")
     with connect(db_path) as conn:
         conn.execute(
             """
             INSERT INTO hypotheses(
               hypothesis_id, title, summary, created_at, model, reasoning_tokens,
-              total_tokens, generation_seconds, enabled, path
+              total_tokens, generation_seconds, web_search_enabled,
+              web_search_has_results, enabled, path
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(hypothesis_id) DO UPDATE SET
               title=excluded.title,
               summary=excluded.summary,
@@ -61,6 +63,8 @@ def upsert_hypothesis(project_dir: Path, hdir: Path) -> None:
               reasoning_tokens=excluded.reasoning_tokens,
               total_tokens=excluded.total_tokens,
               generation_seconds=excluded.generation_seconds,
+              web_search_enabled=excluded.web_search_enabled,
+              web_search_has_results=excluded.web_search_has_results,
               enabled=excluded.enabled,
               path=excluded.path
             """,
@@ -73,6 +77,8 @@ def upsert_hypothesis(project_dir: Path, hdir: Path) -> None:
                 summary.get("reasoning_tokens"),
                 summary.get("total_tokens"),
                 summary.get("generation_seconds"),
+                1 if web_search["enabled"] else 0,
+                1 if web_search["has_results"] else 0,
                 1 if payload.get("enabled", True) else 0,
                 _project_path(project_dir, hdir / "hypothesis.yaml"),
             ),
@@ -546,6 +552,14 @@ def _run_summary(request_path: Path, response_path: Path) -> dict[str, Any]:
         "total_tokens": total.get("totalTokens"),
         "generation_seconds": round(wall_ms / 1000) if isinstance(wall_ms, int) else None,
     }
+
+
+def _web_search_summary(request_path: Path, summary_path: Path) -> dict[str, bool]:
+    request = read_yaml(request_path) if request_path.exists() else {}
+    metadata = request.get("metadata") if isinstance(request, dict) and isinstance(request.get("metadata"), dict) else {}
+    enabled = bool(metadata.get("web_search_enabled"))
+    has_results = summary_path.exists() and bool(summary_path.read_text(encoding="utf-8", errors="replace").strip())
+    return {"enabled": enabled, "has_results": has_results}
 
 
 def _token_total(response: dict[str, Any]) -> dict[str, Any]:

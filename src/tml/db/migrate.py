@@ -16,6 +16,8 @@ def migrate(db_path: Path) -> None:
         _ensure_column(conn, "hypotheses", "reasoning_tokens", "INTEGER")
         _ensure_column(conn, "hypotheses", "total_tokens", "INTEGER")
         _ensure_column(conn, "hypotheses", "generation_seconds", "INTEGER")
+        _ensure_column(conn, "hypotheses", "web_search_enabled", "INTEGER NOT NULL DEFAULT 0")
+        _ensure_column(conn, "hypotheses", "web_search_has_results", "INTEGER NOT NULL DEFAULT 0")
         _ensure_column(conn, "materializations", "model", "TEXT")
         _ensure_column(conn, "materializations", "reasoning_tokens", "INTEGER")
         _ensure_column(conn, "materializations", "total_tokens", "INTEGER")

@@ -37,6 +37,7 @@ class RootGenerationPlan:
     reasoning_effort: str | None
     timeout_seconds: object
     sandbox: str
+    web_search_enabled: bool
 
 
 def root_generation_plan(project_dir: Path, count: int | None = None) -> RootGenerationPlan:
@@ -49,6 +50,7 @@ def root_generation_plan(project_dir: Path, count: int | None = None) -> RootGen
     providers = repo_providers_for_project(project_dir)
     spec = resolve_model_spec(model, providers)
     provider_config = {**(spec.provider_config or {}), **role_options}
+    web_search_enabled = _bool(provider_config.get("web_search"))
     hypothesis_ids = [hypothesis_id(number) for number in range(next_number, target + 1)]
     return RootGenerationPlan(
         target=target,
@@ -63,6 +65,7 @@ def root_generation_plan(project_dir: Path, count: int | None = None) -> RootGen
         reasoning_effort=spec.reasoning_effort,
         timeout_seconds=provider_config.get("timeout_seconds"),
         sandbox="read_only",
+        web_search_enabled=web_search_enabled,
     )
 
 
@@ -80,6 +83,9 @@ def generate_missing_root_hypotheses(
     models = repo_models_for_project(project_dir)
     model, role_options = resolve_role_model(models, "hypothesis")
     providers = repo_providers_for_project(project_dir)
+    spec = resolve_model_spec(model, providers)
+    provider_config = {**(spec.provider_config or {}), **role_options}
+    web_search_enabled = _bool(provider_config.get("web_search"))
     for number in range(next_hypothesis_number(project_dir), target + 1):
         if stop_requested is not None and stop_requested():
             break
@@ -104,6 +110,7 @@ def generate_missing_root_hypotheses(
                 rendered_prompt_hash=rendered["rendered_hash"],
                 cwd=repo_root_for_project(project_dir),
                 sandbox="read_only",
+                metadata={"web_search_enabled": web_search_enabled},
                 progress=progress,
             ),
             artifact_dir=hdir,
@@ -133,3 +140,9 @@ def _parse_hypothesis(text: str) -> dict[str, object]:
         first = parsed["hypotheses"][0]
         return first if isinstance(first, dict) else {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}

@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS hypotheses (
   reasoning_tokens INTEGER,
   total_tokens INTEGER,
   generation_seconds INTEGER,
+  web_search_enabled INTEGER NOT NULL DEFAULT 0,
+  web_search_has_results INTEGER NOT NULL DEFAULT 0,
   enabled INTEGER NOT NULL,
   path TEXT NOT NULL
 );

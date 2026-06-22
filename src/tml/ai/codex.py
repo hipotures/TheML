@@ -45,20 +45,23 @@ class CodexAiClient:
     def _call_cli(self, request: AiRequest) -> AiResponse:
         with tempfile.TemporaryDirectory(prefix="tml-codex-") as tmp:
             response_path = Path(tmp) / "response.txt"
+            command = [
+                "codex",
+                "--ask-for-approval",
+                "never",
+                "exec",
+                "--sandbox",
+                "read-only",
+                "--model",
+                request.model,
+                "--output-last-message",
+                str(response_path),
+                "-",
+            ]
+            if self.spec is not None and _as_bool((self.spec.provider_config or {}).get("web_search"), default=False):
+                command.insert(1, "--search")
             result = subprocess.run(
-                [
-                    "codex",
-                    "--ask-for-approval",
-                    "never",
-                    "exec",
-                    "--sandbox",
-                    "read-only",
-                    "--model",
-                    request.model,
-                    "--output-last-message",
-                    str(response_path),
-                    "-",
-                ],
+                command,
                 input=request.prompt,
                 text=True,
                 capture_output=True,
@@ -70,7 +73,13 @@ class CodexAiClient:
                 raise RuntimeError(f"Codex backend failed: {message}")
             return AiResponse(
                 text=response_path.read_text(encoding="utf-8"),
-                metadata={"backend": "codex", "model": request.model},
+                metadata={
+                    "backend": "codex",
+                    "model": request.model,
+                    "web_search_enabled": self.spec is not None
+                    and _as_bool((self.spec.provider_config or {}).get("web_search"), default=False),
+                    "web_search_has_results": False,
+                },
             )
 
     def _call_app_server(self, invocation: ModelInvocation, spec: ModelSpec) -> ProviderResult:
@@ -79,6 +88,7 @@ class CodexAiClient:
             raise RuntimeError("Codex model spec must include a model, for example codex:gpt-5.4:high.")
 
         provider_config = spec.provider_config or {}
+        web_search_enabled = _as_bool(provider_config.get("web_search"), default=False)
         cwd = invocation.cwd or Path.cwd()
         thread_cwd = _app_server_work_dir(cwd, provider_config)
         sandbox = _codex_app_server_sandbox(
@@ -244,6 +254,8 @@ class CodexAiClient:
         wall_ms = int((perf_counter() - started) * 1000)
         text = "".join(final_chunks).strip()
         logged_notifications = notifications if log_raw_notifications else _compact_events(notifications, include_deltas=log_event_deltas)
+        web_search_summary = _web_search_event_summary(logged_notifications)
+        _write_web_search_summary(invocation, web_search_summary)
         raw = {
             "rpc_responses": rpc_responses,
             "notifications": logged_notifications,
@@ -265,6 +277,8 @@ class CodexAiClient:
                 "error": error_message,
                 "wall_ms": wall_ms,
                 "usage": usage,
+                "web_search_enabled": web_search_enabled,
+                "web_search_has_results": web_search_summary is not None,
             },
             raw=raw,
             events=logged_notifications,
@@ -291,6 +305,7 @@ class CodexAiClient:
         sandbox = _codex_sandbox(invocation.sandbox or str((spec.provider_config or {}).get("sandbox") or "read_only"), Sandbox)
         cwd = invocation.cwd or Path.cwd()
         summary = str((spec.provider_config or {}).get("summary") or "concise")
+        web_search_enabled = _as_bool((spec.provider_config or {}).get("web_search"), default=False)
         config = {}
         if effort:
             config["model_reasoning_effort"] = effort
@@ -326,9 +341,16 @@ class CodexAiClient:
         items = raw.get("items")
         if isinstance(items, list):
             events = [{"type": "item", "item": item} for item in items if isinstance(item, dict)]
+        web_search_summary = _web_search_event_summary(events)
+        _write_web_search_summary(invocation, web_search_summary)
         return ProviderResult(
             text=str(getattr(result, "final_response", "") or ""),
-            metadata={**metadata, "usage": raw["usage"]},
+            metadata={
+                **metadata,
+                "usage": raw["usage"],
+                "web_search_enabled": web_search_enabled,
+                "web_search_has_results": web_search_summary is not None,
+            },
             raw=raw,
             events=events,
         )
@@ -433,6 +455,72 @@ def _compact_content(part: Any) -> Any:
     return compact
 
 
+def _web_search_event_summary(events: list[dict[str, Any]]) -> str | None:
+    queries: list[str] = []
+    urls: list[str] = []
+
+    def add_unique(items: list[str], value: Any) -> None:
+        text = str(value or "").strip()
+        if text and text not in items:
+            items.append(text)
+
+    for event in events:
+        item = _event_item(event)
+        if not isinstance(item, dict) or "web_search" not in str(item.get("type") or ""):
+            continue
+        action = item.get("action")
+        if not isinstance(action, dict):
+            action = {}
+        action_type = str(action.get("type") or "").strip()
+        item_query = str(item.get("query") or "").strip()
+        if action_type == "search":
+            add_unique(queries, action.get("query") or item_query)
+            for query in action.get("queries") or []:
+                add_unique(queries, query)
+        elif item_query.startswith(("http://", "https://")):
+            add_unique(urls, item_query)
+        else:
+            for key in ("url", "href"):
+                value = action.get(key)
+                if isinstance(value, str) and value.startswith(("http://", "https://")):
+                    add_unique(urls, value)
+
+    if not queries and not urls:
+        return None
+    lines = ["# Web Search", ""]
+    if queries:
+        lines.extend(["## Search Queries", ""])
+        lines.extend(f"- {query}" for query in queries)
+        lines.append("")
+    if urls:
+        lines.extend(["## Opened Pages", ""])
+        lines.extend(f"- {url}" for url in urls)
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _event_item(event: dict[str, Any]) -> dict[str, Any] | None:
+    item = event.get("item")
+    if isinstance(item, dict):
+        return item
+    params = event.get("params")
+    if isinstance(params, dict) and isinstance(params.get("item"), dict):
+        return params["item"]
+    return None
+
+
+def _write_web_search_summary(invocation: ModelInvocation, summary: str | None) -> None:
+    if invocation.runtime_artifact_dir is None:
+        return
+    prefix = f"{invocation.runtime_response_prefix}." if invocation.runtime_response_prefix else ""
+    path = invocation.runtime_artifact_dir / f"{prefix}web_search.md"
+    if summary is None:
+        if path.exists():
+            path.unlink()
+        return
+    atomic_write_text(path, summary)
+
+
 def _provider_bool(invocation: ModelInvocation, key: str, *, default: bool) -> bool:
     value = invocation.metadata.get(key)
     return _as_bool(value, default=default)
@@ -464,6 +552,7 @@ def _client_info() -> dict[str, str]:
 
 def _app_server_command(provider_config: dict[str, Any]) -> list[str]:
     args = ["codex", "app-server"]
+    web_search_enabled = _as_bool(provider_config.get("web_search"), default=False)
     disable_features = provider_config.get("disable_features") or [
         "apps",
         "browser_use",
@@ -481,7 +570,7 @@ def _app_server_command(provider_config: dict[str, Any]) -> list[str]:
     config_overrides = {
         "project_doc_max_bytes": int(provider_config.get("project_doc_max_bytes") or 0),
         "project_doc_fallback_filenames": [],
-        "web_search": "disabled",
+        "web_search": "enabled" if web_search_enabled else "disabled",
         "mcp_servers": {},
         "features.skill_mcp_dependency_install": False,
     }

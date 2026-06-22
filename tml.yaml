@@ -57,6 +57,7 @@ providers:
     kind: codex_app_server
     sandbox: read_only
     summary: concise
+    web_search: true
     isolated_home: true
     home_dir: tmp/codex-home
     work_dir: tmp/work-dir
