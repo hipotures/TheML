@@ -1,0 +1,90 @@
+schema_version: 1
+branch_id: B000022
+operation: manual_aide_top5_reconstruction
+parent_ref: '000001'
+mode: autogluon
+status: materialized
+materialization_file: autogluon-001.py
+code_hash: 690fffb2e1847a1599eff2baa201ffc308badb25d8d9225598c0664ccca0a06c
+summary: Add AIDE top-5 feature groups to the existing broadband color baseline.
+created_at: '2026-06-22T00:00:00+02:00'
+origin:
+  run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
+  top_nodes:
+    - node_sha: 6c49774cd2
+      artifact: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
+      local_score: 0.9718980974256234
+      public_score: 0.96891
+    - node_sha: 6791ea9442
+      artifact: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
+      local_score: 0.9718535409860212
+      public_score: 0.96905
+    - node_sha: 3fb5b46538
+      artifact: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
+      local_score: 0.9716470815772227
+      public_score: 0.96905
+    - node_sha: 182e97f5ae
+      artifact: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
+      local_score: 0.9716117614889225
+      public_score: 0.96911
+    - node_sha: 99f4320b32
+      artifact: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py
+      local_score: 0.9716
+      public_score: 0.96957
+components:
+  - role: baseline
+    source_type: hypothesis
+    source_id: '000001'
+    mode: autogluon
+    file: autogluon-001.py
+    code_hash: f3ed5048490b8f38456e574896cc35c7eca012937fba5401a5863a53cd5e9306
+    path: hypotheses/000001/materializations/autogluon-001.py
+  - role: aide_port
+    source_type: hypothesis
+    source_id: '000021'
+    mode: autogluon
+    file: autogluon-001.py
+    code_hash: b516eb87023ab2d41976923b2a90019ef1933969c8905a23eaa06ad8de4c461d
+    path: hypotheses/000021/materializations/autogluon-001.py
+  - role: aide_port
+    source_type: hypothesis
+    source_id: '000022'
+    mode: autogluon
+    file: autogluon-001.py
+    code_hash: 613518c2a7c71f83823fb18f6b8009965038e95c80a530ee0054d5ff152c5282
+    path: hypotheses/000022/materializations/autogluon-001.py
+  - role: aide_port
+    source_type: hypothesis
+    source_id: '000023'
+    mode: autogluon
+    file: autogluon-001.py
+    code_hash: 36182e7404485e02208a3c20d3e79c1d8a4ee4a170063d4237cbfd3e5e4a0e79
+    path: hypotheses/000023/materializations/autogluon-001.py
+  - role: aide_port
+    source_type: hypothesis
+    source_id: '000024'
+    mode: autogluon
+    file: autogluon-001.py
+    code_hash: baa2cca7daec5a1bc8b463a0c76e60f7fa17bf2afb803693b45e12a96c8646df
+    path: hypotheses/000024/materializations/autogluon-001.py
+  - role: aide_port
+    source_type: hypothesis
+    source_id: '000025'
+    mode: autogluon
+    file: autogluon-001.py
+    code_hash: 658e2f200f441753f33e8b0c182cd514dc02838155a9c62f2d375506459e3f7f
+    path: hypotheses/000025/materializations/autogluon-001.py
+  - role: aide_port
+    source_type: hypothesis
+    source_id: '000026'
+    mode: autogluon
+    file: autogluon-001.py
+    code_hash: c29ebeafc9385c36b569c8785481c27f0ded8f16a82f8d56395f0634089a2c22
+    path: hypotheses/000026/materializations/autogluon-001.py
+  - role: aide_port
+    source_type: hypothesis
+    source_id: '000027'
+    mode: autogluon
+    file: autogluon-001.py
+    code_hash: b2f52f7a5ee1ea32e9de67de24c6039843904a9a27c25e28ecdaf76fd5fe880f
+    path: hypotheses/000027/materializations/autogluon-001.py

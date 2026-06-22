@@ -1,0 +1,17 @@
+schema_version: 1
+hypothesis_id: "000026"
+slug: aide_smooth_spline_sed_interactions
+materializations:
+  - name: autogluon-001
+    path: materializations/autogluon-001.py
+    sha256: c29ebeafc9385c36b569c8785481c27f0ded8f16a82f8d56395f0634089a2c22
+    feature_groups:
+      - aide_smooth_spline_sed_interactions
+origin:
+  run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
+  source_artifacts:
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py

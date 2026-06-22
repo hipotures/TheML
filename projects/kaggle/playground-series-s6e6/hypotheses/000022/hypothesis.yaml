@@ -1,0 +1,22 @@
+schema_version: 1
+hypothesis_id: "000022"
+slug: aide_sky_cell_local_residuals
+enabled: true
+created_at: "2026-06-22T00:00:00+02:00"
+source: manual_port_from_aide
+summary: >
+  Recreate the AIDE local sky-cell context: half-degree cell density,
+  neighbor-cell density, concentration, and within-cell residual/z-score
+  statistics for magnitudes, redshift, and color-shape features.
+competition:
+  project: kaggle/playground-series-s6e6
+origin:
+  run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
+  top_nodes:
+    - 6c49774cd2
+    - 6791ea9442
+    - 3fb5b46538
+    - 182e97f5ae
+    - 99f4320b32
+notes:
+  - This is distinct from existing sky-geometry hypotheses because it uses local empirical sky-cell residuals.

@@ -1,0 +1,17 @@
+schema_version: 1
+hypothesis_id: "000023"
+slug: aide_redshift_bin_color_residuals
+materializations:
+  - name: autogluon-001
+    path: materializations/autogluon-001.py
+    sha256: 36182e7404485e02208a3c20d3e79c1d8a4ee4a170063d4237cbfd3e5e4a0e79
+    feature_groups:
+      - aide_redshift_bin_color_residuals
+origin:
+  run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
+  source_artifacts:
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py

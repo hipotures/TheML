@@ -1,0 +1,17 @@
+schema_version: 1
+hypothesis_id: "000021"
+slug: aide_broadband_flux_ratios
+materializations:
+  - name: autogluon-001
+    path: materializations/autogluon-001.py
+    sha256: b516eb87023ab2d41976923b2a90019ef1933969c8905a23eaa06ad8de4c461d
+    feature_groups:
+      - aide_broadband_flux_ratios
+origin:
+  run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
+  source_artifacts:
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py

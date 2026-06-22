@@ -1,0 +1,17 @@
+schema_version: 1
+hypothesis_id: "000024"
+slug: aide_catalog_rank_frequency_context
+materializations:
+  - name: autogluon-001
+    path: materializations/autogluon-001.py
+    sha256: baa2cca7daec5a1bc8b463a0c76e60f7fa17bf2afb803693b45e12a96c8646df
+    feature_groups:
+      - aide_catalog_rank_frequency_context
+origin:
+  run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
+  source_artifacts:
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py

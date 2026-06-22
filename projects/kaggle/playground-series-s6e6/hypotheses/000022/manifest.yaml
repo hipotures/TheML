@@ -1,0 +1,17 @@
+schema_version: 1
+hypothesis_id: "000022"
+slug: aide_sky_cell_local_residuals
+materializations:
+  - name: autogluon-001
+    path: materializations/autogluon-001.py
+    sha256: 613518c2a7c71f83823fb18f6b8009965038e95c80a530ee0054d5ff152c5282
+    feature_groups:
+      - aide_sky_cell_local_residuals
+origin:
+  run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
+  source_artifacts:
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
+    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py
