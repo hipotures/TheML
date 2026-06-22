@@ -794,7 +794,8 @@ def kaggle_submit_cmd(ctx: typer.Context) -> None:
     try:
         _reject_positional(ctx.args, "tml kaggle submit")
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"sha", "sha256"}, "tml kaggle submit")
+        _validate_override_keys(overrides, {"sha", "sha256", "dry-run", "dry_run"}, "tml kaggle submit")
+        dry_run = _bool(overrides.get("dry-run", overrides.get("dry_run", False)))
         sha = str(overrides.get("sha") or overrides.get("sha256") or "")
         ref = active_project_ref()
         config = load_project_config(ref.path)
@@ -804,6 +805,9 @@ def kaggle_submit_cmd(ctx: typer.Context) -> None:
         submission_path = ref.path / str(row["submission_path"])
         message = _kaggle_submit_message(row)
         upload_path = submission_path.with_name(_upload_submission_filename(row))
+        if dry_run:
+            _print_kaggle_submit_dry_run(ref.path, competition, row, submission_path, upload_path, message)
+            return
         response = submit_competition_file(competition, submission_path, message, upload_path)
         mark_submission_submitted(
             ref.path,
@@ -1774,6 +1778,39 @@ def _kaggle_submit_message(row: dict[str, object]) -> str:
         f"tml_ts={_date_yyyymmdd(row.get('created_at'))} | node={node_text} | "
         f"sha={str(row.get('submission_sha256') or '')[:10]} | algo=AG{metric_text}{time_text}"
     )
+
+
+def _print_kaggle_submit_dry_run(
+    project_dir: Path,
+    competition: str,
+    row: dict[str, object],
+    submission_path: Path,
+    upload_path: Path,
+    message: str,
+) -> None:
+    table = Table(title="Kaggle submit dry-run", box=box.SIMPLE_HEAVY, show_header=False)
+    table.add_column("Field", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    exists = submission_path.is_file()
+    size = submission_path.stat().st_size if exists else None
+    table.add_row("competition", competition)
+    table.add_row("submission_path", _repo_relative(project_dir, submission_path))
+    table.add_row("upload_path", _repo_relative(project_dir, upload_path))
+    table.add_row("upload_filename", upload_path.name)
+    table.add_row("file_exists", str(exists).lower())
+    table.add_row("file_size_bytes", "" if size is None else str(size))
+    table.add_row("message", message)
+    table.add_row("sha", str(row.get("submission_sha256") or ""))
+    table.add_row("node", str(row.get("node_id") or ""))
+    table.add_row("run", str(row.get("run_id") or ""))
+    table.add_row("step", str(row.get("step") or ""))
+    score = row.get("local_score")
+    score_text = "" if not isinstance(score, int | float) else f"{float(score):.5f}"
+    table.add_row("local_score", score_text)
+    table.add_row("metric", str(row.get("metric") or ""))
+    table.add_row("submit_status", str(row.get("submit_status") or ""))
+    console.print(table)
+    console.print("Dry-run only: no file copied, no Kaggle upload, no database update.")
 
 
 def _upload_submission_filename(row: dict[str, object]) -> str:
