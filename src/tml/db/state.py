@@ -189,6 +189,21 @@ def next_branch_id(project_dir: Path) -> str:
     return f"B{int(row['max_id'] or 0) + 1:06d}"
 
 
+def branch_by_composition(project_dir: Path, *, mode: str, composition_hash: str) -> dict[str, Any] | None:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT *
+            FROM branches
+            WHERE mode=? AND composition_hash=?
+            LIMIT 1
+            """,
+            (mode, composition_hash),
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def upsert_branch(
     project_dir: Path,
     branch_dir: Path,

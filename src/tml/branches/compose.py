@@ -9,7 +9,7 @@ from typing import Any
 
 from tml.core.config import active_mode, load_project_config
 from tml.core.errors import TmlError
-from tml.db.state import branch_component_rows, next_branch_id, upsert_branch
+from tml.db.state import branch_by_composition, branch_component_rows, next_branch_id, upsert_branch
 from tml.features.validation import validate_group_code_source
 from tml.utils.hashing import sha256_file, sha256_text
 from tml.utils.yaml_io import read_yaml, write_yaml
@@ -47,13 +47,26 @@ def add_branch(project_dir: Path, *, parent_ref: str, source_ref: str, mode: str
     if parent.code_hash == source.code_hash:
         raise TmlError("Branch add source resolves to the same code as parent.")
 
+    components = _component_records(project_dir, parent=parent, source=source)
+    composition_hash = _composition_hash(components)
+    existing = branch_by_composition(project_dir, mode=mode, composition_hash=composition_hash)
+    if existing is not None:
+        branch_id = str(existing["branch_id"])
+        materialization_path = project_dir / str(existing["path"]).rsplit("/", 1)[0] / "materializations" / str(existing["materialization_file"])
+        return CreatedBranch(
+            branch_id=branch_id,
+            branch_path=materialization_path.parents[1],
+            materialization_path=materialization_path,
+            parent=parent,
+            source=source,
+            composition_hash=composition_hash,
+        )
+
     branch_id = next_branch_id(project_dir)
     branch_dir = project_dir / "branches" / branch_id
     mat_dir = branch_dir / "materializations"
     mat_dir.mkdir(parents=True, exist_ok=True)
     materialization_path = mat_dir / f"{mode}-001.py"
-    components = _component_records(project_dir, parent=parent, source=source)
-    composition_hash = _composition_hash(components)
     code = build_branch_materialization_source(project_dir, components)
     validate_group_code_source(code)
     materialization_path.write_text(code, encoding="utf-8")

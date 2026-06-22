@@ -44,6 +44,12 @@ def migrate(db_path: Path) -> None:
         _ensure_column(conn, "submissions", "remote_date", "TEXT")
         _ensure_column(conn, "submissions", "remote_url", "TEXT")
         _ensure_column(conn, "submissions", "private_score", "REAL")
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_branches_mode_composition
+            ON branches(mode, composition_hash)
+            """
+        )
 
 
 def _ensure_column(conn, table: str, column: str, definition: str) -> None:

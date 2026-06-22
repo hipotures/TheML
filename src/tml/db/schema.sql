@@ -66,6 +66,9 @@ CREATE TABLE IF NOT EXISTS branches (
   summary TEXT
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_branches_mode_composition
+ON branches(mode, composition_hash);
+
 CREATE TABLE IF NOT EXISTS branch_components (
   branch_id TEXT NOT NULL,
   role TEXT NOT NULL,
