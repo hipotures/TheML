@@ -18,7 +18,7 @@ from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.errors import TmlError
 from tml.core.kaggle import download_competition_data
 from tml.core.paths import active_project_ref, workspace_root
-from tml.core.profiles import profile_hash
+from tml.core.profiles import load_profile, profile_hash
 from tml.core.project import default_download_data, default_project_kind, init_project, use_project
 from tml.db.reindex import reindex_project
 from tml.hypotheses.generate import GeneratedHypothesis, generate_missing_root_hypotheses
@@ -119,7 +119,9 @@ def root_status_cmd(ctx: typer.Context) -> None:
 def root_generate_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
+        _reject_positional(ctx.args, "tml root generate")
         overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"count", "json", "json_output"}, "tml root generate")
         count = int(overrides["count"]) if "count" in overrides else None
         json_output = _bool(overrides.get("json", False)) or _bool(overrides.get("json_output", False))
         with Progress(
@@ -147,8 +149,10 @@ def root_generate_cmd(ctx: typer.Context) -> None:
 def root_materialize_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
+        _reject_positional(ctx.args, "tml root materialize")
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"mode", "hypothesis", "id"}, "tml root materialize")
         mode = str(overrides.get("mode") or active_mode(config))
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         created = _materialize_with_progress(
@@ -224,8 +228,13 @@ def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: s
 def root_run_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
+        _reject_positional(ctx.args, "tml root run")
         overrides = _overrides(ctx.args)
         mode = str(overrides["mode"]) if "mode" in overrides else None
+        config = load_project_config(ref.path)
+        active_run_mode = mode or active_mode(config)
+        allowed = {"mode", "hypothesis", "id"} | _profile_override_keys(ref.path, active_run_mode)
+        _validate_override_keys(overrides, allowed, "tml root run")
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "hypothesis", "id"}}
         ran = run_missing(
@@ -243,14 +252,27 @@ def root_run_cmd(ctx: typer.Context) -> None:
 def root_ensure_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
+        _reject_positional(ctx.args, "tml root ensure")
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
-        count = int(overrides["count"]) if "count" in overrides else None
         mode = str(overrides.get("mode") or active_mode(config))
+        allowed = {"count", "mode", "hypothesis", "id"} | _profile_override_keys(ref.path, mode)
+        _validate_override_keys(overrides, allowed, "tml root ensure")
+        count = int(overrides["count"]) if "count" in overrides else None
+        hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         generated = generate_missing_root_hypotheses(ref.path, count=count)
-        materialized = materialize_missing(ref.path, mode=mode)
-        run_overrides = {key: value for key, value in overrides.items() if key not in {"count", "mode"}}
-        ran = run_missing(ref.path, mode=mode, profile_overrides=run_overrides)
+        materialized = materialize_missing(
+            ref.path,
+            mode=mode,
+            hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
+        )
+        run_overrides = {key: value for key, value in overrides.items() if key not in {"count", "mode", "hypothesis", "id"}}
+        ran = run_missing(
+            ref.path,
+            mode=mode,
+            hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
+            profile_overrides=run_overrides,
+        )
         reindex_project(ref.path, ref.db_path)
         console.print(f"Generated: {len(generated)}; materialized: {materialized}; executed: {ran}")
     except Exception as exc:
@@ -452,6 +474,33 @@ def _overrides(args: list[str]) -> dict[str, object]:
         key, value = arg.split("=", 1)
         parsed[key] = _coerce(value)
     return parsed
+
+
+def _validate_override_keys(overrides: dict[str, object], allowed: set[str], command: str) -> None:
+    unknown = sorted(set(overrides) - allowed)
+    if unknown:
+        allowed_list = ", ".join(sorted(allowed))
+        unknown_list = ", ".join(unknown)
+        raise TmlError(f"Unknown parameter for {command}: {unknown_list}. Allowed parameters: {allowed_list}")
+
+
+def _reject_positional(args: list[str], command: str) -> None:
+    positional = _positional(args)
+    if positional:
+        raise TmlError(f"Unexpected argument for {command}: {positional[0]}")
+
+
+def _profile_override_keys(project_dir: Path, mode: str) -> set[str]:
+    config = load_project_config(project_dir)
+    profile_id = active_profile_id(config, mode)
+    try:
+        profile = load_profile(project_dir, mode, profile_id)
+    except Exception:
+        profile = {}
+    ignored = {"schema_version", "profile_id", "source_profile", "mode"}
+    keys = {key for key in profile if key not in ignored}
+    keys.update({"preset", "time", "preprocess_timeout"})
+    return keys
 
 
 def _positional(args: list[str]) -> list[str]:
