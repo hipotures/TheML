@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
-from tml.core.config import load_project_config
+from tml.core.config import load_project_config, repo_root_for_project
 from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml
 
@@ -43,7 +45,9 @@ def reindex_project(project_dir: Path, db_path: Path) -> dict[str, int]:
 
 
 def _index_profiles(conn, project_dir: Path) -> None:
-    for path in sorted((project_dir / "profiles").glob("**/*.yaml")):
+    profile_paths = list((repo_root_for_project(project_dir) / "profiles").glob("*/*.yaml"))
+    profile_paths.extend((project_dir / "profiles").glob("**/*.yaml"))
+    for path in sorted(profile_paths):
         payload = read_yaml(path)
         profile_id = str(payload.get("profile_id") or path.stem)
         conn.execute(
@@ -56,15 +60,49 @@ def _index_hypotheses(conn, project_dir: Path) -> None:
     for path in sorted((project_dir / "hypotheses").glob("*/hypothesis.yaml")):
         payload = read_yaml(path)
         hid = str(payload.get("hypothesis_id") or path.parent.name)
+        run_summary = _run_summary(path.parent / "01-hypothesis.request.json", path.parent / "01-hypothesis.response.json")
         conn.execute(
-            "INSERT INTO hypotheses(hypothesis_id, title, enabled, path) VALUES (?, ?, ?, ?)",
-            (hid, payload.get("title"), 1 if payload.get("enabled", True) else 0, _project_path(project_dir, path)),
+            """
+            INSERT INTO hypotheses(
+              hypothesis_id, title, summary, created_at, model, reasoning_tokens,
+              total_tokens, generation_seconds, enabled, path
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                hid,
+                payload.get("title"),
+                payload.get("summary"),
+                payload.get("created_at"),
+                run_summary.get("model"),
+                run_summary.get("reasoning_tokens"),
+                run_summary.get("total_tokens"),
+                run_summary.get("generation_seconds"),
+                1 if payload.get("enabled", True) else 0,
+                _project_path(project_dir, path),
+            ),
         )
         for code in sorted((path.parent / "materializations").glob("*.py")):
             mode = code.name.split("-", 1)[0]
+            mat_summary = _run_summary(code.parent / f"{mode}-001.request.json", code.parent / f"{mode}-001.response.json")
             conn.execute(
-                "INSERT INTO materializations(hypothesis_id, mode, file, code_hash) VALUES (?, ?, ?, ?)",
-                (hid, mode, code.name, sha256_file(code)),
+                """
+                INSERT INTO materializations(
+                  hypothesis_id, mode, file, code_hash, model, reasoning_tokens,
+                  total_tokens, generation_seconds
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    hid,
+                    mode,
+                    code.name,
+                    sha256_file(code),
+                    mat_summary.get("model"),
+                    mat_summary.get("reasoning_tokens"),
+                    mat_summary.get("total_tokens"),
+                    mat_summary.get("generation_seconds"),
+                ),
             )
 
 
@@ -82,10 +120,15 @@ def _index_runs(conn, project_dir: Path) -> None:
             manifest = read_yaml(node_dir / "artifact-manifest.yaml")
             status = classify_node(node_dir)
             node_id = node_dir.name
+            created_at = start.get("created_at")
+            finished_at = done.get("created_at") or failed.get("created_at")
             conn.execute(
                 """
-                INSERT INTO nodes(node_id, run_id, step, hypothesis_id, mode, profile_id, status, path)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO nodes(
+                  node_id, run_id, step, hypothesis_id, mode, profile_id, status,
+                  created_at, finished_at, run_seconds, path
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     node_id,
@@ -95,6 +138,9 @@ def _index_runs(conn, project_dir: Path) -> None:
                     start.get("mode") or done.get("mode"),
                     start.get("profile_id") or done.get("profile_id"),
                     status,
+                    created_at,
+                    finished_at,
+                    _elapsed_seconds(created_at, finished_at),
                     _project_path(project_dir, node_dir),
                 ),
             )
@@ -141,4 +187,55 @@ def classify_node(node_dir: Path) -> str:
 
 
 def _project_path(project_dir: Path, path: Path) -> str:
-    return path.relative_to(project_dir).as_posix()
+    try:
+        return path.relative_to(project_dir).as_posix()
+    except ValueError:
+        try:
+            return path.relative_to(repo_root_for_project(project_dir)).as_posix()
+        except ValueError:
+            return path.as_posix()
+
+
+def _run_summary(request_path: Path, response_path: Path) -> dict[str, Any]:
+    if not request_path.exists() or not response_path.exists():
+        return {}
+    request = read_yaml(request_path)
+    response = read_yaml(response_path)
+    if not isinstance(request, dict) or not isinstance(response, dict):
+        return {}
+    total = _token_total(response)
+    wall_ms = response.get("wall_ms")
+    return {
+        "model": str(request.get("model") or response.get("model") or "") or None,
+        "reasoning_tokens": total.get("reasoningOutputTokens"),
+        "total_tokens": total.get("totalTokens"),
+        "generation_seconds": round(wall_ms / 1000) if isinstance(wall_ms, int) else None,
+    }
+
+
+def _token_total(response: dict[str, Any]) -> dict[str, Any]:
+    usage = response.get("usage")
+    if not isinstance(usage, dict):
+        return {}
+    token_usage = usage.get("tokenUsage")
+    if not isinstance(token_usage, dict):
+        return {}
+    total = token_usage.get("total")
+    return total if isinstance(total, dict) else {}
+
+
+def _elapsed_seconds(start_value: Any, end_value: Any) -> int | None:
+    started_at = _parse_datetime(start_value)
+    finished_at = _parse_datetime(end_value)
+    if started_at is None or finished_at is None:
+        return None
+    return max(0, round((finished_at - started_at).total_seconds()))
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None

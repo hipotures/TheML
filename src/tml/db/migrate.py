@@ -10,3 +10,23 @@ def migrate(db_path: Path) -> None:
     schema = resources.files("tml.db").joinpath("schema.sql").read_text(encoding="utf-8")
     with connect(db_path) as conn:
         conn.executescript(schema)
+        _ensure_column(conn, "hypotheses", "summary", "TEXT")
+        _ensure_column(conn, "hypotheses", "created_at", "TEXT")
+        _ensure_column(conn, "hypotheses", "model", "TEXT")
+        _ensure_column(conn, "hypotheses", "reasoning_tokens", "INTEGER")
+        _ensure_column(conn, "hypotheses", "total_tokens", "INTEGER")
+        _ensure_column(conn, "hypotheses", "generation_seconds", "INTEGER")
+        _ensure_column(conn, "materializations", "model", "TEXT")
+        _ensure_column(conn, "materializations", "reasoning_tokens", "INTEGER")
+        _ensure_column(conn, "materializations", "total_tokens", "INTEGER")
+        _ensure_column(conn, "materializations", "generation_seconds", "INTEGER")
+        _ensure_column(conn, "nodes", "created_at", "TEXT")
+        _ensure_column(conn, "nodes", "finished_at", "TEXT")
+        _ensure_column(conn, "nodes", "run_seconds", "INTEGER")
+
+
+def _ensure_column(conn, table: str, column: str, definition: str) -> None:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    if any(row["name"] == column for row in rows):
+        return
+    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")

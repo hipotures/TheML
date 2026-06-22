@@ -4,7 +4,6 @@ import json
 import os
 import threading
 import time
-from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -22,14 +21,18 @@ from tml.core.paths import active_project_ref, workspace_root
 from tml.core.profiles import load_profile, profile_hash
 from tml.core.project import default_download_data, default_project_kind, init_project, use_project
 from tml.db.reindex import reindex_project
+from tml.db.state import (
+    best_score,
+    materialization_rows,
+    root_counts,
+    root_hypothesis_rows,
+    root_run_rows,
+)
 from tml.hypotheses.generate import GeneratedHypothesis, generate_missing_root_hypotheses
 from tml.hypotheses.materialize import materialize_missing
-from tml.hypotheses.model import hypothesis_dirs
 from tml.hypotheses.run import run_missing
-from tml.hypotheses.status import filesystem_counts
 from tml.prompts.diff import diff_prompt
 from tml.prompts.probe import probe_prompt, render_prompt
-from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml
 
 
@@ -98,13 +101,12 @@ def root_status_cmd(ctx: typer.Context) -> None:
     _ = ctx
     try:
         ref = active_project_ref()
-        reindex_project(ref.path, ref.db_path)
         config = load_project_config(ref.path)
-        counts = filesystem_counts(ref.path)
+        counts = root_counts(ref.path)
         mode = active_mode(config)
         profile_id = active_profile_id(config, mode)
         active_hash = profile_hash(ref.path, mode, profile_id)
-        best = _best_score(ref.path)
+        best = best_score(ref.path)
         console.print(f"Active project: {ref.slug}")
         console.print(f"Target ROOT count: {config.get('root', {}).get('target_count', 20)}")
         console.print(f"Active mode: {mode}")
@@ -140,7 +142,6 @@ def root_generate_cmd(ctx: typer.Context) -> None:
                 progress.update(task, description=message)
 
             created = generate_missing_root_hypotheses(ref.path, count=count, progress=report)
-        reindex_project(ref.path, ref.db_path)
         if json_output:
             _print_generated_hypotheses_json(ref.path, created)
             return
@@ -164,7 +165,6 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
             mode=mode,
             hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
         )
-        reindex_project(ref.path, ref.db_path)
         _print_root_materializations(ref.path, mode=mode, created_count=created, hypothesis_id=str(hypothesis_id) if hypothesis_id else None)
     except Exception as exc:
         _abort(exc)
@@ -248,7 +248,6 @@ def root_run_cmd(ctx: typer.Context) -> None:
             hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
             profile_overrides=run_overrides,
         )
-        reindex_project(ref.path, ref.db_path)
         _print_root_run_summary(
             ref.path,
             mode=active_run_mode,
@@ -583,8 +582,8 @@ def _print_generated_hypotheses_json(project_dir: Path, created: list[GeneratedH
     payload = {
         "created": sorted(created_ids),
         "hypotheses": [
-            _root_hypothesis_json_row(hdir, created_ids=created_ids)
-            for hdir in hypothesis_dirs(project_dir)
+            _root_hypothesis_json_row(row, created_ids=created_ids)
+            for row in root_hypothesis_rows(project_dir)
         ],
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -604,8 +603,8 @@ def _print_existing_root_hypotheses(project_dir: Path, *, created_ids: set[str])
         )
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
     rows = []
-    for hdir in hypothesis_dirs(project_dir):
-        row = _root_hypothesis_row(hdir, created_ids=created_ids)
+    for db_row in root_hypothesis_rows(project_dir):
+        row = _root_hypothesis_row(db_row, created_ids=created_ids)
         if not row:
             continue
         rows.append(
@@ -643,34 +642,21 @@ def _print_root_materializations(
     table.add_column("Gen", justify="right", no_wrap=True)
     table.add_column("Summary", overflow="fold", min_width=40, ratio=1)
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
-    for hdir in hypothesis_dirs(project_dir):
-        if target_id and hdir.name != target_id:
-            continue
-        row = _root_materialization_row(hdir, mode=mode, summary_limit=summary_limit)
-        if row:
-            table.add_row(*row)
+    for db_row in materialization_rows(project_dir, mode=mode, hypothesis_id=target_id):
+        table.add_row(*_root_materialization_row(db_row, summary_limit=summary_limit))
     console.print(table)
 
 
-def _root_materialization_row(hdir: Path, *, mode: str, summary_limit: int) -> list[str] | None:
-    hypothesis = read_yaml(hdir / "hypothesis.yaml")
-    if not isinstance(hypothesis, dict):
-        return None
-    mat_dir = hdir / "materializations"
-    code = mat_dir / f"{mode}-001.py"
-    response = mat_dir / f"{mode}-001.response.json"
-    if not code.exists() and not response.exists():
-        return None
-    run = _run_summary_from_paths(mat_dir / f"{mode}-001.request.json", response)
+def _root_materialization_row(db_row: dict[str, object], *, summary_limit: int) -> list[str]:
     return [
-        str(hypothesis.get("hypothesis_id") or hdir.name),
-        "⌘" if code.exists() else "⚠",
-        mode,
-        code.name if code.exists() else "",
-        run["model"] if run else "",
-        run["reasoning_tokens"] if run else "",
-        run["duration"] if run else "",
-        _short_text(str(hypothesis.get("summary") or ""), summary_limit),
+        str(db_row.get("hypothesis_id") or ""),
+        "⌘",
+        str(db_row.get("mode") or ""),
+        str(db_row.get("file") or ""),
+        str(db_row.get("model") or ""),
+        _token_summary(db_row),
+        _seconds_text(db_row.get("generation_seconds")),
+        _short_text(str(db_row.get("summary") or ""), summary_limit),
     ]
 
 
@@ -697,17 +683,10 @@ def _print_root_run_summary(
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
     old_rows: list[list[str]] = []
     new_rows: list[list[str]] = []
-    for hdir in hypothesis_dirs(project_dir):
-        row = _root_run_row(
-            hdir,
-            project_dir=project_dir,
-            mode=mode,
-            profile_id=profile_id,
-            summary_limit=summary_limit,
-        )
-        if not row:
-            continue
-        if hdir.name in executed_ids:
+    for db_row in root_run_rows(project_dir, mode=mode, profile_id=profile_id):
+        row = _root_run_row(db_row, summary_limit=summary_limit)
+        hypothesis_id_value = str(db_row.get("hypothesis_id") or "")
+        if hypothesis_id_value in executed_ids:
             new_rows.append(row)
         else:
             old_rows.append(row)
@@ -721,27 +700,17 @@ def _print_root_run_summary(
 
 
 def _root_run_row(
-    hdir: Path,
+    db_row: dict[str, object],
     *,
-    project_dir: Path,
-    mode: str,
-    profile_id: str,
     summary_limit: int,
-) -> list[str] | None:
-    hypothesis = read_yaml(hdir / "hypothesis.yaml")
-    if not isinstance(hypothesis, dict):
-        return None
-    hid = str(hypothesis.get("hypothesis_id") or hdir.name)
-    hypothesis_summary = _artifact_run_summary(hdir, "01-hypothesis")
-    materialization = hdir / "materializations" / f"{mode}-001.py"
-    code_hash = sha256_file(materialization) if materialization.exists() else ""
-    state = _current_run_state(project_dir, hypothesis_id=hid, mode=mode, profile_id=profile_id, code_hash=code_hash)
-    if state:
-        status = "▶" if state["status"] == "complete" else "⚠"
-        score = _format_score(state.get("metric"))
-        node = str(state.get("node_id") or "")
-        run_duration = _node_run_duration(project_dir, node)
-    elif materialization.exists():
+) -> list[str]:
+    node_status = str(db_row.get("node_status") or "")
+    if node_status:
+        status = "▶" if node_status == "complete" else "⚠"
+        score = _format_score(db_row.get("metric"))
+        node = str(db_row.get("node_id") or "")
+        run_duration = _seconds_text(db_row.get("run_seconds"))
+    elif db_row.get("code_hash"):
         status = "⌘"
         score = ""
         node = ""
@@ -752,66 +721,17 @@ def _root_run_row(
         node = ""
         run_duration = ""
     return [
-        hid,
+        str(db_row.get("hypothesis_id") or ""),
         status,
-        str(hypothesis.get("created_at") or ""),
-        hypothesis_summary["model"] if hypothesis_summary else "",
-        hypothesis_summary["reasoning_tokens"] if hypothesis_summary else "",
-        hypothesis_summary["duration"] if hypothesis_summary else "",
+        str(db_row.get("created_at") or ""),
+        str(db_row.get("model") or ""),
+        _token_summary(db_row),
+        _seconds_text(db_row.get("generation_seconds")),
         run_duration,
         score,
         node,
-        _short_text(str(hypothesis.get("summary") or ""), summary_limit),
+        _short_text(str(db_row.get("summary") or ""), summary_limit),
     ]
-
-
-def _current_run_state(
-    project_dir: Path,
-    *,
-    hypothesis_id: str,
-    mode: str,
-    profile_id: str,
-    code_hash: str,
-) -> dict[str, object] | None:
-    if not code_hash:
-        return None
-    for filename in ("node.done.yaml", "failed.yaml"):
-        for path in sorted((project_dir / "runs").glob(f"*/artifacts/*/{filename}"), reverse=True):
-            payload = read_yaml(path)
-            if (
-                payload.get("hypothesis_id") == hypothesis_id
-                and payload.get("mode") == mode
-                and payload.get("profile_id") == profile_id
-                and payload.get("code_hash") == code_hash
-            ):
-                return payload
-    return None
-
-
-def _node_run_duration(project_dir: Path, node_id_value: str) -> str:
-    if not node_id_value:
-        return ""
-    for node_dir in (project_dir / "runs").glob(f"*/artifacts/{node_id_value}"):
-        start = read_yaml(node_dir / "node.start.yaml")
-        done = read_yaml(node_dir / "node.done.yaml")
-        if not isinstance(start, dict) or not isinstance(done, dict):
-            continue
-        started_at = _parse_datetime(start.get("created_at"))
-        finished_at = _parse_datetime(done.get("created_at"))
-        if started_at is None or finished_at is None:
-            continue
-        seconds = max(0, round((finished_at - started_at).total_seconds()))
-        return f"{seconds}s"
-    return ""
-
-
-def _parse_datetime(value: object) -> datetime | None:
-    if not isinstance(value, str) or not value:
-        return None
-    try:
-        return datetime.fromisoformat(value)
-    except ValueError:
-        return None
 
 
 def _format_score(value: object) -> str:
@@ -820,8 +740,26 @@ def _format_score(value: object) -> str:
     return ""
 
 
-def _root_hypothesis_json_row(hdir: Path, *, created_ids: set[str]) -> dict[str, object]:
-    row = _root_hypothesis_row(hdir, created_ids=created_ids)
+def _token_summary(row: dict[str, object]) -> str:
+    reasoning = row.get("reasoning_tokens")
+    total = row.get("total_tokens")
+    if isinstance(reasoning, int) and isinstance(total, int):
+        return f"{reasoning}/{total}"
+    if isinstance(total, int):
+        return str(total)
+    return ""
+
+
+def _seconds_text(value: object) -> str:
+    if isinstance(value, int):
+        return f"{value}s"
+    if isinstance(value, float):
+        return f"{round(value)}s"
+    return ""
+
+
+def _root_hypothesis_json_row(db_row: dict[str, object], *, created_ids: set[str]) -> dict[str, object]:
+    row = _root_hypothesis_row(db_row, created_ids=created_ids)
     if not row:
         return {}
     return {
@@ -841,53 +779,18 @@ def _root_hypothesis_table_values(row: dict[str, object], *, summary_limit: int)
     return values
 
 
-def _root_hypothesis_row(hdir: Path, *, created_ids: set[str]) -> dict[str, object]:
-    payload = read_yaml(hdir / "hypothesis.yaml")
-    if not isinstance(payload, dict):
-        return {}
-    payload["_hdir"] = str(hdir)
-    summary = _artifact_run_summary(hdir, "01-hypothesis")
-    hypothesis_id = str(payload.get("hypothesis_id") or hdir.name)
+def _root_hypothesis_row(db_row: dict[str, object], *, created_ids: set[str]) -> dict[str, object]:
+    hypothesis_id = str(db_row.get("hypothesis_id") or "")
     return {
         "id": hypothesis_id,
         "is_new": hypothesis_id in created_ids,
-        "status": _hypothesis_status_icon(payload),
-        "created_at": str(payload.get("created_at") or ""),
-        "model": summary["model"] if summary else "",
-        "reasoning_tokens": summary["reasoning_tokens"] if summary else "",
-        "duration": summary["duration"] if summary else "",
-        "summary": str(payload.get("summary") or ""),
+        "status": str(db_row.get("status_icon") or ""),
+        "created_at": str(db_row.get("created_at") or ""),
+        "model": str(db_row.get("model") or ""),
+        "reasoning_tokens": _token_summary(db_row),
+        "duration": _seconds_text(db_row.get("generation_seconds")),
+        "summary": str(db_row.get("summary") or ""),
     }
-
-
-def _hypothesis_status_icon(payload: dict[str, object]) -> str:
-    if payload.get("enabled", True) is False:
-        return "⊘"
-    hypothesis_id = str(payload.get("hypothesis_id") or "")
-    hdir = Path(str(payload.get("_hdir") or ""))
-    if hypothesis_id and hdir and _hypothesis_has_failed_run(hdir.parent.parent, hypothesis_id):
-        return "⚠"
-    if hypothesis_id and hdir and _hypothesis_has_completed_run(hdir.parent.parent, hypothesis_id):
-        return "▶"
-    if hdir and any((hdir / "materializations").glob("*.py")):
-        return "⌘"
-    return "◇"
-
-
-def _hypothesis_has_completed_run(project_dir: Path, hypothesis_id: str) -> bool:
-    for done in (project_dir / "runs").glob("*/artifacts/*/node.done.yaml"):
-        payload = read_yaml(done)
-        if payload.get("hypothesis_id") == hypothesis_id:
-            return True
-    return False
-
-
-def _hypothesis_has_failed_run(project_dir: Path, hypothesis_id: str) -> bool:
-    for failed in (project_dir / "runs").glob("*/artifacts/*/failed.yaml"):
-        payload = read_yaml(failed)
-        if payload.get("hypothesis_id") == hypothesis_id:
-            return True
-    return False
 
 
 def _short_text(value: str, limit: int) -> str:
@@ -935,13 +838,6 @@ def _metadata_run_summary(project_dir: Path) -> dict[str, str] | None:
     request_path = project_dir / "logs" / "project-metadata" / "request.json"
     response_path = project_dir / "logs" / "project-metadata" / "response.json"
     return _run_summary_from_paths(request_path, response_path)
-
-
-def _artifact_run_summary(artifact_dir: Path, prefix: str) -> dict[str, str] | None:
-    return _run_summary_from_paths(
-        artifact_dir / f"{prefix}.request.json",
-        artifact_dir / f"{prefix}.response.json",
-    )
 
 
 def _run_summary_from_paths(request_path: Path, response_path: Path) -> dict[str, str] | None:
@@ -1035,16 +931,6 @@ def _data_files(data_dir: Path) -> list[str]:
     if not data_dir.exists():
         return []
     return sorted(path.name for path in data_dir.iterdir() if path.is_file())
-
-
-def _best_score(project_dir: Path) -> float | None:
-    scores: list[float] = []
-    for done in (project_dir / "runs").glob("*/artifacts/*/node.done.yaml"):
-        payload = read_yaml(done)
-        metric = payload.get("metric")
-        if isinstance(metric, (int, float)):
-            scores.append(float(metric))
-    return max(scores) if scores else None
 
 
 def _abort(exc: Exception) -> None:

@@ -9,13 +9,12 @@ from pathlib import Path
 from tml.ai import ModelInvocation, run_model_invocation
 from tml.ai.models import resolve_role_model
 from tml.core.config import load_project_config, repo_models_for_project, repo_providers_for_project, repo_root_for_project
+from tml.db.state import next_hypothesis_number, upsert_hypothesis, upsert_project
 from tml.core.ids import hypothesis_id
 from tml.features.validation import validate_root_hypothesis
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
 from tml.utils.yaml_io import write_yaml
-
-from .model import hypothesis_dirs
 
 
 @dataclass(frozen=True)
@@ -30,14 +29,14 @@ def generate_missing_root_hypotheses(
     *,
     progress: Callable[[str], None] | None = None,
 ) -> list[GeneratedHypothesis]:
+    upsert_project(project_dir)
     config = load_project_config(project_dir)
     target = count or int(config.get("root", {}).get("target_count", 20))
-    existing = len(hypothesis_dirs(project_dir))
     created: list[GeneratedHypothesis] = []
     models = repo_models_for_project(project_dir)
     model, role_options = resolve_role_model(models, "hypothesis")
     providers = repo_providers_for_project(project_dir)
-    for number in range(existing + 1, target + 1):
+    for number in range(next_hypothesis_number(project_dir), target + 1):
         hid = hypothesis_id(number)
         hdir = project_dir / "hypotheses" / hid
         hdir.mkdir(parents=True, exist_ok=True)
@@ -77,6 +76,7 @@ def generate_missing_root_hypotheses(
             }
         )
         write_yaml(hdir / "hypothesis.yaml", payload)
+        upsert_hypothesis(project_dir, hdir)
         created.append(GeneratedHypothesis(hypothesis_id=hid, path=hdir))
     return created
 

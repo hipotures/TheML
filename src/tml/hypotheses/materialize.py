@@ -8,14 +8,13 @@ from pathlib import Path
 from tml.ai import ModelInvocation, run_model_invocation
 from tml.ai.models import resolve_role_model
 from tml.core.config import repo_models_for_project, repo_providers_for_project, repo_root_for_project
+from tml.db.state import materialization_candidates, upsert_materialization, upsert_project
 from tml.features.validation import validate_group_code_source
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
 from tml.utils.atomic import atomic_write_text
 from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml, write_yaml
-
-from .model import hypothesis_dirs
 
 
 def materialize_missing(
@@ -24,14 +23,13 @@ def materialize_missing(
     hypothesis_id: str | None = None,
     progress: Callable[[str, int | None], None] | None = None,
 ) -> int:
+    upsert_project(project_dir)
     models = repo_models_for_project(project_dir)
     model, role_options = resolve_role_model(models, "materializations", fallback_role="code")
     providers = repo_providers_for_project(project_dir)
     created = 0
-    target_hypothesis_id = hypothesis_id.zfill(6) if hypothesis_id else None
-    for hdir in hypothesis_dirs(project_dir):
-        if target_hypothesis_id and hdir.name != target_hypothesis_id:
-            continue
+    for record in materialization_candidates(project_dir, hypothesis_id=hypothesis_id):
+        hdir = project_dir / str(record["path"]).rsplit("/", 1)[0]
         mat_dir = hdir / "materializations"
         mat_dir.mkdir(parents=True, exist_ok=True)
         target = mat_dir / f"{mode}-001.py"
@@ -39,7 +37,10 @@ def materialize_missing(
             if _is_runtime_wrapper(target):
                 hypothesis = read_yaml(hdir / "hypothesis.yaml")
                 if _rewrite_group_only_from_response(hdir, mat_dir, mode, target, hypothesis):
+                    upsert_materialization(project_dir, hdir, mode, target)
                     created += 1
+            else:
+                upsert_materialization(project_dir, hdir, mode, target)
             continue
         timeout_seconds = int(role_options.get("timeout_seconds") or 900)
         if progress is not None:
@@ -75,6 +76,7 @@ def materialize_missing(
         validate_group_code_source(group_code)
         atomic_write_text(target, group_code)
         _update_manifest(hdir, mode, target, hypothesis)
+        upsert_materialization(project_dir, hdir, mode, target)
         created += 1
     return created
 

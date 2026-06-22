@@ -18,6 +18,12 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE TABLE IF NOT EXISTS hypotheses (
   hypothesis_id TEXT PRIMARY KEY,
   title TEXT,
+  summary TEXT,
+  created_at TEXT,
+  model TEXT,
+  reasoning_tokens INTEGER,
+  total_tokens INTEGER,
+  generation_seconds INTEGER,
   enabled INTEGER NOT NULL,
   path TEXT NOT NULL
 );
@@ -27,6 +33,10 @@ CREATE TABLE IF NOT EXISTS materializations (
   mode TEXT NOT NULL,
   file TEXT NOT NULL,
   code_hash TEXT NOT NULL,
+  model TEXT,
+  reasoning_tokens INTEGER,
+  total_tokens INTEGER,
+  generation_seconds INTEGER,
   PRIMARY KEY (hypothesis_id, mode, file)
 );
 
@@ -43,6 +53,9 @@ CREATE TABLE IF NOT EXISTS nodes (
   mode TEXT,
   profile_id TEXT,
   status TEXT NOT NULL,
+  created_at TEXT,
+  finished_at TEXT,
+  run_seconds INTEGER,
   path TEXT NOT NULL
 );
 
