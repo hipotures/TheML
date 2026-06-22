@@ -133,8 +133,9 @@ def classify_node(node_dir: Path) -> str:
         return "missing_hypothesis"
     if not (node_dir / "02-code.py").exists():
         return "missing_code"
-    attempts = list((node_dir / "03-execute").glob("attempt-*"))
-    if attempts:
+    if (node_dir / "started.yaml").exists() or (node_dir / "stdout.log").exists() or (node_dir / "stderr.log").exists():
+        return "execution_interrupted"
+    if list((node_dir / "03-execute").glob("attempt-*")):
         return "execution_interrupted"
     return "aborted"
 

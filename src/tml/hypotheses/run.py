@@ -65,15 +65,13 @@ def run_missing(
                 profile_overrides=profile_overrides,
             ),
         )
-        attempt_dir = node_dir / "03-execute" / "attempt-001"
-        attempt_dir.mkdir(parents=True, exist_ok=True)
-        write_yaml(attempt_dir / "started.yaml", {"created_at": datetime.now().isoformat(timespec="seconds")})
+        write_yaml(node_dir / "started.yaml", {"created_at": datetime.now().isoformat(timespec="seconds")})
         result = run_python_script(
             node_dir / "02-code.py",
             node_dir / "work",
             timeout_seconds=_execution_timeout_seconds(profile_overrides),
         )
-        write_attempt_result(attempt_dir, result)
+        write_attempt_result(node_dir, result)
         if result.status == "ok":
             _write_success_markers(node_dir, nid, hid, mode, profile_id, materialization, result)
         else:
