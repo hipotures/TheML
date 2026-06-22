@@ -427,6 +427,44 @@ def submission_rows(project_dir: Path) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def submission_by_sha_prefix(project_dir: Path, sha_prefix: str) -> dict[str, Any]:
+    db_path = ensure_project_db(project_dir)
+    prefix = sha_prefix.strip().lower()
+    if not prefix:
+        raise ValueError("Missing submission sha prefix.")
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM submissions
+            WHERE lower(submission_sha256) LIKE ?
+            ORDER BY local_score DESC
+            """,
+            (prefix + "%",),
+        ).fetchall()
+    if not rows:
+        raise ValueError(f"No submission matches sha prefix: {sha_prefix}")
+    distinct_hashes = {str(row["submission_sha256"]) for row in rows}
+    if len(distinct_hashes) > 1:
+        preview = ", ".join(sorted(value[:10] for value in distinct_hashes))
+        raise ValueError(f"Ambiguous sha prefix {sha_prefix}; matches: {preview}")
+    return dict(rows[0])
+
+
+def mark_submission_submitted(project_dir: Path, *, node_id: str, submission_path: str) -> None:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            UPDATE submissions
+            SET submit_status='submitted'
+            WHERE node_id=? AND submission_path=?
+            """,
+            (node_id, submission_path),
+        )
+        conn.commit()
+
+
 def materialization_rows(project_dir: Path, *, mode: str, hypothesis_id: str | None = None) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
     sql = """

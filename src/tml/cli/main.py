@@ -17,7 +17,7 @@ from rich.tree import Tree
 from tml.cli.prompt_output import print_prompt_choices, print_prompt_probe_summary, print_prompt_render_summary
 from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.errors import TmlError
-from tml.core.kaggle import download_competition_data
+from tml.core.kaggle import download_competition_data, submit_competition_file
 from tml.core.paths import active_project_ref, workspace_root
 from tml.core.profiles import load_profile, profile_hash
 from tml.core.project import default_download_data, default_project_kind, init_project, use_project
@@ -25,10 +25,12 @@ from tml.db.reindex import reindex_project
 from tml.db.state import (
     best_score,
     materialization_rows,
+    mark_submission_submitted,
     root_counts,
     root_hypothesis_rows,
     root_run_rows,
     run_request_status,
+    submission_by_sha_prefix,
     submission_rows,
 )
 from tml.hypotheses.generate import GeneratedHypothesis, generate_missing_root_hypotheses
@@ -339,6 +341,31 @@ def kaggle_download_cmd() -> None:
 
             download_competition_data(slug, data_dir, progress=report)
         _print_kaggle_download_summary(ref.root, slug, data_dir)
+    except Exception as exc:
+        _abort(exc)
+
+
+@kaggle_app.command("submit", context_settings=EXTRA)
+def kaggle_submit_cmd(ctx: typer.Context) -> None:
+    try:
+        _reject_positional(ctx.args, "tml kaggle submit")
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"sha", "sha256"}, "tml kaggle submit")
+        sha = str(overrides.get("sha") or overrides.get("sha256") or "")
+        ref = active_project_ref()
+        config = load_project_config(ref.path)
+        competition = str(config.get("kaggle_slug") or ref.slug)
+        row = submission_by_sha_prefix(ref.path, sha)
+        _validate_submit_row(row)
+        submission_path = ref.path / str(row["submission_path"])
+        message = _kaggle_submit_message(row)
+        submit_competition_file(competition, submission_path, message)
+        mark_submission_submitted(
+            ref.path,
+            node_id=str(row["node_id"]),
+            submission_path=str(row["submission_path"]),
+        )
+        console.print(f"Submitted {str(row['submission_sha256'])[:10]} to {competition}.")
     except Exception as exc:
         _abort(exc)
 
@@ -727,7 +754,7 @@ def _print_root_run_request_status(project_dir: Path, *, mode: str, hypothesis_i
 
 def _print_submissions(project_dir: Path) -> None:
     rows = submission_rows(project_dir)
-    table = Table(title="Submission candidates", box=box.SIMPLE_HEAVY)
+    table = Table(title="Submission candidates", box=box.SIMPLE_HEAVY, row_styles=["on grey23", "on grey11"])
     table.add_column("#", justify="right", no_wrap=True)
     table.add_column("CV#", justify="right", no_wrap=True)
     table.add_column("PUB#", justify="right", no_wrap=True)
@@ -766,6 +793,56 @@ def _print_submissions(project_dir: Path) -> None:
             str(row.get("submission_sha256") or "")[:10],
         )
     console.print(table)
+    _print_submission_actions(rows)
+
+
+def _print_submission_actions(rows: list[dict[str, object]]) -> None:
+    ready = [
+        row
+        for row in rows
+        if isinstance(row.get("local_score"), int | float)
+        and str(row.get("status") or "") == "complete"
+        and str(row.get("submit_status") or "") != "submitted"
+        and str(row.get("submission_sha256") or "")
+    ][:5]
+    if ready:
+        console.print()
+        console.print("[bold]Ready submit commands:[/bold]")
+        for row in ready:
+            sha = str(row.get("submission_sha256") or "")[:10]
+            console.print(f"uv run tml kaggle submit sha={sha}")
+
+        console.print()
+        console.print("[bold]Ready rerun commands:[/bold]")
+        for row in ready:
+            sha = str(row.get("submission_sha256") or "")[:10]
+            console.print(f"# fake: uv run tml root rerun sha={sha} profile=best_boost_gpu_1h execute=true")
+    console.print("Remote Kaggle submissions visible: not synced")
+
+
+def _validate_submit_row(row: dict[str, object]) -> None:
+    sha = str(row.get("submission_sha256") or "")[:10]
+    if str(row.get("status") or "") != "complete":
+        raise TmlError(f"Submission {sha} is not submit-ready: run status is {row.get('status')}.")
+    if str(row.get("submit_status") or "") == "submitted":
+        raise TmlError(f"Submission {sha} is already marked as submitted.")
+    if not isinstance(row.get("local_score"), int | float):
+        raise TmlError(f"Submission {sha} is not submit-ready: missing local score.")
+
+
+def _kaggle_submit_message(row: dict[str, object]) -> str:
+    score = row.get("local_score")
+    score_text = "nan" if not isinstance(score, int | float) else f"{float(score):.5f}"
+    run_seconds = row.get("run_seconds")
+    time_text = f" | time={float(run_seconds) / 60.0:.1f}m" if isinstance(run_seconds, int | float) else ""
+    metric_text = f" | metric={row['metric']}" if row.get("metric") else ""
+    node_id = str(row.get("node_id") or "")
+    node_text = node_id[:8] if node_id else "unknown"
+    return (
+        f"cv={score_text} | run={row.get('run_id')} | step={row.get('step')} | "
+        f"tml_ts={_date_yyyymmdd(row.get('created_at'))} | node={node_text} | "
+        f"sha={str(row.get('submission_sha256') or '')[:10]} | algo=AG{metric_text}{time_text}"
+    )
 
 
 def _best_numeric(values) -> float | None:
