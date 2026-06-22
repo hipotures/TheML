@@ -815,6 +815,178 @@ def mark_submission_submitted(
         conn.commit()
 
 
+def sync_submission_remote_rows(project_dir: Path, remote_submissions: list[object]) -> int:
+    db_path = ensure_project_db(project_dir)
+    synced_at = datetime.now().isoformat(timespec="seconds")
+    changed = 0
+    with connect(db_path) as conn:
+        rows = [dict(row) for row in conn.execute("SELECT * FROM submissions").fetchall()]
+        for remote in remote_submissions:
+            remote_fields = _remote_submission_fields(remote, synced_at=synced_at)
+            match = _match_remote_submission(rows, remote_fields)
+            if match is None:
+                continue
+            update = {
+                "submit_status": _submit_status_from_remote(remote_fields.get("remote_status")),
+                **remote_fields,
+            }
+            persisted_update = {
+                key: update[key]
+                for key in (
+                    "submit_status",
+                    "kaggle_ref",
+                    "remote_status",
+                    "remote_date",
+                    "remote_url",
+                    "public_score",
+                    "private_score",
+                )
+            }
+            before = {key: match.get(key) for key in persisted_update}
+            if before == persisted_update:
+                continue
+            conn.execute(
+                """
+                UPDATE submissions
+                SET submit_status=?,
+                    kaggle_ref=?,
+                    remote_status=?,
+                    remote_date=?,
+                    remote_url=?,
+                    public_score=?,
+                    private_score=?
+                WHERE node_id=? AND submission_path=?
+                """,
+                (
+                    update["submit_status"],
+                    update["kaggle_ref"],
+                    update["remote_status"],
+                    update["remote_date"],
+                    update["remote_url"],
+                    update["public_score"],
+                    update["private_score"],
+                    match["node_id"],
+                    match["submission_path"],
+                ),
+            )
+            match.update(persisted_update)
+            changed += 1
+        conn.commit()
+    return changed
+
+
+def _remote_submission_fields(remote: object, *, synced_at: str) -> dict[str, Any]:
+    description = _remote_attr(remote, "description")
+    return {
+        "kaggle_ref": _remote_ref(remote),
+        "remote_filename": _remote_attr(remote, "file_name"),
+        "remote_date": _date_to_string(_remote_attr(remote, "date")),
+        "remote_description": description,
+        "remote_status": _status_to_string(_remote_attr(remote, "status")),
+        "public_score": _score_or_none(_remote_attr(remote, "public_score")),
+        "private_score": _score_or_none(_remote_attr(remote, "private_score")),
+        "remote_url": _remote_attr(remote, "url"),
+        "synced_at": synced_at,
+        "parsed_description": _parse_submission_description(description),
+    }
+
+
+def _match_remote_submission(rows: list[dict[str, Any]], remote_fields: dict[str, Any]) -> dict[str, Any] | None:
+    remote_ref = str(remote_fields.get("kaggle_ref") or "")
+    if remote_ref:
+        for row in rows:
+            if str(row.get("kaggle_ref") or "") == remote_ref:
+                return row
+    filename = str(remote_fields.get("remote_filename") or "")
+    if filename:
+        for row in rows:
+            if str(row.get("uploaded_filename") or "") == filename:
+                return row
+    parsed = remote_fields.get("parsed_description")
+    parsed_description = parsed if isinstance(parsed, dict) else {}
+    sha = str(parsed_description.get("sha") or "").lower()
+    if sha:
+        matches = [row for row in rows if str(row.get("submission_sha256") or "").lower().startswith(sha)]
+        run = str(parsed_description.get("run") or "")
+        if run and len(matches) > 1:
+            matches = [row for row in matches if str(row.get("run_id") or "") == run]
+        step = str(parsed_description.get("step") or "")
+        if step and len(matches) > 1:
+            matches = [row for row in matches if str(row.get("step") or "") == step]
+        if len(matches) == 1:
+            return matches[0]
+    return None
+
+
+def _remote_attr(remote: object, snake_name: str) -> Any:
+    if isinstance(remote, dict):
+        return remote.get(snake_name) or remote.get(_snake_to_camel(snake_name))
+    if hasattr(remote, snake_name):
+        return getattr(remote, snake_name)
+    private_name = f"_{snake_name}"
+    if hasattr(remote, private_name):
+        return getattr(remote, private_name)
+    camel_name = _snake_to_camel(snake_name)
+    if hasattr(remote, camel_name):
+        return getattr(remote, camel_name)
+    return None
+
+
+def _snake_to_camel(value: str) -> str:
+    parts = value.split("_")
+    return parts[0] + "".join(part.title() for part in parts[1:])
+
+
+def _remote_ref(remote: object) -> str | None:
+    ref = _remote_attr(remote, "ref")
+    return str(ref) if ref is not None else None
+
+
+def _status_to_string(status: object) -> str | None:
+    if status is None:
+        return None
+    if hasattr(status, "name"):
+        return str(status.name)
+    return str(status)
+
+
+def _date_to_string(value: object) -> str | None:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return str(value.isoformat())
+    return str(value)
+
+
+def _score_or_none(value: object) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_submission_description(description: object) -> dict[str, str]:
+    import re
+
+    if not description:
+        return {}
+    parsed: dict[str, str] = {}
+    for match in re.finditer(r"([A-Za-z_][A-Za-z0-9_]*)=([^|]+)", str(description)):
+        parsed[match.group(1).strip()] = match.group(2).strip()
+    return parsed
+
+
+def _submit_status_from_remote(remote_status: object) -> str:
+    status = str(remote_status or "").strip().upper()
+    if status in {"ERROR", "FAILED", "FAILURE"}:
+        return "failed"
+    if status in {"COMPLETE", "SUBMITTED"}:
+        return "submitted"
+    return "uploaded"
+
+
 def materialization_rows(project_dir: Path, *, mode: str, hypothesis_id: str | None = None) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
     sql = """

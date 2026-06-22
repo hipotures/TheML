@@ -23,7 +23,7 @@ from tml.branches.run import BranchRunPlan, branch_run_plan, run_missing_branche
 from tml.cli.prompt_output import print_prompt_choices, print_prompt_probe_summary, print_prompt_render_summary
 from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.errors import TmlError
-from tml.core.kaggle import download_competition_data, submit_competition_file
+from tml.core.kaggle import download_competition_data, list_competition_submissions, submit_competition_file
 from tml.core.paths import active_project_ref, workspace_root
 from tml.core.profiles import load_profile, profile_hash
 from tml.core.project import default_download_data, default_project_kind, init_project, use_project
@@ -41,6 +41,7 @@ from tml.db.state import (
     solution_tree_root_rows,
     submission_by_sha_prefix,
     submission_rows,
+    sync_submission_remote_rows,
 )
 from tml.hypotheses.generate import (
     GeneratedHypothesis,
@@ -750,6 +751,7 @@ def reindex_cmd(scope: str | None = None, run_id: str | None = None) -> None:
             f"{counts['materializations']} materializations, {counts['nodes']} nodes, "
             f"{counts['submissions']} submissions"
         )
+        _sync_kaggle_submissions(ref.path)
     except Exception as exc:
         _abort(exc)
 
@@ -763,6 +765,18 @@ def submissions_cmd() -> None:
         _print_submissions(ref.path)
     except Exception as exc:
         _abort(exc)
+
+
+def _sync_kaggle_submissions(project_dir: Path) -> None:
+    config = load_project_config(project_dir)
+    competition = str(config.get("kaggle_slug") or project_dir.name)
+    try:
+        remote_submissions = list_competition_submissions(competition)
+    except Exception as exc:
+        console.print(f"Remote Kaggle submissions unavailable: {exc}")
+        return
+    changed = sync_submission_remote_rows(project_dir, remote_submissions)
+    console.print(f"Remote Kaggle submissions visible: {len(remote_submissions)}; synced local rows: {changed}.")
 
 
 @kaggle_app.command("download")
@@ -785,6 +799,15 @@ def kaggle_download_cmd() -> None:
 
             download_competition_data(slug, data_dir, progress=report)
         _print_kaggle_download_summary(ref.root, slug, data_dir)
+    except Exception as exc:
+        _abort(exc)
+
+
+@kaggle_app.command("sync")
+def kaggle_sync_cmd() -> None:
+    try:
+        ref = active_project_ref()
+        _sync_kaggle_submissions(ref.path)
     except Exception as exc:
         _abort(exc)
 
@@ -1753,14 +1776,19 @@ def _print_submission_actions(rows: list[dict[str, object]]) -> None:
         for row in ready:
             sha = str(row.get("submission_sha256") or "")[:10]
             console.print(f"# fake: uv run tml root rerun sha={sha} profile=best_boost_gpu_1h execute=true")
-    console.print("Remote Kaggle submissions visible: not synced")
+    synced_rows = sum(1 for row in rows if str(row.get("remote_status") or ""))
+    if synced_rows:
+        console.print(f"Remote Kaggle submissions synced local rows: {synced_rows}")
+    else:
+        console.print("Remote Kaggle submissions not synced. Run: uv run tml kaggle sync")
 
 
 def _validate_submit_row(row: dict[str, object], *, allow_uploaded: bool = False) -> None:
     sha = str(row.get("submission_sha256") or "")[:10]
     if str(row.get("status") or "") != "complete":
         raise TmlError(f"Submission {sha} is not submit-ready: run status is {row.get('status')}.")
-    if not allow_uploaded and str(row.get("submit_status") or "") in {"submitted", "uploaded"}:
+    submit_status = str(row.get("submit_status") or "not_submitted")
+    if not allow_uploaded and submit_status != "not_submitted":
         raise TmlError(f"Submission {sha} is already uploaded; use force=true to upload it again.")
     if not isinstance(row.get("local_score"), int | float):
         raise TmlError(f"Submission {sha} is not submit-ready: missing local score.")

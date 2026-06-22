@@ -62,6 +62,17 @@ def submit_competition_file(slug: str, submission_path: Path, message: str, uplo
     return api.competition_submit(str(upload_path), message, slug, quiet=False)
 
 
+def list_competition_submissions(slug: str, *, page_size: int = 200) -> list[object]:
+    try:
+        from kaggle.api.kaggle_api_extended import KaggleApi
+    except ModuleNotFoundError as exc:
+        raise TmlError("Kaggle Python package is not installed in this environment.") from exc
+    api = KaggleApi()
+    api.authenticate()
+    submissions = api.competition_submissions(slug, page_size=page_size)
+    return list(submissions or [])
+
+
 def _prepare_submission_upload(submission_path: Path, upload_path: Path) -> None:
     upload_path.parent.mkdir(parents=True, exist_ok=True)
     if submission_path.name.endswith(".csv.gz") and upload_path.suffix == ".csv":
