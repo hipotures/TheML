@@ -11,6 +11,7 @@ from rich import box
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn
 from rich.table import Table
+from rich.text import Text
 from rich.tree import Tree
 
 from tml.cli.prompt_output import print_prompt_choices, print_prompt_probe_summary, print_prompt_render_summary
@@ -28,6 +29,7 @@ from tml.db.state import (
     root_hypothesis_rows,
     root_run_rows,
     run_request_status,
+    submission_rows,
 )
 from tml.hypotheses.generate import GeneratedHypothesis, generate_missing_root_hypotheses
 from tml.hypotheses.materialize import materialize_missing
@@ -302,6 +304,17 @@ def reindex_cmd(scope: str | None = None, run_id: str | None = None) -> None:
             f"{counts['materializations']} materializations, {counts['nodes']} nodes, "
             f"{counts['submissions']} submissions"
         )
+    except Exception as exc:
+        _abort(exc)
+
+
+@app.command("submissions")
+@app.command("sub")
+@app.command("subm")
+def submissions_cmd() -> None:
+    try:
+        ref = active_project_ref()
+        _print_submissions(ref.path)
     except Exception as exc:
         _abort(exc)
 
@@ -710,6 +723,111 @@ def _print_root_run_request_status(project_dir: Path, *, mode: str, hypothesis_i
         console.print(f"Run skipped: hypothesis {hid} does not exist.")
     elif status == "missing_materialization":
         console.print(f"Run skipped: hypothesis {hid} has no {mode} materialization. Run: uv run tml root materialize id={int(hid)}")
+
+
+def _print_submissions(project_dir: Path) -> None:
+    rows = submission_rows(project_dir)
+    table = Table(title="Submission candidates", box=box.SIMPLE_HEAVY)
+    table.add_column("#", justify="right", no_wrap=True)
+    table.add_column("CV#", justify="right", no_wrap=True)
+    table.add_column("PUB#", justify="right", no_wrap=True)
+    table.add_column("cv", justify="right", no_wrap=True)
+    table.add_column("public", justify="right", no_wrap=True)
+    table.add_column("submit", no_wrap=True)
+    table.add_column("kind/profile", no_wrap=True)
+    table.add_column("time", justify="right", no_wrap=True)
+    table.add_column("metric", no_wrap=True)
+    table.add_column("run", no_wrap=True, overflow="ellipsis", max_width=38)
+    table.add_column("step", justify="right", no_wrap=True)
+    table.add_column("date", no_wrap=True)
+    table.add_column("sha", no_wrap=True)
+    if not rows:
+        console.print("No submissions recorded in project database.")
+        return
+
+    best_local = _best_numeric(row.get("local_score") for row in rows)
+    best_public = _best_numeric(row.get("public_score") for row in rows)
+    for index, row in enumerate(rows, start=1):
+        local_score = row.get("local_score")
+        public_score = row.get("public_score")
+        table.add_row(
+            str(index),
+            _rank_text(row.get("cv_rank"), local_score),
+            _rank_text(row.get("public_rank") or row.get("computed_public_rank"), public_score),
+            _score_text(local_score, best=best_local, style="bold black on bright_green"),
+            _score_text(public_score, best=best_public, style="bold black on bright_cyan"),
+            _submit_status_text(row.get("submit_status")),
+            _kind_profile_text(row),
+            _minutes_text(row.get("run_seconds")),
+            str(row.get("metric") or ""),
+            str(row.get("run_id") or ""),
+            _step_text(row.get("step")),
+            _date_yyyymmdd(row.get("created_at")),
+            str(row.get("submission_sha256") or "")[:10],
+        )
+    console.print(table)
+
+
+def _best_numeric(values) -> float | None:
+    parsed: list[float] = []
+    for value in values:
+        if isinstance(value, int | float):
+            parsed.append(float(value))
+    return max(parsed) if parsed else None
+
+
+def _rank_text(value: object, score: object) -> str:
+    if not isinstance(score, int | float):
+        return ""
+    try:
+        return str(int(value))
+    except (TypeError, ValueError):
+        return ""
+
+
+def _score_text(value: object, *, best: float | None, style: str) -> str | Text:
+    if not isinstance(value, int | float):
+        return ""
+    text = f"{float(value):.5f}"
+    if best is not None and float(value) == best:
+        return Text(text, style=style)
+    return text
+
+
+def _submit_status_text(value: object) -> Text:
+    text = str(value or "")
+    if text == "submitted":
+        return Text(text, style="green")
+    if text == "not_submitted":
+        return Text(text, style="dim")
+    return Text(text)
+
+
+def _kind_profile_text(row: dict[str, object]) -> str:
+    kind = str(row.get("kind") or "")
+    profile = str(row.get("profile_id") or "")
+    if kind and profile:
+        return f"{kind}/{profile}"
+    return profile or kind
+
+
+def _minutes_text(value: object) -> str:
+    if not isinstance(value, int | float):
+        return ""
+    return f"{float(value) / 60.0:.1f}m"
+
+
+def _step_text(value: object) -> str:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return ""
+    return str(parsed)
+
+
+def _date_yyyymmdd(value: object) -> str:
+    text = str(value or "")
+    return text[:10].replace("-", "") if len(text) >= 10 else text
 
 
 def _root_run_row(
