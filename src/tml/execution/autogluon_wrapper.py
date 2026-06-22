@@ -185,7 +185,7 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
     submission[prediction_cols[0]] = predictions.values
     artifacts = work_dir.parent / "artifacts"
     artifacts.mkdir(exist_ok=True)
-    submission.to_csv(artifacts / "submission.csv", index=False)
+    submission.to_csv(artifacts / "submission.csv.gz", index=False, compression="gzip")
 
     leaderboard = predictor.leaderboard(silent=True)
     if training_plan.defer_save_space:

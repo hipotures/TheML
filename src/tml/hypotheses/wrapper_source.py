@@ -573,8 +573,8 @@ def main():
                     except Exception as exc:
                         prediction_artifacts["save_space_error"] = f"{{type(exc).__name__}}: {{exc}}"
                 submission = _make_submission(sample, test[id_col], predictions, id_col, target_col)
-                submission_path = artifacts_dir / "submission.csv"
-                submission.to_csv(submission_path, index=False)
+                submission_path = artifacts_dir / "submission.csv.gz"
+                submission.to_csv(submission_path, index=False, compression="gzip")
                 print("AutoGluon materialization: finished validation and prediction", flush=True)
                 print(f"AutoGluon materialization: submission saved to {{submission_path}}", flush=True)
                 if prediction_artifacts.get("oof_predictions"):

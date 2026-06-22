@@ -247,8 +247,8 @@ def _fit_score_and_write_submission(
         submission[target_output_col] = test_pred
         artifacts = work_dir.parent / "artifacts"
         artifacts.mkdir(exist_ok=True)
-        submission_path = artifacts / "submission.csv"
-        submission.to_csv(submission_path, index=False)
+        submission_path = artifacts / "submission.csv.gz"
+        submission.to_csv(submission_path, index=False, compression="gzip")
         print(f"TML_STAGE|legacy submission saved to {submission_path}", flush=True)
 
     return metric, {
