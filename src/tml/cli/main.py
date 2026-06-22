@@ -929,7 +929,7 @@ def _run_summary_from_paths(request_path: Path, response_path: Path) -> dict[str
     duration = ""
     result = status
     if isinstance(wall_ms, int):
-        duration = f"{wall_ms / 1000:.1f}s"
+        duration = f"{round(wall_ms / 1000)}s"
         result = f"{status} in {duration}"
     total_tokens = _run_total_tokens(response)
     reasoning_tokens = _run_reasoning_tokens(response)
