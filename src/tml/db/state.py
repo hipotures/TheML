@@ -602,7 +602,7 @@ def materialization_rows(project_dir: Path, *, mode: str, hypothesis_id: str | N
                m.model, m.reasoning_tokens, m.total_tokens, m.generation_seconds
         FROM materializations m
         JOIN hypotheses h ON h.hypothesis_id=m.hypothesis_id
-        WHERE m.mode=?
+        WHERE m.mode=? AND m.active=1
     """
     params: list[Any] = [mode]
     if hypothesis_id:

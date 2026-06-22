@@ -1026,7 +1026,6 @@ def _print_root_materializations(
     table.add_column("S", no_wrap=True)
     table.add_column("Mode", no_wrap=True)
     table.add_column("File", no_wrap=True)
-    table.add_column("Status", no_wrap=True)
     table.add_column("Model", no_wrap=True)
     table.add_column("Res/Tokens", justify="right", no_wrap=True)
     table.add_column("Gen", justify="right", no_wrap=True)
@@ -1037,15 +1036,12 @@ def _print_root_materializations(
     console.print(table)
 
 
-def _root_materialization_row(db_row: dict[str, object], *, summary_limit: int) -> list[str]:
-    active = bool(db_row.get("active"))
-    status = str(db_row.get("status") or "")
+def _root_materialization_row(db_row: dict[str, object], *, summary_limit: int) -> list[object]:
     return [
         str(db_row.get("hypothesis_id") or ""),
-        "⌘" if active else "·",
+        Text("⌘", style="green"),
         str(db_row.get("mode") or ""),
         str(db_row.get("file") or ""),
-        status,
         str(db_row.get("model") or ""),
         _token_summary(db_row),
         _seconds_text(db_row.get("generation_seconds")),
