@@ -1004,12 +1004,15 @@ def _print_existing_root_hypotheses(project_dir: Path, *, created_ids: set[str])
         )
     old_rows = [row for is_new, row in rows if not is_new]
     new_rows = [row for is_new, row in rows if is_new]
+    displayed_index = 0
     for row in old_rows:
-        table.add_row(*row)
+        table.add_row(*row, style=_zebra_style(displayed_index))
+        displayed_index += 1
     if old_rows and new_rows:
         table.add_row("NEW", *["" for _ in ROOT_HYPOTHESIS_COLUMNS[1:]], style="reverse")
     for row in new_rows:
-        table.add_row(*row, style="bold")
+        table.add_row(*row, style=_zebra_style(displayed_index, extra="bold"))
+        displayed_index += 1
     console.print(table)
 
 
@@ -1026,27 +1029,51 @@ def _print_root_materializations(
     table.add_column("S", no_wrap=True)
     table.add_column("Mode", no_wrap=True)
     table.add_column("File", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
     table.add_column("Model", no_wrap=True)
     table.add_column("Res/Tokens", justify="right", no_wrap=True)
     table.add_column("Gen", justify="right", no_wrap=True)
     table.add_column("Summary", overflow="fold", min_width=40, ratio=1)
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
-    for db_row in materialization_rows(project_dir, mode=mode, hypothesis_id=target_id):
-        table.add_row(*_root_materialization_row(db_row, summary_limit=summary_limit))
+    for row_index, db_row in enumerate(materialization_rows(project_dir, mode=mode, hypothesis_id=target_id)):
+        row_style = _zebra_style(row_index)
+        table.add_row(*_root_materialization_row(db_row, summary_limit=summary_limit), style=row_style)
     console.print(table)
 
 
 def _root_materialization_row(db_row: dict[str, object], *, summary_limit: int) -> list[object]:
+    active = bool(db_row.get("active"))
+    status = str(db_row.get("status") or "")
     return [
         str(db_row.get("hypothesis_id") or ""),
-        Text("⌘", style="green"),
+        Text("⌘", style="green") if active else Text("·", style="dim"),
         str(db_row.get("mode") or ""),
         str(db_row.get("file") or ""),
+        _materialization_status_text(status),
         str(db_row.get("model") or ""),
         _token_summary(db_row),
         _seconds_text(db_row.get("generation_seconds")),
         _short_text(str(db_row.get("summary") or ""), summary_limit),
     ]
+
+
+def _materialization_status_text(status: str) -> Text:
+    if status == "bug":
+        return Text(status, style="bold red")
+    if status == "fixed":
+        return Text(status, style="green")
+    if status == "active":
+        return Text(status, style="green")
+    if status == "inactive":
+        return Text(status, style="dim")
+    return Text(status or "n/a", style="yellow")
+
+
+def _zebra_style(index: int, *, extra: str | None = None) -> str | None:
+    background = "on grey15" if index % 2 else None
+    if extra and background:
+        return f"{extra} {background}"
+    return extra or background
 
 
 def _print_root_run_summary(

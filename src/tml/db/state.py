@@ -602,13 +602,13 @@ def materialization_rows(project_dir: Path, *, mode: str, hypothesis_id: str | N
                m.model, m.reasoning_tokens, m.total_tokens, m.generation_seconds
         FROM materializations m
         JOIN hypotheses h ON h.hypothesis_id=m.hypothesis_id
-        WHERE m.mode=? AND m.active=1
+        WHERE m.mode=?
     """
     params: list[Any] = [mode]
     if hypothesis_id:
         sql += " AND h.hypothesis_id=?"
         params.append(hypothesis_id.zfill(6))
-    sql += " ORDER BY h.hypothesis_id, m.active DESC, m.file"
+    sql += " ORDER BY h.hypothesis_id, m.file"
     with connect(db_path) as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
