@@ -58,7 +58,10 @@ class CodexAiClient:
                 str(response_path),
                 "-",
             ]
-            if self.spec is not None and _as_bool((self.spec.provider_config or {}).get("web_search"), default=False):
+            web_search_enabled = self.spec is not None and _codex_web_search_enabled(
+                (self.spec.provider_config or {}).get("web_search")
+            )
+            if web_search_enabled:
                 command.insert(1, "--search")
             result = subprocess.run(
                 command,
@@ -76,8 +79,7 @@ class CodexAiClient:
                 metadata={
                     "backend": "codex",
                     "model": request.model,
-                    "web_search_enabled": self.spec is not None
-                    and _as_bool((self.spec.provider_config or {}).get("web_search"), default=False),
+                    "web_search_enabled": web_search_enabled,
                     "web_search_has_results": False,
                 },
             )
@@ -88,7 +90,7 @@ class CodexAiClient:
             raise RuntimeError("Codex model spec must include a model, for example codex:gpt-5.4:high.")
 
         provider_config = spec.provider_config or {}
-        web_search_enabled = _as_bool(provider_config.get("web_search"), default=False)
+        web_search_enabled = _codex_web_search_enabled(provider_config.get("web_search"))
         cwd = invocation.cwd or Path.cwd()
         thread_cwd = _app_server_work_dir(cwd, provider_config)
         sandbox = _codex_app_server_sandbox(
@@ -305,7 +307,7 @@ class CodexAiClient:
         sandbox = _codex_sandbox(invocation.sandbox or str((spec.provider_config or {}).get("sandbox") or "read_only"), Sandbox)
         cwd = invocation.cwd or Path.cwd()
         summary = str((spec.provider_config or {}).get("summary") or "concise")
-        web_search_enabled = _as_bool((spec.provider_config or {}).get("web_search"), default=False)
+        web_search_enabled = _codex_web_search_enabled((spec.provider_config or {}).get("web_search"))
         config = {}
         if effort:
             config["model_reasoning_effort"] = effort
@@ -385,6 +387,24 @@ def _codex_summary_for_model(model: str, provider_config: dict[str, Any]) -> str
     if value is False or value is None:
         return None
     return str(value or "concise")
+
+
+def _codex_web_search_config(value: Any) -> str:
+    if isinstance(value, bool):
+        return "live" if value else "disabled"
+    normalized = str(value or "disabled").strip().lower()
+    if normalized in {"1", "true", "yes", "on", "enabled", "enable"}:
+        return "live"
+    if normalized in {"0", "false", "no", "off", "disabled", "disable", "none"}:
+        return "disabled"
+    if normalized in {"live", "cached"}:
+        return normalized
+    raise RuntimeError("Unsupported Codex web_search value "
+                       f"{value!r}. Expected true, false, live, cached, or disabled.")
+
+
+def _codex_web_search_enabled(value: Any) -> bool:
+    return _codex_web_search_config(value) != "disabled"
 
 
 def _flush_live_artifacts(
@@ -552,7 +572,6 @@ def _client_info() -> dict[str, str]:
 
 def _app_server_command(provider_config: dict[str, Any]) -> list[str]:
     args = ["codex", "app-server"]
-    web_search_enabled = _as_bool(provider_config.get("web_search"), default=False)
     disable_features = provider_config.get("disable_features") or [
         "apps",
         "browser_use",
@@ -570,7 +589,7 @@ def _app_server_command(provider_config: dict[str, Any]) -> list[str]:
     config_overrides = {
         "project_doc_max_bytes": int(provider_config.get("project_doc_max_bytes") or 0),
         "project_doc_fallback_filenames": [],
-        "web_search": "enabled" if web_search_enabled else "disabled",
+        "web_search": _codex_web_search_config(provider_config.get("web_search")),
         "mcp_servers": {},
         "features.skill_mcp_dependency_install": False,
     }
@@ -672,6 +691,10 @@ def _read_until_response(
             rpc_responses.append(message)
         else:
             notifications.append(message)
+    if proc.poll() is not None:
+        raise RuntimeError(
+            f"Codex app-server exited with code {proc.returncode} while waiting for response id={request_id}."
+        )
     raise RuntimeError(f"Timed out waiting for Codex app-server response id={request_id}.")
 
 

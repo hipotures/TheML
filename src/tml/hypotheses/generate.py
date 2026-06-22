@@ -50,7 +50,7 @@ def root_generation_plan(project_dir: Path, count: int | None = None) -> RootGen
     providers = repo_providers_for_project(project_dir)
     spec = resolve_model_spec(model, providers)
     provider_config = {**(spec.provider_config or {}), **role_options}
-    web_search_enabled = _bool(provider_config.get("web_search"))
+    web_search_enabled = _web_search_enabled(provider_config.get("web_search"))
     hypothesis_ids = [hypothesis_id(number) for number in range(next_number, target + 1)]
     return RootGenerationPlan(
         target=target,
@@ -85,7 +85,7 @@ def generate_missing_root_hypotheses(
     providers = repo_providers_for_project(project_dir)
     spec = resolve_model_spec(model, providers)
     provider_config = {**(spec.provider_config or {}), **role_options}
-    web_search_enabled = _bool(provider_config.get("web_search"))
+    web_search_enabled = _web_search_enabled(provider_config.get("web_search"))
     for number in range(next_hypothesis_number(project_dir), target + 1):
         if stop_requested is not None and stop_requested():
             break
@@ -140,6 +140,12 @@ def _parse_hypothesis(text: str) -> dict[str, object]:
         first = parsed["hypotheses"][0]
         return first if isinstance(first, dict) else {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _web_search_enabled(value: object) -> bool:
+    if str(value or "").strip().lower() in {"live", "cached"}:
+        return True
+    return _bool(value)
 
 
 def _bool(value: object) -> bool:
