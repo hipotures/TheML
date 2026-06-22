@@ -139,7 +139,14 @@ def materialize_missing(
             response_prefix=f"{mode}-001",
         )
         group_code = _parse_code(response.text)
-        validate_group_code_source(group_code)
+        try:
+            validate_group_code_source(group_code)
+        except ValueError as exc:
+            response_path = mat_dir / f"{mode}-001.response.md"
+            raise ValueError(
+                f"Invalid materialization for hypothesis {hdir.name} ({mode}); "
+                f"response={response_path}: {exc}"
+            ) from exc
         atomic_write_text(target, group_code)
         _update_manifest(hdir, mode, target, hypothesis)
         upsert_materialization(project_dir, hdir, mode, target)
@@ -174,7 +181,13 @@ def _rewrite_group_only_from_response(
     if not response_path.exists():
         return False
     group_code = _parse_code(response_path.read_text(encoding="utf-8"))
-    validate_group_code_source(group_code)
+    try:
+        validate_group_code_source(group_code)
+    except ValueError as exc:
+        raise ValueError(
+            f"Invalid materialization for hypothesis {hdir.name} ({mode}); "
+            f"response={response_path}: {exc}"
+        ) from exc
     atomic_write_text(target, group_code)
     _update_manifest(hdir, mode, target, hypothesis)
     return True

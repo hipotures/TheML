@@ -30,6 +30,9 @@ Rules:
 - You may compute covariate-only train+test statistics from `raw`; do not use target labels, validation labels, model outputs, or leaderboard feedback.
 - Do not read project data files, write files, train models, create `main()`, concatenate final blocks, or implement orchestration.
 - Do not implement timing decorators or logging wrappers. The group executor logs every group call and duration.
+- Top-level code may contain only imports, function definitions, literal constants, and `FEATURE_GROUPS`.
+- Do not call functions in top-level assignments. For example, do not write `EDGES = np.array(...)`, `CUTS = pd.IntervalIndex(...)`, or any other assignment whose right-hand side calls a function or constructor.
+- If a constant needs conversion to a NumPy/Pandas object, store it as a literal tuple/list at module level and convert it inside the feature function.
 
 Register groups like this:
 
