@@ -794,14 +794,15 @@ def kaggle_submit_cmd(ctx: typer.Context) -> None:
     try:
         _reject_positional(ctx.args, "tml kaggle submit")
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"sha", "sha256", "dry-run", "dry_run"}, "tml kaggle submit")
+        _validate_override_keys(overrides, {"sha", "sha256", "dry-run", "dry_run", "force"}, "tml kaggle submit")
         dry_run = _bool(overrides.get("dry-run", overrides.get("dry_run", False)))
+        force = _bool(overrides.get("force", False))
         sha = str(overrides.get("sha") or overrides.get("sha256") or "")
         ref = active_project_ref()
         config = load_project_config(ref.path)
         competition = str(config.get("kaggle_slug") or ref.slug)
         row = submission_by_sha_prefix(ref.path, sha)
-        _validate_submit_row(row, allow_submitted=dry_run)
+        _validate_submit_row(row, allow_uploaded=dry_run or force)
         submission_path = ref.path / str(row["submission_path"])
         message = _kaggle_submit_message(row)
         upload_path = submission_path.with_name(_upload_submission_filename(row))
@@ -1755,12 +1756,12 @@ def _print_submission_actions(rows: list[dict[str, object]]) -> None:
     console.print("Remote Kaggle submissions visible: not synced")
 
 
-def _validate_submit_row(row: dict[str, object], *, allow_submitted: bool = False) -> None:
+def _validate_submit_row(row: dict[str, object], *, allow_uploaded: bool = False) -> None:
     sha = str(row.get("submission_sha256") or "")[:10]
     if str(row.get("status") or "") != "complete":
         raise TmlError(f"Submission {sha} is not submit-ready: run status is {row.get('status')}.")
-    if not allow_submitted and str(row.get("submit_status") or "") == "submitted":
-        raise TmlError(f"Submission {sha} is already marked as submitted.")
+    if not allow_uploaded and str(row.get("submit_status") or "") in {"submitted", "uploaded"}:
+        raise TmlError(f"Submission {sha} is already uploaded; use force=true to upload it again.")
     if not isinstance(row.get("local_score"), int | float):
         raise TmlError(f"Submission {sha} is not submit-ready: missing local score.")
 

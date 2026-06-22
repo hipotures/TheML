@@ -792,7 +792,7 @@ def mark_submission_submitted(
         conn.execute(
             """
             UPDATE submissions
-            SET submit_status='submitted',
+            SET submit_status='uploaded',
                 submitted_at=?,
                 kaggle_message=?,
                 kaggle_response_json=?,
