@@ -29,45 +29,57 @@ def _load_branch_module(key, source):
     _MODULE_CACHE[key] = module
     return module
 
+
+def _call_feature_function(module, fn_name, raw, original_deps, aux):
+    import warnings
+
+    from pandas.errors import PerformanceWarning
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        warnings.filterwarnings("ignore", category=PerformanceWarning)
+        return getattr(module, fn_name)(raw, original_deps, aux)
+
+
 def _branch_hypothesis_000001_autogluon_001_py_001(raw, deps, aux):
     module = _load_branch_module('hypothesis_000001_autogluon_001_py', HYPOTHESIS_000001_AUTOGLUON_001_PY_SOURCE)
     original_deps = {}
-    return getattr(module, 'add_broadband_color_shape')(raw, original_deps, aux)
+    return _call_feature_function(module, 'add_broadband_color_shape', raw, original_deps, aux)
 
 def _branch_hypothesis_000021_autogluon_001_py_001(raw, deps, aux):
     module = _load_branch_module('hypothesis_000021_autogluon_001_py', HYPOTHESIS_000021_AUTOGLUON_001_PY_SOURCE)
     original_deps = {}
-    return getattr(module, 'aide_broadband_flux_ratios')(raw, original_deps, aux)
+    return _call_feature_function(module, 'aide_broadband_flux_ratios', raw, original_deps, aux)
 
 def _branch_hypothesis_000022_autogluon_001_py_001(raw, deps, aux):
     module = _load_branch_module('hypothesis_000022_autogluon_001_py', HYPOTHESIS_000022_AUTOGLUON_001_PY_SOURCE)
     original_deps = {}
-    return getattr(module, 'aide_sky_cell_local_residuals')(raw, original_deps, aux)
+    return _call_feature_function(module, 'aide_sky_cell_local_residuals', raw, original_deps, aux)
 
 def _branch_hypothesis_000023_autogluon_001_py_001(raw, deps, aux):
     module = _load_branch_module('hypothesis_000023_autogluon_001_py', HYPOTHESIS_000023_AUTOGLUON_001_PY_SOURCE)
     original_deps = {}
-    return getattr(module, 'aide_redshift_bin_color_residuals')(raw, original_deps, aux)
+    return _call_feature_function(module, 'aide_redshift_bin_color_residuals', raw, original_deps, aux)
 
 def _branch_hypothesis_000024_autogluon_001_py_001(raw, deps, aux):
     module = _load_branch_module('hypothesis_000024_autogluon_001_py', HYPOTHESIS_000024_AUTOGLUON_001_PY_SOURCE)
     original_deps = {}
-    return getattr(module, 'aide_catalog_rank_frequency_context')(raw, original_deps, aux)
+    return _call_feature_function(module, 'aide_catalog_rank_frequency_context', raw, original_deps, aux)
 
 def _branch_hypothesis_000025_autogluon_001_py_001(raw, deps, aux):
     module = _load_branch_module('hypothesis_000025_autogluon_001_py', HYPOTHESIS_000025_AUTOGLUON_001_PY_SOURCE)
     original_deps = {}
-    return getattr(module, 'aide_aux_reference_distribution_distance')(raw, original_deps, aux)
+    return _call_feature_function(module, 'aide_aux_reference_distribution_distance', raw, original_deps, aux)
 
 def _branch_hypothesis_000026_autogluon_001_py_001(raw, deps, aux):
     module = _load_branch_module('hypothesis_000026_autogluon_001_py', HYPOTHESIS_000026_AUTOGLUON_001_PY_SOURCE)
     original_deps = {}
-    return getattr(module, 'aide_smooth_spline_sed_interactions')(raw, original_deps, aux)
+    return _call_feature_function(module, 'aide_smooth_spline_sed_interactions', raw, original_deps, aux)
 
 def _branch_hypothesis_000027_autogluon_001_py_001(raw, deps, aux):
     module = _load_branch_module('hypothesis_000027_autogluon_001_py', HYPOTHESIS_000027_AUTOGLUON_001_PY_SOURCE)
     original_deps = {}
-    return getattr(module, 'aide_id_sequence_scan_context')(raw, original_deps, aux)
+    return _call_feature_function(module, 'aide_id_sequence_scan_context', raw, original_deps, aux)
 
 FEATURE_GROUPS = [
     {
