@@ -48,7 +48,7 @@ def download_competition_data(slug: str, data_dir: Path, progress: Callable[[str
                 _gzip_file(path)
 
 
-def submit_competition_file(slug: str, submission_path: Path, message: str) -> None:
+def submit_competition_file(slug: str, submission_path: Path, message: str, upload_path: Path) -> object:
     if not submission_path.is_file():
         raise TmlError(f"Submission file does not exist: {submission_path}")
     try:
@@ -57,7 +57,9 @@ def submit_competition_file(slug: str, submission_path: Path, message: str) -> N
         raise TmlError("Kaggle Python package is not installed in this environment.") from exc
     api = KaggleApi()
     api.authenticate()
-    api.competition_submit(str(submission_path), message, slug, quiet=False)
+    if upload_path != submission_path:
+        shutil.copy2(submission_path, upload_path)
+    return api.competition_submit(str(upload_path), message, slug, quiet=False)
 
 
 def _one_line(message: str) -> str:

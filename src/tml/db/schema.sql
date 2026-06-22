@@ -99,6 +99,16 @@ CREATE TABLE IF NOT EXISTS submissions (
   created_at TEXT,
   finished_at TEXT,
   artifact_dir TEXT NOT NULL,
+  submitted_at TEXT,
+  kaggle_message TEXT,
+  kaggle_response_json TEXT,
+  kaggle_ref TEXT,
+  upload_path TEXT,
+  uploaded_filename TEXT,
+  remote_status TEXT,
+  remote_date TEXT,
+  remote_url TEXT,
+  private_score REAL,
   PRIMARY KEY (node_id, submission_path)
 );
 

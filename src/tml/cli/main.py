@@ -4,6 +4,7 @@ import json
 import os
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import typer
@@ -359,11 +360,17 @@ def kaggle_submit_cmd(ctx: typer.Context) -> None:
         _validate_submit_row(row)
         submission_path = ref.path / str(row["submission_path"])
         message = _kaggle_submit_message(row)
-        submit_competition_file(competition, submission_path, message)
+        upload_path = submission_path.with_name(_upload_submission_filename(row))
+        response = submit_competition_file(competition, submission_path, message, upload_path)
         mark_submission_submitted(
             ref.path,
             node_id=str(row["node_id"]),
             submission_path=str(row["submission_path"]),
+            submitted_at=datetime.now(timezone.utc).isoformat(),
+            kaggle_message=message,
+            kaggle_response=response,
+            upload_path=_repo_relative(ref.path, upload_path),
+            uploaded_filename=upload_path.name,
         )
         console.print(f"Submitted {str(row['submission_sha256'])[:10]} to {competition}.")
     except Exception as exc:
@@ -843,6 +850,23 @@ def _kaggle_submit_message(row: dict[str, object]) -> str:
         f"tml_ts={_date_yyyymmdd(row.get('created_at'))} | node={node_text} | "
         f"sha={str(row.get('submission_sha256') or '')[:10]} | algo=AG{metric_text}{time_text}"
     )
+
+
+def _upload_submission_filename(row: dict[str, object]) -> str:
+    score = row.get("local_score")
+    score_text = "nan" if not isinstance(score, int | float) else f"{float(score):.5f}"
+    sha = str(row.get("submission_sha256") or "nohash")[:10]
+    node = str(row.get("node_id") or "unknown")[:8]
+    step = _step_text(row.get("step")) or "na"
+    date = _date_yyyymmdd(row.get("created_at")) or "unknown"
+    return f"sub_{date}_step-{step}_node-{node}_sha-{sha}_cv-{score_text}.csv.gz"
+
+
+def _repo_relative(base_dir: Path, path: Path) -> str:
+    try:
+        return path.relative_to(base_dir).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def _best_numeric(values) -> float | None:

@@ -98,10 +98,13 @@ def upsert_submission(conn, row: dict[str, Any] | None) -> None:
           profile_id=excluded.profile_id,
           kind=excluded.kind,
           status=excluded.status,
-          submit_status=excluded.submit_status,
+          submit_status=CASE
+            WHEN submissions.submit_status='submitted' THEN submissions.submit_status
+            ELSE excluded.submit_status
+          END,
           local_score=excluded.local_score,
-          public_score=excluded.public_score,
-          public_rank=excluded.public_rank,
+          public_score=COALESCE(submissions.public_score, excluded.public_score),
+          public_rank=COALESCE(submissions.public_rank, excluded.public_rank),
           metric=excluded.metric,
           code_hash=excluded.code_hash,
           run_seconds=excluded.run_seconds,

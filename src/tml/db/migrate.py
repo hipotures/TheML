@@ -23,6 +23,16 @@ def migrate(db_path: Path) -> None:
         _ensure_column(conn, "nodes", "created_at", "TEXT")
         _ensure_column(conn, "nodes", "finished_at", "TEXT")
         _ensure_column(conn, "nodes", "run_seconds", "INTEGER")
+        _ensure_column(conn, "submissions", "submitted_at", "TEXT")
+        _ensure_column(conn, "submissions", "kaggle_message", "TEXT")
+        _ensure_column(conn, "submissions", "kaggle_response_json", "TEXT")
+        _ensure_column(conn, "submissions", "kaggle_ref", "TEXT")
+        _ensure_column(conn, "submissions", "upload_path", "TEXT")
+        _ensure_column(conn, "submissions", "uploaded_filename", "TEXT")
+        _ensure_column(conn, "submissions", "remote_status", "TEXT")
+        _ensure_column(conn, "submissions", "remote_date", "TEXT")
+        _ensure_column(conn, "submissions", "remote_url", "TEXT")
+        _ensure_column(conn, "submissions", "private_score", "REAL")
 
 
 def _ensure_column(conn, table: str, column: str, definition: str) -> None:

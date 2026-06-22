@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import json
 from pathlib import Path
 from typing import Any
 
@@ -451,16 +452,41 @@ def submission_by_sha_prefix(project_dir: Path, sha_prefix: str) -> dict[str, An
     return dict(rows[0])
 
 
-def mark_submission_submitted(project_dir: Path, *, node_id: str, submission_path: str) -> None:
+def mark_submission_submitted(
+    project_dir: Path,
+    *,
+    node_id: str,
+    submission_path: str,
+    submitted_at: str,
+    kaggle_message: str,
+    kaggle_response: Any,
+    upload_path: str,
+    uploaded_filename: str,
+) -> None:
     db_path = ensure_project_db(project_dir)
     with connect(db_path) as conn:
         conn.execute(
             """
             UPDATE submissions
-            SET submit_status='submitted'
+            SET submit_status='submitted',
+                submitted_at=?,
+                kaggle_message=?,
+                kaggle_response_json=?,
+                kaggle_ref=?,
+                upload_path=?,
+                uploaded_filename=?
             WHERE node_id=? AND submission_path=?
             """,
-            (node_id, submission_path),
+            (
+                submitted_at,
+                kaggle_message,
+                json.dumps(_jsonable(kaggle_response), sort_keys=True),
+                _response_ref(kaggle_response),
+                upload_path,
+                uploaded_filename,
+                node_id,
+                submission_path,
+            ),
         )
         conn.commit()
 
@@ -531,6 +557,28 @@ def _token_total(response: dict[str, Any]) -> dict[str, Any]:
         return {}
     total = token_usage.get("total")
     return total if isinstance(total, dict) else {}
+
+
+def _jsonable(value: Any) -> Any:
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, list | tuple):
+        return [_jsonable(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if hasattr(value, "to_dict"):
+        return _jsonable(value.to_dict())
+    if hasattr(value, "__dict__"):
+        return _jsonable(dict(value.__dict__))
+    return repr(value)
+
+
+def _response_ref(value: Any) -> str | None:
+    payload = _jsonable(value)
+    if isinstance(payload, dict):
+        ref = payload.get("ref")
+        return str(ref) if ref is not None else None
+    return None
 
 
 def _elapsed_seconds(start_value: Any, end_value: Any) -> int | None:
