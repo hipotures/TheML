@@ -19,6 +19,9 @@ source:
   file: autogluon-001.py
   code_hash: 1d4155b73b019be8b2aa0fbfa280da686b0336f58a10bc28bb318cf98c89fd3a
   path: hypotheses/000016/materializations/autogluon-001.py
+parent_edge:
+  kind: hypothesis
+  id: '000003'
 mode: autogluon
 status: materialized
 materialization_file: autogluon-001.py
