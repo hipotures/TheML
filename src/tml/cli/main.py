@@ -98,6 +98,7 @@ def root_status_cmd(ctx: typer.Context) -> None:
     _ = ctx
     try:
         ref = active_project_ref()
+        reindex_project(ref.path, ref.db_path)
         config = load_project_config(ref.path)
         counts = filesystem_counts(ref.path)
         mode = active_mode(config)
@@ -139,6 +140,7 @@ def root_generate_cmd(ctx: typer.Context) -> None:
                 progress.update(task, description=message)
 
             created = generate_missing_root_hypotheses(ref.path, count=count, progress=report)
+        reindex_project(ref.path, ref.db_path)
         if json_output:
             _print_generated_hypotheses_json(ref.path, created)
             return
@@ -162,6 +164,7 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
             mode=mode,
             hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
         )
+        reindex_project(ref.path, ref.db_path)
         _print_root_materializations(ref.path, mode=mode, created_count=created, hypothesis_id=str(hypothesis_id) if hypothesis_id else None)
     except Exception as exc:
         _abort(exc)
@@ -245,6 +248,7 @@ def root_run_cmd(ctx: typer.Context) -> None:
             hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
             profile_overrides=run_overrides,
         )
+        reindex_project(ref.path, ref.db_path)
         _print_root_run_summary(
             ref.path,
             mode=active_run_mode,
