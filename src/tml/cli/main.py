@@ -1166,10 +1166,9 @@ def _print_root_materializations(
     title = "ROOT materializations" if created_count is None else f"ROOT materializations (created: {created_count})"
     table = Table(title=title, box=box.SIMPLE_HEAVY)
     table.add_column("ID", style="bold", no_wrap=True)
-    table.add_column("S", no_wrap=True)
+    table.add_column("S", justify="center", no_wrap=True, width=1)
     table.add_column("Mode", no_wrap=True)
     table.add_column("File", no_wrap=True)
-    table.add_column("Status", no_wrap=True)
     table.add_column("Model", no_wrap=True)
     table.add_column("Res/Tokens", justify="right", no_wrap=True)
     table.add_column("Gen", justify="right", no_wrap=True)
@@ -1192,10 +1191,9 @@ def _root_materialization_row(db_row: dict[str, object], *, summary_limit: int) 
     status = str(db_row.get("status") or "")
     return [
         str(db_row.get("hypothesis_id") or ""),
-        Text("⌘", style="green") if active else Text("·", style="dim"),
+        _materialization_status_icon(status, active=active),
         str(db_row.get("mode") or ""),
         str(db_row.get("file") or ""),
-        _materialization_status_text(status),
         str(db_row.get("model") or ""),
         _token_summary(db_row),
         _seconds_text(db_row.get("generation_seconds")),
@@ -1203,16 +1201,14 @@ def _root_materialization_row(db_row: dict[str, object], *, summary_limit: int) 
     ]
 
 
-def _materialization_status_text(status: str) -> Text:
+def _materialization_status_icon(status: str, *, active: bool) -> Text:
     if status == "bug":
-        return Text(status, style="bold red")
+        return Text("⚠", style="bold red")
     if status == "fixed":
-        return Text(status, style="green")
-    if status == "active":
-        return Text(status, style="green")
-    if status == "inactive":
-        return Text(status, style="dim")
-    return Text(status or "n/a", style="yellow")
+        return Text("⌘", style="bold yellow")
+    if active:
+        return Text("⌘", style="green")
+    return Text("·", style="dim")
 
 
 def _zebra_style(index: int, *, extra: str | None = None) -> str | None:
