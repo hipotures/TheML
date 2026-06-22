@@ -1064,7 +1064,7 @@ def _print_root_run_summary(
     profile_id = active_profile_id(config, mode)
     table = Table(title=f"ROOT run (executed: {len(executed_ids)})", box=box.SIMPLE_HEAVY)
     table.add_column("ID", style="bold", no_wrap=True)
-    table.add_column("S", justify="center", no_wrap=True)
+    table.add_column("Status", justify="center", no_wrap=True)
     table.add_column("Created", no_wrap=True)
     table.add_column("Model", no_wrap=True)
     table.add_column("Res/Tokens", justify="right", no_wrap=True)
@@ -1074,8 +1074,8 @@ def _print_root_run_summary(
     table.add_column("Node", no_wrap=True)
     table.add_column("Summary", overflow="fold", min_width=36, ratio=1)
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
-    old_rows: list[list[str]] = []
-    new_rows: list[list[str]] = []
+    old_rows: list[list[object]] = []
+    new_rows: list[list[object]] = []
     target_id = hypothesis_id.zfill(6) if hypothesis_id else None
     for db_row in root_run_rows(project_dir, mode=mode, profile_id=profile_id, hypothesis_id=target_id):
         row = _root_run_row(db_row, summary_limit=summary_limit)
@@ -1279,20 +1279,20 @@ def _root_run_row(
     db_row: dict[str, object],
     *,
     summary_limit: int,
-) -> list[str]:
+) -> list[object]:
     node_status = str(db_row.get("node_status") or "")
     if node_status:
-        status = "▶" if node_status == "complete" else "⚠"
+        status = _run_status_text(node_status)
         score = _format_score(db_row.get("metric"))
         node = str(db_row.get("node_id") or "")
         run_duration = _seconds_text(db_row.get("run_seconds"))
     elif db_row.get("code_hash"):
-        status = "⌘"
+        status = Text("MAT", style="yellow")
         score = ""
         node = ""
         run_duration = ""
     else:
-        status = "◇"
+        status = Text("NEW", style="dim")
         score = ""
         node = ""
         run_duration = ""
@@ -1308,6 +1308,16 @@ def _root_run_row(
         node,
         _short_text(str(db_row.get("summary") or ""), summary_limit),
     ]
+
+
+def _run_status_text(status: str) -> Text:
+    if status == "complete":
+        return Text("OK", style="green")
+    if status == "failed":
+        return Text("BUG", style="bold red")
+    if status == "started":
+        return Text("RUN", style="cyan")
+    return Text(status.upper() or "?", style="yellow")
 
 
 def _format_score(value: object) -> str:
