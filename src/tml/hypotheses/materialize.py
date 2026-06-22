@@ -17,6 +17,8 @@ from tml.utils.atomic import atomic_write_text
 from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml, write_yaml
 
+from .baseline import BASELINE_HYPOTHESIS_ID, BASELINE_MODE, ensure_root_baseline
+
 
 @dataclass(frozen=True)
 class RootMaterializationPlan:
@@ -40,6 +42,7 @@ def root_materialization_plan(
     hypothesis_id: str | None = None,
 ) -> RootMaterializationPlan:
     upsert_project(project_dir)
+    ensure_root_baseline(project_dir)
     models = repo_models_for_project(project_dir)
     model, role_options = resolve_role_model(models, "materializations", fallback_role="code")
     providers = repo_providers_for_project(project_dir)
@@ -48,6 +51,8 @@ def root_materialization_plan(
     candidates = materialization_candidates(project_dir, hypothesis_id=hypothesis_id)
     pending_ids: list[str] = []
     for record in candidates:
+        if str(record["hypothesis_id"]) == BASELINE_HYPOTHESIS_ID and mode != BASELINE_MODE:
+            continue
         hdir = _candidate_hypothesis_dir(project_dir, record)
         target = _materialization_target(hdir, mode)
         if target.exists():
@@ -76,6 +81,7 @@ def materialize_missing(
     progress: Callable[[str, int | None], None] | None = None,
 ) -> int:
     upsert_project(project_dir)
+    ensure_root_baseline(project_dir)
     models = repo_models_for_project(project_dir)
     model, role_options = resolve_role_model(models, "materializations", fallback_role="code")
     providers = repo_providers_for_project(project_dir)
@@ -84,10 +90,13 @@ def materialize_missing(
     pending_total = sum(
         1
         for record in candidates
-        if not _materialization_target(_candidate_hypothesis_dir(project_dir, record), mode).exists()
+        if str(record["hypothesis_id"]) != BASELINE_HYPOTHESIS_ID
+        and not _materialization_target(_candidate_hypothesis_dir(project_dir, record), mode).exists()
     )
     pending_index = 0
     for record in candidates:
+        if str(record["hypothesis_id"]) == BASELINE_HYPOTHESIS_ID and mode != BASELINE_MODE:
+            continue
         hdir = _candidate_hypothesis_dir(project_dir, record)
         mat_dir = hdir / "materializations"
         mat_dir.mkdir(parents=True, exist_ok=True)

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from tml.core.config import load_project_config, repo_root_for_project
+from tml.hypotheses.baseline import ensure_root_baseline
 from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml
 
@@ -14,6 +15,7 @@ from .submissions import build_submission_row, upsert_submission
 
 
 def reindex_project(project_dir: Path, db_path: Path) -> dict[str, int]:
+    ensure_root_baseline(project_dir)
     migrate(db_path)
     config = load_project_config(project_dir)
     with connect(db_path) as conn:

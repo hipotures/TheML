@@ -26,6 +26,8 @@ from tml.utils.atomic import atomic_write_text
 from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import write_yaml
 
+from .baseline import ensure_root_baseline
+
 
 @dataclass(frozen=True)
 class RootRunPlan:
@@ -50,6 +52,7 @@ def root_run_plan(
     profile_overrides: dict[str, object] | None = None,
 ) -> RootRunPlan:
     upsert_project(project_dir)
+    ensure_root_baseline(project_dir)
     config = load_project_config(project_dir)
     active_run_mode = mode or active_mode(config)
     profile_id = active_profile_id(config, active_run_mode)
@@ -94,6 +97,7 @@ def run_missing(
     progress: Callable[[str], None] | None = None,
 ) -> list[str]:
     upsert_project(project_dir)
+    ensure_root_baseline(project_dir)
     config = load_project_config(project_dir)
     mode = mode or active_mode(config)
     profile_id = active_profile_id(config, mode)

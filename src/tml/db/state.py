@@ -410,7 +410,7 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
             AND e.mode=m.mode AND e.code_hash=m.code_hash AND e.status='failed'
           JOIN nodes n ON n.node_id=e.node_id
         )
-        WHERE rn=1
+        WHERE rn=1 AND hypothesis_id<>'000000'
     """
     params: list[Any] = [mode]
     if hypothesis_id:
@@ -495,10 +495,16 @@ def root_counts(project_dir: Path) -> dict[str, int]:
     db_path = ensure_project_db(project_dir)
     with connect(db_path) as conn:
         return {
-            "hypotheses": int(conn.execute("SELECT count(*) FROM hypotheses").fetchone()[0]),
-            "materialized": int(conn.execute("SELECT count(DISTINCT hypothesis_id) FROM materializations").fetchone()[0]),
-            "evaluated": int(conn.execute("SELECT count(*) FROM nodes WHERE status='complete'").fetchone()[0]),
-            "incomplete": int(conn.execute("SELECT count(*) FROM nodes WHERE status NOT IN ('complete','failed')").fetchone()[0]),
+            "hypotheses": int(conn.execute("SELECT count(*) FROM hypotheses WHERE hypothesis_id<>'000000'").fetchone()[0]),
+            "materialized": int(
+                conn.execute("SELECT count(DISTINCT hypothesis_id) FROM materializations WHERE hypothesis_id<>'000000'").fetchone()[0]
+            ),
+            "evaluated": int(
+                conn.execute("SELECT count(DISTINCT hypothesis_id) FROM nodes WHERE status='complete' AND hypothesis_id<>'000000'").fetchone()[0]
+            ),
+            "incomplete": int(
+                conn.execute("SELECT count(*) FROM nodes WHERE status NOT IN ('complete','failed') AND hypothesis_id<>'000000'").fetchone()[0]
+            ),
         }
 
 

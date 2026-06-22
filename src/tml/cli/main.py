@@ -43,6 +43,7 @@ from tml.hypotheses.generate import (
     generate_missing_root_hypotheses,
     root_generation_plan,
 )
+from tml.hypotheses.baseline import ensure_root_baseline
 from tml.hypotheses.bugfix import RootBugfixPlan, bugfix_failed_materializations, root_bugfix_plan
 from tml.hypotheses.materialize import RootMaterializationPlan, materialize_missing, root_materialization_plan
 from tml.hypotheses.run import RootRunPlan, root_run_plan, run_missing
@@ -116,6 +117,7 @@ def root_status_cmd(ctx: typer.Context) -> None:
     _ = ctx
     try:
         ref = active_project_ref()
+        ensure_root_baseline(ref.path)
         config = load_project_config(ref.path)
         counts = root_counts(ref.path)
         mode = active_mode(config)
@@ -154,6 +156,7 @@ def root_status_cmd(ctx: typer.Context) -> None:
 def root_generate_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
+        ensure_root_baseline(ref.path)
         status_only = _command_status_requested(ctx.args, "tml root generate")
         overrides = _overrides(ctx.args)
         _validate_override_keys(overrides, {"count", "json", "json_output", "yes"}, "tml root generate")
@@ -237,13 +240,14 @@ def root_generate_cmd(ctx: typer.Context) -> None:
 def root_materialize_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
+        ensure_root_baseline(ref.path)
         status_only = _command_status_requested(ctx.args, "tml root materialize")
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
         _validate_override_keys(overrides, {"mode", "hypothesis", "id", "yes"}, "tml root materialize")
         mode = str(overrides.get("mode") or active_mode(config))
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
-        hypothesis_id_text = str(hypothesis_id) if hypothesis_id else None
+        hypothesis_id_text = _optional_text(hypothesis_id)
         if status_only:
             _print_root_materializations(ref.path, mode=mode, created_count=None, hypothesis_id=hypothesis_id_text)
             return
@@ -284,13 +288,14 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
 def root_bugfix_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
+        ensure_root_baseline(ref.path)
         status_only = _command_status_requested(ctx.args, "tml root bugfix")
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
         _validate_override_keys(overrides, {"mode", "hypothesis", "id", "yes"}, "tml root bugfix")
         mode = str(overrides.get("mode") or active_mode(config))
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
-        hypothesis_id_text = str(hypothesis_id) if hypothesis_id else None
+        hypothesis_id_text = _optional_text(hypothesis_id)
         if status_only:
             _print_root_materializations(ref.path, mode=mode, created_count=None, hypothesis_id=hypothesis_id_text)
             return
@@ -450,6 +455,7 @@ def _bugfix_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | 
 def root_run_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
+        ensure_root_baseline(ref.path)
         status_only = _command_status_requested(ctx.args, "tml root run")
         overrides = _overrides(ctx.args)
         mode = str(overrides["mode"]) if "mode" in overrides else None
@@ -458,7 +464,7 @@ def root_run_cmd(ctx: typer.Context) -> None:
         allowed = {"mode", "hypothesis", "id", "yes"} | _profile_override_keys(ref.path, active_run_mode)
         _validate_override_keys(overrides, allowed, "tml root run")
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
-        hypothesis_id_text = str(hypothesis_id) if hypothesis_id else None
+        hypothesis_id_text = _optional_text(hypothesis_id)
         if status_only:
             _print_root_run_request_status(ref.path, mode=active_run_mode, hypothesis_id=hypothesis_id_text)
             _print_root_run_summary(
@@ -515,6 +521,7 @@ def root_run_cmd(ctx: typer.Context) -> None:
 def root_ensure_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
+        ensure_root_baseline(ref.path)
         _reject_positional(ctx.args, "tml root ensure")
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
@@ -527,13 +534,13 @@ def root_ensure_cmd(ctx: typer.Context) -> None:
         materialized = materialize_missing(
             ref.path,
             mode=mode,
-            hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
+            hypothesis_id=_optional_text(hypothesis_id),
         )
         run_overrides = {key: value for key, value in overrides.items() if key not in {"count", "mode", "hypothesis", "id"}}
         ran = run_missing(
             ref.path,
             mode=mode,
-            hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
+            hypothesis_id=_optional_text(hypothesis_id),
             profile_overrides=run_overrides,
         )
         reindex_project(ref.path, ref.db_path)
@@ -555,6 +562,7 @@ def root_ensure_cmd(ctx: typer.Context) -> None:
 def root_autocommit_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
+        ensure_root_baseline(ref.path)
         _reject_positional(ctx.args, "tml root autocommit")
         overrides = _overrides(ctx.args)
         _validate_override_keys(overrides, {"message", "yes"}, "tml root autocommit")
@@ -828,6 +836,10 @@ def _validate_override_keys(overrides: dict[str, object], allowed: set[str], com
         allowed_list = ", ".join(sorted(allowed))
         unknown_list = ", ".join(unknown)
         raise TmlError(f"Unknown parameter for {command}: {unknown_list}. Allowed parameters: {allowed_list}")
+
+
+def _optional_text(value: object) -> str | None:
+    return None if value is None else str(value)
 
 
 def _reject_positional(args: list[str], command: str) -> None:

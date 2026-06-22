@@ -14,6 +14,7 @@ from tml.prompts.renderer import render_template
 from tml.utils.atomic import atomic_write_text
 from tml.utils.yaml_io import read_yaml
 
+from .baseline import ensure_root_baseline
 from .materialize import _parse_code, _update_manifest
 
 
@@ -41,6 +42,7 @@ def root_bugfix_plan(
     hypothesis_id: str | None = None,
 ) -> RootBugfixPlan:
     upsert_project(project_dir)
+    ensure_root_baseline(project_dir)
     models = repo_models_for_project(project_dir)
     model, role_options = resolve_role_model(models, "materializations", fallback_role="code")
     providers = repo_providers_for_project(project_dir)
@@ -81,6 +83,7 @@ def bugfix_failed_materializations(
     progress: Callable[[str, int | None], None] | None = None,
 ) -> int:
     upsert_project(project_dir)
+    ensure_root_baseline(project_dir)
     models = repo_models_for_project(project_dir)
     model, role_options = resolve_role_model(models, "materializations", fallback_role="code")
     providers = repo_providers_for_project(project_dir)

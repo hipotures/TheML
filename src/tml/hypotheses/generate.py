@@ -16,6 +16,8 @@ from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
 from tml.utils.yaml_io import write_yaml
 
+from .baseline import ensure_root_baseline
+
 
 @dataclass(frozen=True)
 class GeneratedHypothesis:
@@ -42,6 +44,7 @@ class RootGenerationPlan:
 
 def root_generation_plan(project_dir: Path, count: int | None = None) -> RootGenerationPlan:
     upsert_project(project_dir)
+    ensure_root_baseline(project_dir)
     config = load_project_config(project_dir)
     target = count or int(config.get("root", {}).get("target_count", 20))
     next_number = next_hypothesis_number(project_dir)
@@ -77,6 +80,7 @@ def generate_missing_root_hypotheses(
     stop_requested: Callable[[], bool] | None = None,
 ) -> list[GeneratedHypothesis]:
     upsert_project(project_dir)
+    ensure_root_baseline(project_dir)
     config = load_project_config(project_dir)
     target = count or int(config.get("root", {}).get("target_count", 20))
     created: list[GeneratedHypothesis] = []
