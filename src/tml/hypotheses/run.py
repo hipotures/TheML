@@ -75,7 +75,7 @@ def run_missing(
         result = run_python_script(node_dir / "02-code.py", node_dir / "work")
         write_attempt_result(attempt_dir, result)
         if result.status == "ok":
-            _write_success_markers(node_dir, nid, hid, mode, profile_id, materialization, result.metric)
+            _write_success_markers(node_dir, nid, hid, mode, profile_id, materialization, result)
         else:
             write_yaml(
                 node_dir / "failed.yaml",
@@ -148,7 +148,7 @@ def _write_success_markers(
     mode: str,
     profile_id: str,
     materialization: Path,
-    metric: float | None,
+    result,
 ) -> None:
     code_hash = sha256_file(materialization)
     manifest = {
@@ -158,7 +158,7 @@ def _write_success_markers(
         "mode": mode,
         "profile_id": profile_id,
         "code_hash": code_hash,
-        "metric": metric,
+        "metric": result.metric,
         "files": {
             "hypothesis": "01-hypothesis.yaml",
             "code": "02-code.py",
@@ -166,5 +166,10 @@ def _write_success_markers(
         },
         "created_at": datetime.now().isoformat(timespec="seconds"),
     }
+    if result.payload is not None:
+        manifest["result_payload"] = result.payload
+        run_stats = result.payload.get("run_stats")
+        if isinstance(run_stats, dict):
+            manifest["run_stats"] = run_stats
     write_yaml(node_dir / "artifact-manifest.yaml", manifest)
     write_yaml(node_dir / "node.done.yaml", {**manifest, "status": "complete"})
