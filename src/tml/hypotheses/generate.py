@@ -86,14 +86,22 @@ def generate_missing_root_hypotheses(
     spec = resolve_model_spec(model, providers)
     provider_config = {**(spec.provider_config or {}), **role_options}
     web_search_enabled = _web_search_enabled(provider_config.get("web_search"))
-    for number in range(next_hypothesis_number(project_dir), target + 1):
+    numbers = list(range(next_hypothesis_number(project_dir), target + 1))
+    total = len(numbers)
+    for index, number in enumerate(numbers, start=1):
         if stop_requested is not None and stop_requested():
             break
         hid = hypothesis_id(number)
         hdir = project_dir / "hypotheses" / hid
         hdir.mkdir(parents=True, exist_ok=True)
+        progress_prefix = f"ROOT hypothesis {hid} ({index}/{total})"
         if progress is not None:
-            progress(f"Generating ROOT hypothesis {hid} with {model}...")
+            progress(f"Generating {progress_prefix} with {model}...")
+
+        def invocation_progress(message: str, *, prefix: str = progress_prefix) -> None:
+            if progress is not None:
+                progress(f"{prefix}: {message}")
+
         rendered = render_template(
             project_dir,
             "root.hypothesis",
@@ -111,7 +119,7 @@ def generate_missing_root_hypotheses(
                 cwd=repo_root_for_project(project_dir),
                 sandbox="read_only",
                 metadata={"web_search_enabled": web_search_enabled},
-                progress=progress,
+                progress=invocation_progress if progress is not None else None,
             ),
             artifact_dir=hdir,
             providers=providers,
