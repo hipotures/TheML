@@ -86,23 +86,58 @@ def upsert_hypothesis(project_dir: Path, hdir: Path) -> None:
         conn.commit()
 
 
-def upsert_materialization(project_dir: Path, hdir: Path, mode: str, code_path: Path) -> None:
+def upsert_materialization(
+    project_dir: Path,
+    hdir: Path,
+    mode: str,
+    code_path: Path,
+    *,
+    status: str = "active",
+    active: bool = True,
+    source_node_id: str | None = None,
+    fixed_from_file: str | None = None,
+    fixed_from_code_hash: str | None = None,
+) -> None:
     db_path = ensure_project_db(project_dir)
     hid = hdir.name
     summary = _run_summary(
-        code_path.parent / f"{mode}-001.request.json",
-        code_path.parent / f"{mode}-001.response.json",
+        code_path.parent / f"{code_path.stem}.request.json",
+        code_path.parent / f"{code_path.stem}.response.json",
     )
     with connect(db_path) as conn:
+        if active:
+            conn.execute(
+                """
+                UPDATE materializations
+                SET active=0
+                WHERE hypothesis_id=? AND mode=? AND file<>?
+                """,
+                (hid, mode, code_path.name),
+            )
+        if fixed_from_file:
+            conn.execute(
+                """
+                UPDATE materializations
+                SET status='bug', active=0, source_node_id=COALESCE(source_node_id, ?)
+                WHERE hypothesis_id=? AND mode=? AND file=?
+                """,
+                (source_node_id, hid, mode, fixed_from_file),
+            )
         conn.execute(
             """
             INSERT INTO materializations(
-              hypothesis_id, mode, file, code_hash, model, reasoning_tokens,
+              hypothesis_id, mode, file, code_hash, status, active, source_node_id,
+              fixed_from_file, fixed_from_code_hash, model, reasoning_tokens,
               total_tokens, generation_seconds
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(hypothesis_id, mode, file) DO UPDATE SET
               code_hash=excluded.code_hash,
+              status=excluded.status,
+              active=excluded.active,
+              source_node_id=excluded.source_node_id,
+              fixed_from_file=excluded.fixed_from_file,
+              fixed_from_code_hash=excluded.fixed_from_code_hash,
               model=excluded.model,
               reasoning_tokens=excluded.reasoning_tokens,
               total_tokens=excluded.total_tokens,
@@ -113,6 +148,11 @@ def upsert_materialization(project_dir: Path, hdir: Path, mode: str, code_path: 
                 mode,
                 code_path.name,
                 sha256_file(code_path),
+                status,
+                1 if active else 0,
+                source_node_id,
+                fixed_from_file,
+                fixed_from_code_hash,
                 summary.get("model"),
                 summary.get("reasoning_tokens"),
                 summary.get("total_tokens"),
@@ -289,7 +329,7 @@ def root_hypothesis_rows(project_dir: Path) -> list[dict[str, Any]]:
             ) THEN '▶'
             WHEN EXISTS (
               SELECT 1 FROM materializations m
-              WHERE m.hypothesis_id=h.hypothesis_id
+              WHERE m.hypothesis_id=h.hypothesis_id AND m.active=1
             ) THEN '⌘'
             ELSE '◇'
           END AS status_icon
@@ -320,12 +360,53 @@ def run_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = Non
         SELECT h.hypothesis_id, h.path, m.file, m.code_hash
         FROM hypotheses h
         JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
+          AND m.active=1
     """
     params: list[Any] = [mode]
     if hypothesis_id:
         sql += " WHERE h.hypothesis_id=?"
         params.append(hypothesis_id.zfill(6))
-    sql += " ORDER BY h.hypothesis_id"
+    sql += " ORDER BY h.hypothesis_id, m.active DESC, m.file"
+    with connect(db_path) as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(row) for row in rows]
+
+
+def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = None) -> list[dict[str, Any]]:
+    db_path = ensure_project_db(project_dir)
+    sql = """
+        SELECT *
+        FROM (
+          SELECT
+            h.hypothesis_id,
+            h.path,
+            h.summary,
+            m.file,
+            m.code_hash,
+            m.status AS materialization_status,
+            n.node_id,
+            n.run_id,
+            n.step,
+            n.path AS node_path,
+            n.finished_at,
+            n.run_seconds,
+            ROW_NUMBER() OVER (
+              PARTITION BY h.hypothesis_id, m.mode, m.file
+              ORDER BY COALESCE(n.finished_at, n.created_at, '') DESC, n.step DESC
+            ) AS rn
+          FROM hypotheses h
+          JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=? AND m.active=1
+          JOIN evaluations e ON e.hypothesis_id=h.hypothesis_id
+            AND e.mode=m.mode AND e.code_hash=m.code_hash AND e.status='failed'
+          JOIN nodes n ON n.node_id=e.node_id
+        )
+        WHERE rn=1
+    """
+    params: list[Any] = [mode]
+    if hypothesis_id:
+        sql += " AND hypothesis_id=?"
+        params.append(hypothesis_id.zfill(6))
+    sql += " ORDER BY hypothesis_id"
     with connect(db_path) as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
@@ -346,7 +427,7 @@ def run_request_status(project_dir: Path, mode: str, hypothesis_id: str | None) 
           END AS status
         FROM (SELECT ? AS requested_id) r
         LEFT JOIN hypotheses h ON h.hypothesis_id=r.requested_id
-        LEFT JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
+        LEFT JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=? AND m.active=1
     """
     with connect(db_path) as conn:
         rows = conn.execute(sql, (hid, mode)).fetchall()
@@ -507,8 +588,8 @@ def mark_submission_submitted(
 def materialization_rows(project_dir: Path, *, mode: str, hypothesis_id: str | None = None) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
     sql = """
-        SELECT h.hypothesis_id, h.summary, m.mode, m.file, m.model, m.reasoning_tokens,
-               m.total_tokens, m.generation_seconds
+        SELECT h.hypothesis_id, h.summary, m.mode, m.file, m.status, m.active,
+               m.model, m.reasoning_tokens, m.total_tokens, m.generation_seconds
         FROM materializations m
         JOIN hypotheses h ON h.hypothesis_id=m.hypothesis_id
         WHERE m.mode=?
@@ -517,7 +598,7 @@ def materialization_rows(project_dir: Path, *, mode: str, hypothesis_id: str | N
     if hypothesis_id:
         sql += " AND h.hypothesis_id=?"
         params.append(hypothesis_id.zfill(6))
-    sql += " ORDER BY h.hypothesis_id"
+    sql += " ORDER BY h.hypothesis_id, m.active DESC, m.file"
     with connect(db_path) as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
@@ -539,7 +620,7 @@ def root_run_rows(
           n.node_id, n.status AS node_status, n.run_seconds,
           e.metric
         FROM hypotheses h
-        LEFT JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
+        LEFT JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=? AND m.active=1
         LEFT JOIN evaluations e ON e.hypothesis_id=h.hypothesis_id
           AND e.mode=? AND e.profile_id=? AND e.code_hash=m.code_hash
         LEFT JOIN nodes n ON n.node_id=e.node_id

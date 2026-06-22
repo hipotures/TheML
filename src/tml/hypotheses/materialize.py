@@ -93,13 +93,15 @@ def materialize_missing(
         mat_dir.mkdir(parents=True, exist_ok=True)
         target = _materialization_target(hdir, mode)
         if target.exists():
+            active_file = _manifest_active_file(hdir, mode)
+            is_active_target = active_file is None or active_file == target.name
             if _is_runtime_wrapper(target):
                 hypothesis = read_yaml(hdir / "hypothesis.yaml")
                 if _rewrite_group_only_from_response(hdir, mat_dir, mode, target, hypothesis):
-                    upsert_materialization(project_dir, hdir, mode, target)
+                    upsert_materialization(project_dir, hdir, mode, target, active=is_active_target)
                     created += 1
             else:
-                upsert_materialization(project_dir, hdir, mode, target)
+                upsert_materialization(project_dir, hdir, mode, target, active=is_active_target)
             continue
         timeout_seconds = int(role_options.get("timeout_seconds") or 900)
         pending_index += 1
@@ -238,3 +240,15 @@ def _update_manifest(hdir: Path, mode: str, path: Path, hypothesis: dict[str, ob
         "code_artifact": path.name,
     }
     write_yaml(manifest_path, manifest)
+
+
+def _manifest_active_file(hdir: Path, mode: str) -> str | None:
+    manifest = read_yaml(hdir / "manifest.yaml")
+    versions = manifest.get("materializations")
+    if not isinstance(versions, dict):
+        return None
+    entry = versions.get(mode)
+    if not isinstance(entry, dict):
+        return None
+    active = entry.get("active")
+    return active if isinstance(active, str) else None

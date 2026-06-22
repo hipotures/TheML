@@ -91,20 +91,27 @@ def _index_hypotheses(conn, project_dir: Path) -> None:
         )
         for code in sorted((path.parent / "materializations").glob("*.py")):
             mode = code.name.split("-", 1)[0]
-            mat_summary = _run_summary(code.parent / f"{mode}-001.request.json", code.parent / f"{mode}-001.response.json")
+            manifest = read_yaml(path.parent / "manifest.yaml")
+            materializations = manifest.get("materializations") if isinstance(manifest.get("materializations"), dict) else {}
+            mode_manifest = materializations.get(mode) if isinstance(materializations.get(mode), dict) else {}
+            active_file = mode_manifest.get("active") if isinstance(mode_manifest.get("active"), str) else None
+            active = active_file is None or active_file == code.name
+            mat_summary = _run_summary(code.parent / f"{code.stem}.request.json", code.parent / f"{code.stem}.response.json")
             conn.execute(
                 """
                 INSERT INTO materializations(
-                  hypothesis_id, mode, file, code_hash, model, reasoning_tokens,
-                  total_tokens, generation_seconds
+                  hypothesis_id, mode, file, code_hash, status, active, model,
+                  reasoning_tokens, total_tokens, generation_seconds
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     hid,
                     mode,
                     code.name,
                     sha256_file(code),
+                    "active" if active else "inactive",
+                    1 if active else 0,
                     mat_summary.get("model"),
                     mat_summary.get("reasoning_tokens"),
                     mat_summary.get("total_tokens"),

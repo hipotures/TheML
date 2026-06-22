@@ -1,0 +1,66 @@
+Fix one failed ROOT materialization.
+
+Return a corrected version of the same feature-group module. Do not invent a
+new hypothesis or change the feature family. Keep the fix narrow: address the
+observed failure while preserving the intended preprocessing behavior.
+
+{% include "blocks/materialization-context.md.j2" %}
+
+# Task
+
+{{ task_text }}
+
+{% set target = project.get("target", {}) %}
+{% set metric = target.get("autogluon_metric") or target.get("sklearn_metric") %}
+{% if target.get("id_column") or target.get("target_column") or target.get("problem_type") or metric %}
+# Project Target
+{% if target.get("id_column") -%}
+- ID column: {{ target.get("id_column") }}
+{% endif -%}
+{% if target.get("target_column") -%}
+- Target column: {{ target.get("target_column") }}
+{% endif -%}
+{% if target.get("problem_type") -%}
+- Problem type: {{ target.get("problem_type") }}
+{% endif -%}
+{% if metric -%}
+- Evaluation metric: {{ metric }}
+{% endif -%}
+{% endif %}
+
+# Failed Materialization
+
+- Mode: {{ bugfix.mode }}
+- Hypothesis ID: {{ bugfix.hypothesis_id }}
+- Source file: {{ bugfix.source_file }}
+- Failed node: {{ bugfix.node_id }}
+- Run: {{ bugfix.run_id }}
+
+# Execution Error
+
+```text
+{{ bugfix.error_text }}
+```
+
+# Previous Code
+
+```python
+{{ bugfix.source_code }}
+```
+
+{% include "blocks/group-code-contract.md.j2" %}
+
+Mode-specific boundary:
+{% if bugfix.mode == "autogluon" -%}
+- Do not train AutoGluon.
+- Do not import or instantiate `TabularPredictor`.
+- Do not call `.fit()`, `.predict()`, `.predict_proba()`, or `.leaderboard()`.
+{% else -%}
+- Do not write a complete runnable script.
+- Do not print result JSON.
+- Do not train sklearn models.
+- Do not create validation splits.
+{% endif -%}
+- Do not define `main()`.
+- Do not read project data files.
+- The fixed wrapper handles all non-preprocessing work.
