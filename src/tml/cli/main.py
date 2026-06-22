@@ -134,7 +134,19 @@ def root_status_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@root_app.command("generate", context_settings=EXTRA)
+@root_app.command(
+    "generate",
+    context_settings=EXTRA,
+    help=(
+        "Generate missing ROOT hypotheses for the active project.\n\n"
+        "Accepted key=value parameters:\n"
+        "  count=<n>          Generate until ROOT hypothesis n exists.\n"
+        "  yes=true           Skip the confirmation prompt.\n"
+        "  json=true          Print machine-readable JSON; requires yes=true.\n"
+        "  json_output=true   Alias for json=true; requires yes=true.\n\n"
+        "Codex web search is configured in tml.yaml under providers.codex.web_search."
+    ),
+)
 def root_generate_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
