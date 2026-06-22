@@ -1,21 +1,24 @@
+title: AIDE redshift-bin color residuals
+group_name: aide_redshift_bin_color_residuals
+family: aide_photometric_redshift
+summary: Recreate the AIDE empirical redshift-bin residual features by comparing each
+  object's colors and color curvatures against objects in the same quantile redshift
+  regime.
+depends_on: []
+strategy: 'Using clipped nonnegative redshift, assign rows to approximately 24 quantile
+  bins, with duplicate edges handled safely. For each bin, compute the mean and
+  standard deviation of AIDE color-shape columns u-g, g-r, r-i, i-z, u-i, u-r,
+  g-z, r-z, u-2*r+i, and g-2*i+z. For each row, emit signed deltas from the bin
+  mean and standardized z-scores for each color feature, then aggregate those
+  residuals into L2 norm, absolute L1 norm, mean signed delta, delta standard
+  deviation, and maximum absolute z-score. The transform must be deterministic
+  and must not use the target.'
+expected_signal: Stars, galaxies, and quasars occupy different color manifolds at
+  similar observed redshift values; residuals within redshift regimes can expose
+  objects whose colors are inconsistent with their local redshift context.
+risk: This overlaps conceptually with photoz_color_consistency, and quantile bins can
+  be sparse at distribution edges, so the added signal may be redundant or noisy.
 schema_version: 1
-hypothesis_id: "000023"
-slug: aide_redshift_bin_color_residuals
+hypothesis_id: '000023'
 enabled: true
-created_at: "2026-06-22T00:00:00+02:00"
-source: manual_port_from_aide
-summary: >
-  Port AIDE's empirical redshift-bin color residuals: qcut redshift regimes
-  with per-bin color mean/std deltas and aggregate residual scores.
-competition:
-  project: kaggle/playground-series-s6e6
-origin:
-  run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
-  top_nodes:
-    - 6c49774cd2
-    - 6791ea9442
-    - 3fb5b46538
-    - 182e97f5ae
-    - 99f4320b32
-notes:
-  - Existing photo-z hypotheses model redshift consistency differently; this keeps the AIDE residual construction.
+created_at: '2026-06-22T00:00:00+02:00'

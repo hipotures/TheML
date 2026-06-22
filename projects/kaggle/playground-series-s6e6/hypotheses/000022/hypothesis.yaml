@@ -1,22 +1,29 @@
-schema_version: 1
-hypothesis_id: "000022"
-slug: aide_sky_cell_local_residuals
-enabled: true
-created_at: "2026-06-22T00:00:00+02:00"
-source: manual_port_from_aide
-summary: >
-  Recreate the AIDE local sky-cell context: half-degree cell density,
-  neighbor-cell density, concentration, and within-cell residual/z-score
+title: AIDE sky-cell local residuals
+group_name: aide_sky_cell_local_residuals
+family: aide_spatial_context
+summary: Encode local empirical sky context from the AIDE top-5 solutions: half-degree
+  sky-cell density, 3x3 neighbor density, concentration, and within-cell residual
   statistics for magnitudes, redshift, and color-shape features.
-competition:
-  project: kaggle/playground-series-s6e6
-origin:
-  run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
-  top_nodes:
-    - 6c49774cd2
-    - 6791ea9442
-    - 3fb5b46538
-    - 182e97f5ae
-    - 99f4320b32
-notes:
-  - This is distinct from existing sky-geometry hypotheses because it uses local empirical sky-cell residuals.
+depends_on: []
+strategy: 'Build a deterministic sky key from alpha and delta by binning alpha at
+  two cells per degree and delta+90 at two cells per degree, matching the coarse
+  AIDE sky-cell construction. For each row, add the count of objects in its cell,
+  the total count in the surrounding 3x3 cell neighborhood, and the ratio between
+  the cell count and neighbor count as a local concentration feature. Within each
+  sky cell, compute mean and standard-deviation residuals for u, g, r, i, z, and
+  clipped redshift, producing both signed deltas and z-scores. Repeat the same
+  residual construction for AIDE color-shape columns such as u-g, g-r, r-i, i-z,
+  u-i, u-r, g-z, r-z, u-2*r+i, and g-2*i+z. Add aggregate residual summaries such
+  as L2 norm, absolute L1 norm, mean signed color delta, color-delta standard
+  deviation, and maximum absolute local z-score. Do not use target labels.'
+expected_signal: The synthetic catalog may preserve sky-dependent survey depth,
+  calibration, or selection structure. Objects with unusual photometry relative to
+  nearby sky cells can separate stars, galaxies, and quasars beyond pure angular
+  coordinates.
+risk: Cell-level statistics can be noisy in sparse regions and may partially duplicate
+  existing sky-position hypotheses; if train and test sky distributions differ,
+  empirical cell residuals can become brittle.
+schema_version: 1
+hypothesis_id: '000022'
+enabled: true
+created_at: '2026-06-22T00:00:00+02:00'

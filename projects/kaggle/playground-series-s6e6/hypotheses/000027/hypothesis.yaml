@@ -1,22 +1,24 @@
+title: AIDE id sequence scan context
+group_name: aide_id_sequence_scan_context
+family: aide_sequence_context
+summary: Evaluate the AIDE id-sequence feature path directly in TheML by encoding
+  row/order structure through id rank, normalized rank, coarse blocks, modulo
+  cycles, parity, log id, and neighboring id gaps.
+depends_on: []
+strategy: 'If an id column is present, coerce it to numeric and derive deterministic
+  sequence features: missing-id indicator, ordinal rank, rank normalized to [0,1],
+  coarse blocks at 1k and 100k scales, modulo residues for 2, 11, and 97, even-id
+  indicator, log1p clipped id, and previous/next id gaps after sorting by id. If id
+  is absent, use the row order as a neutral fallback only so the materialization
+  remains valid. Do not use labels or any model outputs.'
+expected_signal: Survey or synthetic generation order can leak weak scan, batching,
+  or sampling structure. The AIDE code contained this feature path, and evaluating
+  it as a separate hypothesis makes the potential id/order signal explicit rather
+  than mixing it into other photometric groups.
+risk: Id-derived features can be dataset-specific and may not generalize; if ids are
+  arbitrary or shuffled, the group may add pure noise or encourage leaderboard-only
+  artifacts.
 schema_version: 1
-hypothesis_id: "000027"
-slug: aide_id_sequence_scan_context
+hypothesis_id: '000027'
 enabled: true
-created_at: "2026-06-22T00:00:00+02:00"
-source: manual_port_from_aide
-summary: >
-  Port the AIDE id-sequence features so TheML can explicitly evaluate whether
-  row/order structure carries survey-scan signal: rank, normalized rank, block,
-  modulo, parity, log id, and neighboring id gaps.
-competition:
-  project: kaggle/playground-series-s6e6
-origin:
-  run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
-  top_nodes:
-    - 6c49774cd2
-    - 6791ea9442
-    - 3fb5b46538
-    - 182e97f5ae
-    - 99f4320b32
-notes:
-  - AIDE's submitted wrapper dropped id before preprocess, but this hypothesis preserves the code path for direct evaluation in TheML.
+created_at: '2026-06-22T00:00:00+02:00'
