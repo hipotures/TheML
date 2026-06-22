@@ -1715,6 +1715,7 @@ def _print_submissions(project_dir: Path) -> None:
     rows = submission_rows(project_dir)
     table = Table(title="Submission candidates", box=box.SIMPLE_HEAVY, row_styles=["on grey23", "on grey11"])
     table.add_column("#", justify="right", no_wrap=True)
+    table.add_column("ID", no_wrap=True)
     table.add_column("CV#", justify="right", no_wrap=True)
     table.add_column("PUB#", justify="right", no_wrap=True)
     table.add_column("cv", justify="right", no_wrap=True)
@@ -1738,6 +1739,7 @@ def _print_submissions(project_dir: Path) -> None:
         public_score = row.get("public_score")
         table.add_row(
             str(index),
+            str(row.get("source_id") or ""),
             _rank_text(row.get("cv_rank"), local_score),
             _rank_text(row.get("public_rank") or row.get("computed_public_rank"), public_score),
             _score_text(local_score, best=best_local, style="bold black on bright_green"),

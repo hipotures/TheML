@@ -735,6 +735,7 @@ def submission_rows(project_dir: Path) -> list[dict[str, Any]]:
     sql = """
         SELECT
           s.*,
+          COALESCE(n.branch_id, s.hypothesis_id) AS source_id,
           RANK() OVER (
             ORDER BY CASE WHEN s.local_score IS NULL THEN 1 ELSE 0 END, s.local_score DESC
           ) AS cv_rank,
@@ -742,6 +743,7 @@ def submission_rows(project_dir: Path) -> list[dict[str, Any]]:
             ORDER BY CASE WHEN s.public_score IS NULL THEN 1 ELSE 0 END, s.public_score DESC
           ) AS computed_public_rank
         FROM submissions s
+        LEFT JOIN nodes n ON n.node_id=s.node_id
         ORDER BY
           CASE WHEN s.local_score IS NULL THEN 1 ELSE 0 END,
           s.local_score DESC,
