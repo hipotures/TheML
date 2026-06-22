@@ -4,10 +4,10 @@ Return only Python code. Do not use markdown fences.
 
 Define semantic feature-group functions and `FEATURE_GROUPS`.
 
-This file is not a standalone solution script. It is imported by a fixed
-wrapper. The wrapper executes the registered groups and is responsible for
-logging, timing, dependency ordering, output-column renaming, final DataFrame
-assembly, and all non-preprocessing work.
+Generate only the feature-group module: Python definitions for feature-group
+preprocessing. A separate fixed runtime wrapper imports this module and is
+responsible for logging, timing, dependency ordering, output-column renaming,
+final DataFrame assembly, and all non-preprocessing work.
 
 Each feature function must use this signature:
 
@@ -39,7 +39,7 @@ FEATURE_GROUPS = [
         "name": "group_name",
         "fn": add_group_name,
         "depends_on": [],
-        "description": "Short description.",
+        "description": "One sentence describing this feature group.",
     }
 ]
 ```
