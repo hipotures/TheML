@@ -1,17 +1,23 @@
 schema_version: 1
-hypothesis_id: "000023"
+hypothesis_id: '000023'
 slug: aide_redshift_bin_color_residuals
 materializations:
-  - name: autogluon-001
-    path: materializations/autogluon-001.py
-    sha256: 36182e7404485e02208a3c20d3e79c1d8a4ee4a170063d4237cbfd3e5e4a0e79
-    feature_groups:
-      - aide_redshift_bin_color_residuals
+  autogluon:
+    active: autogluon-002.py
+    sha256: f6d25efe78f711f80a7e3e644f5b1da63dda93186095e982e1f0a2bd5611185a
+    created_at: '2026-06-22T21:40:13'
 origin:
   run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
   source_artifacts:
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py
+feature_group:
+  logical_name: aide_redshift_bin_color_residuals
+  version_id: aide_redshift_bin_color_residuals@000023
+  source_hypothesis_id: '000023'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-002.py

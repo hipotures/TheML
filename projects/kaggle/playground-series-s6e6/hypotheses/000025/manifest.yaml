@@ -1,17 +1,23 @@
 schema_version: 1
-hypothesis_id: "000025"
+hypothesis_id: '000025'
 slug: aide_aux_reference_distribution_distance
 materializations:
-  - name: autogluon-001
-    path: materializations/autogluon-001.py
-    sha256: 658e2f200f441753f33e8b0c182cd514dc02838155a9c62f2d375506459e3f7f
-    feature_groups:
-      - aide_aux_reference_distribution_distance
+  autogluon:
+    active: autogluon-002.py
+    sha256: 8279af7e206423a7856d4071bc3c244fbd53d37acb8c6f78bc519a072e7dd08f
+    created_at: '2026-06-22T21:40:46'
 origin:
   run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
   source_artifacts:
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py
+feature_group:
+  logical_name: aide_aux_reference_distribution_distance
+  version_id: aide_aux_reference_distribution_distance@000025
+  source_hypothesis_id: '000025'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-002.py

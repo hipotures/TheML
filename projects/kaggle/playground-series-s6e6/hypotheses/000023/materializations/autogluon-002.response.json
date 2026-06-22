@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "high",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\ndef _assign_redshift_bin(redshift, num_bins):\n    clipped = redshift.clip(lower=0.0)\n    if clipped.isna().any():\n        clipped = clipped.fillna(0.0)\n\n    clipped = clipped.astype(\"float64\")\n    clipped = clipped.reindex(redshift.index)\n    if clipped.empty or clipped.nunique(dropna=True) <= 1:\n        return pd.Series(0, index=clipped.index, name=\"redshift_bin\", dtype=\"int64\")\n\n    try:\n        bins = pd.qcut(clipped, q=num_bins, labels=False, duplicates=\"drop\")\n        if pd.api.types.is_categorical_dtype(bins):\n            codes = bins.cat.codes\n        else:\n            codes = bins\n        codes = pd.Series(codes, index=clipped.index, name=\"redshift_bin\").fillna(0).astype(\"int64\")\n        return codes\n\n    except ValueError:\n        ranked = clipped.rank(method=\"first\", pct=True)\n        safe_bins = max(1, min(num_bins, max(1, len(clipped))))\n        fallback = np.floor(ranked.to_numpy(dtype=\"float64\") * safe_bins).astype(\"int64\")\n        fallback = np.clip(fallback, 0, safe_bins - 1)\n        return pd.Series(fallback, index=clipped.index, name=\"redshift_bin\", dtype=\"int64\")\n\n\ndef add_aide_redshift_bin_color_residuals(raw, deps, aux):\n    idx = raw.index\n    redshift_bin = _assign_redshift_bin(raw[\"redshift\"], 24)\n\n    u = raw[\"u\"].to_numpy(dtype=\"float64\")\n    g = raw[\"g\"].to_numpy(dtype=\"float64\")\n    r = raw[\"r\"].to_numpy(dtype=\"float64\")\n    i = raw[\"i\"].to_numpy(dtype=\"float64\")\n    z = raw[\"z\"].to_numpy(dtype=\"float64\")\n\n    color_df = pd.DataFrame(\n        {\n            \"u_g\": u - g,\n            \"g_r\": g - r,\n            \"r_i\": r - i,\n            \"i_z\": i - z,\n            \"u_i\": u - i,\n            \"u_r\": u - r,\n            \"g_z\": g - z,\n            \"r_z\": r - z,\n            \"u_minus_2r_plus_i\": u - 2.0 * r + i,\n            \"g_minus_2i_plus_z\": g - 2.0 * i + z,\n        },\n        index=idx,\n    )\n\n    grouped = color_df.join(redshift_bin)\n    means = grouped.groupby(\"redshift_bin\", sort=False).transform(\"mean\")\n    stds = grouped.groupby(\"redshift_bin\", sort=False).transform(\"std\")\n\n    deltas = color_df - means\n    safe_stds = stds.replace(0.0, np.nan)\n    zscores = (deltas / safe_stds).replace([np.inf, -np.inf], np.nan).fillna(0.0)\n\n    delta_values = deltas.to_numpy(dtype=\"float64\")\n    z_value = zscores.to_numpy(dtype=\"float64\")\n\n    aggregate = pd.DataFrame(\n        {\n            \"color_residual_l2\": np.sqrt(np.sum(delta_values * delta_values, axis=1)),\n            \"color_residual_abs_l1\": np.sum(np.abs(delta_values), axis=1),\n            \"color_residual_mean\": np.mean(delta_values, axis=1),\n            \"color_residual_std\": np.std(delta_values, axis=1),\n            \"color_residual_max_abs_zscore\": np.max(np.abs(z_value), axis=1),\n        },\n        index=idx,\n    )\n\n    return pd.concat(\n        [\n            redshift_bin.to_frame(),\n            deltas.add_prefix(\"color_delta_\"),\n            zscores.add_prefix(\"color_zscore_\"),\n            aggregate,\n        ],\n        axis=1,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"aide_redshift_bin_color_residuals\",\n        \"fn\": add_aide_redshift_bin_color_residuals,\n        \"depends_on\": [],\n        \"description\": \"Compute redshift-quantile color residuals and z-scored residual aggregates from photometric color features.\",\n    }\n]",
+  "usage": {
+    "threadId": "019ef0d8-dbe7-79f2-82e9-8a0514083b0a",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2944,
+        "inputTokens": 9873,
+        "outputTokens": 8587,
+        "reasoningOutputTokens": 7681,
+        "totalTokens": 18460
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 2944,
+        "inputTokens": 9873,
+        "outputTokens": 8587,
+        "reasoningOutputTokens": 7681,
+        "totalTokens": 18460
+      }
+    },
+    "turnId": "019ef0d8-dbf2-7560-a6a0-38e3905c7ba1"
+  },
+  "wall_ms": 9268,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

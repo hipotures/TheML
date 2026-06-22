@@ -1,17 +1,23 @@
 schema_version: 1
-hypothesis_id: "000026"
+hypothesis_id: '000026'
 slug: aide_smooth_spline_sed_interactions
 materializations:
-  - name: autogluon-001
-    path: materializations/autogluon-001.py
-    sha256: c29ebeafc9385c36b569c8785481c27f0ded8f16a82f8d56395f0634089a2c22
-    feature_groups:
-      - aide_smooth_spline_sed_interactions
+  autogluon:
+    active: autogluon-002.py
+    sha256: 4dd4666110312204d8fd4441b79414f49fc851a13e3f531b06b4dbcdc668de0b
+    created_at: '2026-06-22T21:41:23'
 origin:
   run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
   source_artifacts:
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
-    - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
+  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py
+feature_group:
+  logical_name: aide_smooth_spline_sed_interactions
+  version_id: aide_smooth_spline_sed_interactions@000026
+  source_hypothesis_id: '000026'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-002.py

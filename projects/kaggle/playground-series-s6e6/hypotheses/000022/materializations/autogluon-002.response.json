@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "high",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n_AIDE_CELLS_PER_DEGREE = 2\n_AIDE_RA_BINS = 360 * _AIDE_CELLS_PER_DEGREE\n_AIDE_DEC_BINS = 180 * _AIDE_CELLS_PER_DEGREE\n\n_AIDE_BASE_FEATURES = (\"u\", \"g\", \"r\", \"i\", \"z\", \"redshift_clipped\")\n_AIDE_COLOR_FEATURES = (\n    \"u_g\",\n    \"g_r\",\n    \"r_i\",\n    \"i_z\",\n    \"u_i\",\n    \"u_r\",\n    \"g_z\",\n    \"r_z\",\n    \"u_2r_i\",\n    \"g_2i_z\",\n)\n\ndef _compute_sky_cells(alpha_series, delta_series):\n    alpha = np.asarray(alpha_series, dtype=np.float64)\n    delta = np.asarray(delta_series, dtype=np.float64)\n\n    alpha_wrapped = np.mod(alpha, 360.0)\n    ra_bin = np.floor(alpha_wrapped * float(_AIDE_CELLS_PER_DEGREE)).astype(np.int64)\n    ra_bin = np.clip(ra_bin, 0, _AIDE_RA_BINS - 1)\n\n    delta_shift = np.clip(delta + 90.0, 0.0, 180.0 - 1e-12)\n    dec_bin = np.floor(delta_shift * float(_AIDE_CELLS_PER_DEGREE)).astype(np.int64)\n    dec_bin = np.clip(dec_bin, 0, _AIDE_DEC_BINS - 1)\n\n    cell_key = dec_bin * _AIDE_RA_BINS + ra_bin\n    return ra_bin, dec_bin, cell_key\n\ndef _compute_cell_neighbors(ra_bin, dec_bin):\n    cell_counts = np.zeros((_AIDE_DEC_BINS, _AIDE_RA_BINS), dtype=np.int64)\n    np.add.at(cell_counts, (dec_bin, ra_bin), 1)\n\n    cell_count = cell_counts[dec_bin, ra_bin]\n\n    # Wrap longitude with neighbors across 0/360 edges.\n    wrapped_ra = np.concatenate(\n        [cell_counts[:, -1:], cell_counts, cell_counts[:, :1]],\n        axis=1\n    )\n    padded = np.pad(wrapped_ra, ((1, 1), (1, 1)), mode=\"constant\", constant_values=0)\n\n    ra_idx = ra_bin + 2\n    dec_idx = dec_bin + 1\n\n    neighbor_count = (\n        padded[dec_idx - 1, ra_idx - 1] + padded[dec_idx - 1, ra_idx] + padded[dec_idx - 1, ra_idx + 1] +\n        padded[dec_idx, ra_idx - 1] + padded[dec_idx, ra_idx] + padded[dec_idx, ra_idx + 1] +\n        padded[dec_idx + 1, ra_idx - 1] + padded[dec_idx + 1, ra_idx] + padded[dec_idx + 1, ra_idx + 1]\n    )\n\n    concentration = np.zeros_like(cell_count, dtype=np.float64)\n    np.divide(\n        cell_count,\n        neighbor_count,\n        out=concentration,\n        where=neighbor_count > 0\n    )\n    return cell_count, neighbor_count, concentration\n\ndef _safe_zscore(residuals, scales):\n    z = residuals / scales\n    return z.replace([np.inf, -np.inf], np.nan).fillna(0.0)\n\ndef add_aide_sky_cell_local_residuals(raw, deps, aux):\n    alpha = raw[\"alpha\"]\n    delta = raw[\"delta\"]\n\n    ra_bin, dec_bin, cell_key = _compute_sky_cells(alpha, delta)\n    cell_count, neighbor_count, concentration = _compute_cell_neighbors(ra_bin, dec_bin)\n\n    u = raw[\"u\"].to_numpy(dtype=np.float64)\n    g = raw[\"g\"].to_numpy(dtype=np.float64)\n    r = raw[\"r\"].to_numpy(dtype=np.float64)\n    i = raw[\"i\"].to_numpy(dtype=np.float64)\n    z = raw[\"z\"].to_numpy(dtype=np.float64)\n    redshift_clipped = np.clip(raw[\"redshift\"].to_numpy(dtype=np.float64), 0.0, 7.0)\n\n    color_table = {\n        \"u_g\": u - g,\n        \"g_r\": g - r,\n        \"r_i\": r - i,\n        \"i_z\": i - z,\n        \"u_i\": u - i,\n        \"u_r\": u - r,\n        \"g_z\": g - z,\n        \"r_z\": r - z,\n        \"u_2r_i\": u - 2.0 * r + i,\n        \"g_2i_z\": g - 2.0 * i + z,\n    }\n\n    all_features = pd.DataFrame(\n        {\n            \"cell_key\": cell_key,\n            \"u\": u,\n            \"g\": g,\n            \"r\": r,\n            \"i\": i,\n            \"z\": z,\n            \"redshift_clipped\": redshift_clipped,\n            \"u_g\": color_table[\"u_g\"],\n            \"g_r\": color_table[\"g_r\"],\n            \"r_i\": color_table[\"r_i\"],\n            \"i_z\": color_table[\"i_z\"],\n            \"u_i\": color_table[\"u_i\"],\n            \"u_r\": color_table[\"u_r\"],\n            \"g_z\": color_table[\"g_z\"],\n            \"r_z\": color_table[\"r_z\"],\n            \"u_2r_i\": color_table[\"u_2r_i\"],\n            \"g_2i_z\": color_table[\"g_2i_z\"],\n        },\n        index=raw.index,\n    )\n\n    grouped = all_features.groupby(\"cell_key\", sort=False)\n\n    cell_means = grouped[_AIDE_BASE_FEATURES + _AIDE_COLOR_FEATURES].transform(\"mean\")\n    cell_stds = grouped[_AIDE_BASE_FEATURES + _AIDE_COLOR_FEATURES].transform(\"std\").replace(0.0, np.nan)\n\n    residuals = all_features[_AIDE_BASE_FEATURES + _AIDE_COLOR_FEATURES] - cell_means\n    zscores = _safe_zscore(residuals, cell_stds)\n\n    color_residuals = residuals[_AIDE_COLOR_FEATURES].to_numpy(dtype=np.float64)\n    color_zscores = zscores[_AIDE_COLOR_FEATURES].to_numpy(dtype=np.float64)\n\n    out = pd.DataFrame(index=raw.index)\n    out[\"aide_sky_cell_count\"] = cell_count\n    out[\"aide_sky_cell_3x3_count\"] = neighbor_count\n    out[\"aide_sky_cell_concentration\"] = concentration\n\n    for feat in _AIDE_BASE_FEATURES:\n        out[f\"aide_sky_cell_residual_{feat}\"] = residuals[feat]\n        out[f\"aide_sky_cell_zscore_{feat}\"] = zscores[feat]\n\n    for feat in _AIDE_COLOR_FEATURES:\n        out[f\"aide_sky_cell_residual_{feat}\"] = residuals[feat]\n        out[f\"aide_sky_cell_zscore_{feat}\"] = zscores[feat]\n\n    out[\"aide_sky_cell_color_residual_l2\"] = np.sqrt((color_residuals ** 2).sum(axis=1))\n    out[\"aide_sky_cell_color_residual_abs_l1\"] = np.abs(color_residuals).sum(axis=1)\n    out[\"aide_sky_cell_color_residual_mean_signed\"] = color_residuals.mean(axis=1)\n    out[\"aide_sky_cell_color_residual_std\"] = color_residuals.std(axis=1, ddof=0)\n    out[\"aide_sky_cell_color_max_abs_zscore\"] = np.abs(color_zscores).max(axis=1)\n\n    return out\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"aide_sky_cell_local_residuals\",\n        \"fn\": add_aide_sky_cell_local_residuals,\n        \"depends_on\": [],\n        \"description\": \"Build deterministic half-degree sky-cell features with local neighbor density and within-cell residual statistics over magnitudes, clipped redshift, and color-shape features.\",\n    },\n]",
+  "usage": {
+    "threadId": "019ef0d8-ae3d-7e01-a9d7-5605951118fd",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2944,
+        "inputTokens": 9956,
+        "outputTokens": 10344,
+        "reasoningOutputTokens": 8582,
+        "totalTokens": 20300
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 2944,
+        "inputTokens": 9956,
+        "outputTokens": 10344,
+        "reasoningOutputTokens": 8582,
+        "totalTokens": 20300
+      }
+    },
+    "turnId": "019ef0d8-ae4b-7632-bd25-e8afc2fc4dba"
+  },
+  "wall_ms": 11245,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}
