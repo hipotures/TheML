@@ -78,8 +78,10 @@ def main():
     project_dir = _resolve_project_dir(project_relative_path)
     profile_overrides = {overrides_literal}
     data_dir = project_dir / "data"
-    work_dir = Path.cwd()
-    artifacts_dir = work_dir.parent / "artifacts"
+    runtime_dir = Path(__file__).resolve().parent
+    work_dir = runtime_dir / "work"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    artifacts_dir = runtime_dir / "artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     target_log = artifacts_dir / "autogluon_stdout.log"
     reserved_profile_keys = {{
