@@ -72,7 +72,11 @@ def run_missing(
         attempt_dir = node_dir / "03-execute" / "attempt-001"
         attempt_dir.mkdir(parents=True, exist_ok=True)
         write_yaml(attempt_dir / "started.yaml", {"created_at": datetime.now().isoformat(timespec="seconds")})
-        result = run_python_script(node_dir / "02-code.py", node_dir / "work")
+        result = run_python_script(
+            node_dir / "02-code.py",
+            node_dir / "work",
+            timeout_seconds=_execution_timeout_seconds(profile_overrides),
+        )
         write_attempt_result(attempt_dir, result)
         if result.status == "ok":
             _write_success_markers(node_dir, nid, hid, mode, profile_id, materialization, result)
@@ -105,6 +109,21 @@ def _active_or_create_run(project_dir: Path) -> Path:
     write_yaml(run_dir / "run.yaml", {"schema_version": 1, "run_id": rid, "created_at": datetime.now().isoformat(timespec="seconds")})
     (run_dir / "artifacts").mkdir(exist_ok=True)
     return run_dir
+
+
+def _execution_timeout_seconds(profile_overrides: dict[str, object] | None) -> int:
+    overrides = profile_overrides or {}
+    raw_time = overrides.get("time_limit", overrides.get("time"))
+    raw_preprocess = overrides.get("preprocess_timeout", 180)
+    try:
+        time_limit = int(raw_time) if raw_time is not None else 900
+    except (TypeError, ValueError):
+        time_limit = 900
+    try:
+        preprocess_timeout = int(raw_preprocess)
+    except (TypeError, ValueError):
+        preprocess_timeout = 180
+    return max(900, time_limit + preprocess_timeout + 300)
 
 
 def _next_step(run_dir: Path) -> int:

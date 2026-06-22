@@ -3,8 +3,10 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import json
+import queue
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -66,18 +68,79 @@ def run_legacy_group_materialization(
 
 def run_python_script(script: Path, work_dir: Path, timeout_seconds: int = 900) -> ExecutionResult:
     work_dir.mkdir(parents=True, exist_ok=True)
+    started_at = time.monotonic()
+    stdout_parts: list[str] = []
+    stderr_parts: list[str] = []
+    output_queue: queue.Queue[tuple[str, str | None]] = queue.Queue()
+
+    def _reader(stream, name: str) -> None:
+        try:
+            for line in iter(stream.readline, ""):
+                output_queue.put((name, line))
+        finally:
+            output_queue.put((name, None))
+
+    print(
+        f"TML_EXEC|event=start|script={script}|work_dir={work_dir}|timeout_s={timeout_seconds}",
+        flush=True,
+    )
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             [sys.executable, str(script)],
             cwd=work_dir,
             text=True,
-            capture_output=True,
-            timeout=timeout_seconds,
-            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=1,
         )
-    except subprocess.TimeoutExpired as exc:
-        stdout = exc.stdout if isinstance(exc.stdout, str) else ""
-        stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+    except Exception as exc:
+        return ExecutionResult(
+            status="failed",
+            returncode=1,
+            stdout="",
+            stderr="",
+            error=str(exc),
+        )
+
+    assert process.stdout is not None
+    assert process.stderr is not None
+    threads = [
+        threading.Thread(target=_reader, args=(process.stdout, "stdout"), daemon=True),
+        threading.Thread(target=_reader, args=(process.stderr, "stderr"), daemon=True),
+    ]
+    for thread in threads:
+        thread.start()
+
+    closed = set()
+    timed_out = False
+    while len(closed) < 2:
+        if process.poll() is None and time.monotonic() - started_at > timeout_seconds:
+            timed_out = True
+            process.kill()
+        try:
+            name, text = output_queue.get(timeout=0.1)
+        except queue.Empty:
+            continue
+        if text is None:
+            closed.add(name)
+            continue
+        if name == "stdout":
+            stdout_parts.append(text)
+            sys.stdout.write(text)
+            sys.stdout.flush()
+        else:
+            stderr_parts.append(text)
+            sys.stderr.write(text)
+            sys.stderr.flush()
+
+    returncode = process.wait()
+    for thread in threads:
+        thread.join(timeout=1)
+
+    stdout = "".join(stdout_parts)
+    stderr = "".join(stderr_parts)
+    if timed_out:
+        print(f"TML_EXEC|event=timeout|timeout_s={timeout_seconds}", flush=True)
         return ExecutionResult(
             status="failed",
             returncode=124,
@@ -89,7 +152,7 @@ def run_python_script(script: Path, work_dir: Path, timeout_seconds: int = 900) 
     metric = None
     maximize = None
     result_payload = None
-    for line in completed.stdout.splitlines():
+    for line in stdout.splitlines():
         if not line.startswith(RESULT_PREFIX):
             continue
         try:
@@ -103,15 +166,16 @@ def run_python_script(script: Path, work_dir: Path, timeout_seconds: int = 900) 
         metric = float(raw_metric) if isinstance(raw_metric, (int, float)) else None
         raw_maximize = payload.get("maximize")
         maximize = bool(raw_maximize) if isinstance(raw_maximize, bool) else None
-    status = "ok" if completed.returncode == 0 else "failed"
+    status = "ok" if returncode == 0 else "failed"
+    print(f"TML_EXEC|event=end|returncode={returncode}|status={status}", flush=True)
     return ExecutionResult(
         status=status,
-        returncode=completed.returncode,
-        stdout=completed.stdout,
-        stderr=completed.stderr,
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
         metric=metric,
         maximize=maximize,
-        error=None if completed.returncode == 0 else f"Process exited with {completed.returncode}",
+        error=None if returncode == 0 else f"Process exited with {returncode}",
         payload=result_payload,
     )
 
