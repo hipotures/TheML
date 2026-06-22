@@ -683,8 +683,10 @@ def _print_root_run_summary(
     table.add_column("Run", justify="center", no_wrap=True)
     table.add_column("ID", style="bold", no_wrap=True)
     table.add_column("S", justify="center", no_wrap=True)
-    table.add_column("Mode", no_wrap=True)
-    table.add_column("Profile", no_wrap=True)
+    table.add_column("Created", no_wrap=True)
+    table.add_column("Model", no_wrap=True)
+    table.add_column("Res/Tokens", justify="right", no_wrap=True)
+    table.add_column("Gen", no_wrap=True)
     table.add_column("Score", justify="right", no_wrap=True)
     table.add_column("Node", no_wrap=True)
     table.add_column("Summary", overflow="fold", min_width=36, ratio=1)
@@ -702,14 +704,14 @@ def _print_root_run_summary(
         )
         if not row:
             continue
-        if hdir.name in executed_ids:
+        if hdir.name in executed_ids or (target_id is not None and hdir.name == target_id):
             new_rows.append(row)
         else:
             old_rows.append(row)
     for row in old_rows:
         table.add_row(*row)
     if old_rows and new_rows:
-        table.add_row("NEW", *["" for _ in range(7)], style="reverse")
+        table.add_row("NEW", *["" for _ in range(9)], style="reverse")
     for row in new_rows:
         table.add_row(*row, style="bold")
     console.print(table)
@@ -728,6 +730,7 @@ def _root_run_row(
     if not isinstance(hypothesis, dict):
         return None
     hid = str(hypothesis.get("hypothesis_id") or hdir.name)
+    hypothesis_summary = _artifact_run_summary(hdir, "01-hypothesis")
     materialization = hdir / "materializations" / f"{mode}-001.py"
     code_hash = sha256_file(materialization) if materialization.exists() else ""
     state = _current_run_state(project_dir, hypothesis_id=hid, mode=mode, profile_id=profile_id, code_hash=code_hash)
@@ -747,8 +750,10 @@ def _root_run_row(
         "●" if is_target else "",
         hid,
         status,
-        mode,
-        profile_id,
+        str(hypothesis.get("created_at") or ""),
+        hypothesis_summary["model"] if hypothesis_summary else "",
+        hypothesis_summary["reasoning_tokens"] if hypothesis_summary else "",
+        hypothesis_summary["duration"] if hypothesis_summary else "",
         score,
         node,
         _short_text(str(hypothesis.get("summary") or ""), summary_limit),
