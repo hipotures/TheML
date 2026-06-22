@@ -1064,7 +1064,7 @@ def _print_root_run_summary(
     profile_id = active_profile_id(config, mode)
     table = Table(title=f"ROOT run (executed: {len(executed_ids)})", box=box.SIMPLE_HEAVY)
     table.add_column("ID", style="bold", no_wrap=True)
-    table.add_column("Status", justify="center", no_wrap=True)
+    table.add_column("S", justify="center", no_wrap=True)
     table.add_column("Created", no_wrap=True)
     table.add_column("Model", no_wrap=True)
     table.add_column("Res/Tokens", justify="right", no_wrap=True)
@@ -1312,11 +1312,11 @@ def _root_run_row(
 
 def _run_status_text(status: str) -> Text:
     if status == "complete":
-        return Text("OK", style="green")
+        return Text("▶", style="green")
     if status == "failed":
-        return Text("BUG", style="bold red")
+        return Text("⚠", style="bold red")
     if status == "started":
-        return Text("RUN", style="cyan")
+        return Text("●", style="cyan")
     return Text(status.upper() or "?", style="yellow")
 
 
@@ -1363,13 +1363,14 @@ def _root_hypothesis_json_row(db_row: dict[str, object], *, created_ids: set[str
     }
 
 
-def _root_hypothesis_table_values(row: dict[str, object], *, summary_limit: int) -> list[str]:
-    values = []
+def _root_hypothesis_table_values(row: dict[str, object], *, summary_limit: int) -> list[object]:
+    values: list[object] = []
     for column in ROOT_HYPOTHESIS_COLUMNS:
         key = str(column["key"])
-        value = str(row.get(key, ""))
+        raw_value = row.get(key, "")
+        value: object = raw_value
         if column.get("truncate"):
-            value = _short_text(value, summary_limit)
+            value = _short_text(str(raw_value), summary_limit)
         values.append(value)
     return values
 
@@ -1379,13 +1380,25 @@ def _root_hypothesis_row(db_row: dict[str, object], *, created_ids: set[str]) ->
     return {
         "id": hypothesis_id,
         "is_new": hypothesis_id in created_ids,
-        "status": str(db_row.get("status_icon") or ""),
+        "status": _hypothesis_status_text(str(db_row.get("status_icon") or "")),
         "created_at": _short_datetime(db_row.get("created_at")),
         "model": str(db_row.get("model") or ""),
         "reasoning_tokens": _token_summary(db_row),
         "duration": _seconds_text(db_row.get("generation_seconds")),
         "summary": str(db_row.get("summary") or ""),
     }
+
+
+def _hypothesis_status_text(status: str) -> Text:
+    if status == "▶":
+        return Text("▶", style="green")
+    if status == "⚠":
+        return Text("⚠", style="bold red")
+    if status == "⌘":
+        return Text("⌘", style="yellow")
+    if status in {"⊘", "◇"}:
+        return Text(status, style="dim")
+    return Text(status or "?", style="yellow")
 
 
 def _short_text(value: str, limit: int) -> str:

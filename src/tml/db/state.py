@@ -320,13 +320,23 @@ def root_hypothesis_rows(project_dir: Path) -> list[dict[str, Any]]:
           CASE
             WHEN h.enabled=0 THEN '⊘'
             WHEN EXISTS (
-              SELECT 1 FROM nodes n
-              WHERE n.hypothesis_id=h.hypothesis_id AND n.status='failed'
-            ) THEN '⚠'
-            WHEN EXISTS (
-              SELECT 1 FROM nodes n
-              WHERE n.hypothesis_id=h.hypothesis_id AND n.status='complete'
+              SELECT 1
+              FROM materializations m
+              JOIN evaluations e ON e.hypothesis_id=m.hypothesis_id
+                AND e.mode=m.mode AND e.code_hash=m.code_hash
+              WHERE m.hypothesis_id=h.hypothesis_id
+                AND m.active=1
+                AND e.status='complete'
             ) THEN '▶'
+            WHEN EXISTS (
+              SELECT 1
+              FROM materializations m
+              JOIN evaluations e ON e.hypothesis_id=m.hypothesis_id
+                AND e.mode=m.mode AND e.code_hash=m.code_hash
+              WHERE m.hypothesis_id=h.hypothesis_id
+                AND m.active=1
+                AND e.status='failed'
+            ) THEN '⚠'
             WHEN EXISTS (
               SELECT 1 FROM materializations m
               WHERE m.hypothesis_id=h.hypothesis_id AND m.active=1
