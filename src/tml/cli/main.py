@@ -1761,7 +1761,7 @@ def _print_submission_actions(rows: list[dict[str, object]]) -> None:
         for row in rows
         if isinstance(row.get("local_score"), int | float)
         and str(row.get("status") or "") == "complete"
-        and str(row.get("submit_status") or "") != "submitted"
+        and str(row.get("submit_status") or "") == "not_submitted"
         and str(row.get("submission_sha256") or "")
     ][:5]
     if ready:
@@ -1889,6 +1889,8 @@ def _submit_status_text(value: object) -> Text:
     text = str(value or "")
     if text == "submitted":
         return Text(text, style="green")
+    if text == "uploaded":
+        return Text(text, style="yellow")
     if text == "not_submitted":
         return Text(text, style="dim")
     return Text(text)

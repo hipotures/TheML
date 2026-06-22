@@ -820,6 +820,7 @@ def sync_submission_remote_rows(project_dir: Path, remote_submissions: list[obje
     synced_at = datetime.now().isoformat(timespec="seconds")
     changed = 0
     with connect(db_path) as conn:
+        changed += _normalize_remote_error_submit_status(conn)
         rows = [dict(row) for row in conn.execute("SELECT * FROM submissions").fetchall()]
         for remote in remote_submissions:
             remote_fields = _remote_submission_fields(remote, synced_at=synced_at)
@@ -873,6 +874,18 @@ def sync_submission_remote_rows(project_dir: Path, remote_submissions: list[obje
             changed += 1
         conn.commit()
     return changed
+
+
+def _normalize_remote_error_submit_status(conn) -> int:
+    cursor = conn.execute(
+        """
+        UPDATE submissions
+        SET submit_status='uploaded'
+        WHERE submit_status='failed'
+          AND upper(COALESCE(remote_status, '')) IN ('ERROR', 'FAILED', 'FAILURE')
+        """
+    )
+    return int(cursor.rowcount or 0)
 
 
 def _remote_submission_fields(remote: object, *, synced_at: str) -> dict[str, Any]:
@@ -980,8 +993,6 @@ def _parse_submission_description(description: object) -> dict[str, str]:
 
 def _submit_status_from_remote(remote_status: object) -> str:
     status = str(remote_status or "").strip().upper()
-    if status in {"ERROR", "FAILED", "FAILURE"}:
-        return "failed"
     if status in {"COMPLETE", "SUBMITTED"}:
         return "submitted"
     return "uploaded"
