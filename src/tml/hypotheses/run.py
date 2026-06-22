@@ -22,12 +22,12 @@ def run_missing(
     *,
     hypothesis_id: str | None = None,
     profile_overrides: dict[str, object] | None = None,
-) -> int:
+) -> list[str]:
     config = load_project_config(project_dir)
     mode = mode or active_mode(config)
     profile_id = active_profile_id(config, mode)
     run = _active_or_create_run(project_dir)
-    ran = 0
+    ran: list[str] = []
     next_step = _next_step(run)
     target_hypothesis_id = hypothesis_id.zfill(6) if hypothesis_id else None
     for hdir in hypothesis_dirs(project_dir):
@@ -93,7 +93,7 @@ def run_missing(
                     "created_at": datetime.now().isoformat(timespec="seconds"),
                 },
             )
-        ran += 1
+        ran.append(hid)
     return ran
 
 

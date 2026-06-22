@@ -238,7 +238,7 @@ def root_run_cmd(ctx: typer.Context) -> None:
         _validate_override_keys(overrides, allowed, "tml root run")
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "hypothesis", "id"}}
-        ran = run_missing(
+        executed_ids = run_missing(
             ref.path,
             mode=mode,
             hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
@@ -247,7 +247,7 @@ def root_run_cmd(ctx: typer.Context) -> None:
         _print_root_run_summary(
             ref.path,
             mode=active_run_mode,
-            executed_count=ran,
+            executed_ids=set(executed_ids),
             hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
         )
     except Exception as exc:
@@ -280,7 +280,7 @@ def root_ensure_cmd(ctx: typer.Context) -> None:
             profile_overrides=run_overrides,
         )
         reindex_project(ref.path, ref.db_path)
-        console.print(f"Generated: {len(generated)}; materialized: {materialized}; executed: {ran}")
+        console.print(f"Generated: {len(generated)}; materialized: {materialized}; executed: {len(ran)}")
     except Exception as exc:
         _abort(exc)
 
@@ -673,13 +673,13 @@ def _print_root_run_summary(
     project_dir: Path,
     *,
     mode: str,
-    executed_count: int,
+    executed_ids: set[str],
     hypothesis_id: str | None,
 ) -> None:
     target_id = hypothesis_id.zfill(6) if hypothesis_id else None
     config = load_project_config(project_dir)
     profile_id = active_profile_id(config, mode)
-    table = Table(title=f"ROOT run (executed: {executed_count})", box=box.SIMPLE_HEAVY)
+    table = Table(title=f"ROOT run (executed: {len(executed_ids)})", box=box.SIMPLE_HEAVY)
     table.add_column("Run", justify="center", no_wrap=True)
     table.add_column("ID", style="bold", no_wrap=True)
     table.add_column("S", justify="center", no_wrap=True)
@@ -689,6 +689,8 @@ def _print_root_run_summary(
     table.add_column("Node", no_wrap=True)
     table.add_column("Summary", overflow="fold", min_width=36, ratio=1)
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
+    old_rows: list[list[str]] = []
+    new_rows: list[list[str]] = []
     for hdir in hypothesis_dirs(project_dir):
         row = _root_run_row(
             hdir,
@@ -698,8 +700,18 @@ def _print_root_run_summary(
             summary_limit=summary_limit,
             is_target=(target_id is None or hdir.name == target_id),
         )
-        if row:
-            table.add_row(*row)
+        if not row:
+            continue
+        if hdir.name in executed_ids:
+            new_rows.append(row)
+        else:
+            old_rows.append(row)
+    for row in old_rows:
+        table.add_row(*row)
+    if old_rows and new_rows:
+        table.add_row("NEW", *["" for _ in range(7)], style="reverse")
+    for row in new_rows:
+        table.add_row(*row, style="bold")
     console.print(table)
 
 
