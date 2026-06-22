@@ -1888,13 +1888,13 @@ def _score_text(value: object, *, best: float | None, style: str) -> str | Text:
 def _submit_status_text(value: object) -> Text:
     text = str(value or "")
     if text == "submitted":
-        return Text("S", style="green")
+        return Text("✓", style="green")
     if text == "uploaded":
         return Text("U", style="yellow")
     if text == "not_submitted":
         return Text("-", style="dim")
     if text == "failed":
-        return Text("F", style="red")
+        return Text("✗", style="red")
     return Text((text[:1] or "?").upper())
 
 
