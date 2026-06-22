@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import signal
+import subprocess
 import threading
 import time
 from datetime import datetime, timezone
@@ -541,6 +542,46 @@ def root_ensure_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
+@root_app.command(
+    "autocommit",
+    context_settings=EXTRA,
+    help=(
+        "Commit the active project's ROOT hypothesis artifacts.\n\n"
+        "Accepted key=value parameters:\n"
+        "  message=<text>     Commit message; defaults to the project slug.\n"
+        "  yes=true           Skip the confirmation prompt."
+    ),
+)
+def root_autocommit_cmd(ctx: typer.Context) -> None:
+    try:
+        ref = active_project_ref()
+        _reject_positional(ctx.args, "tml root autocommit")
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"message", "yes"}, "tml root autocommit")
+        message = str(overrides.get("message") or f"Commit ROOT hypotheses for {ref.slug}")
+        assume_yes = _bool(overrides.get("yes", False))
+        hypotheses_path = ref.path / "hypotheses"
+        if not hypotheses_path.exists():
+            raise TmlError(f"Hypotheses directory does not exist: {hypotheses_path}")
+        changed_before = _git_changed_paths(workspace_root(), hypotheses_path)
+        if not changed_before:
+            console.print(f"No ROOT hypothesis changes to commit for {ref.slug}.")
+            return
+        _print_root_autocommit_plan(ref.slug, hypotheses_path, message, changed_before)
+        if not assume_yes and not Confirm.ask("Commit ROOT hypotheses?", default=False, console=console):
+            console.print("ROOT hypotheses autocommit cancelled.")
+            return
+        _git_add_path(workspace_root(), hypotheses_path)
+        staged = _git_staged_paths(workspace_root(), hypotheses_path)
+        if not staged:
+            console.print(f"No staged ROOT hypothesis changes to commit for {ref.slug}.")
+            return
+        _git_commit_path(workspace_root(), hypotheses_path, message)
+        console.print(f"Committed {len(staged)} ROOT hypothesis files for {ref.slug}.")
+    except Exception as exc:
+        _abort(exc)
+
+
 @app.command("reindex")
 def reindex_cmd(scope: str | None = None, run_id: str | None = None) -> None:
     try:
@@ -802,6 +843,66 @@ def _command_status_requested(args: list[str], command: str) -> bool:
     if positional == ["status"]:
         return True
     raise TmlError(f"Unexpected argument for {command}: {positional[0]}")
+
+
+def _print_root_autocommit_plan(project_slug: str, hypotheses_path: Path, message: str, changed_paths: list[str]) -> None:
+    preview = ", ".join(changed_paths[:3])
+    if len(changed_paths) > 3:
+        preview += f", ... +{len(changed_paths) - 3}"
+    table = Table(title="ROOT hypotheses autocommit plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Path", _git_pathspec(workspace_root(), hypotheses_path))
+    table.add_row("Changed files", str(len(changed_paths)))
+    table.add_row("Preview", preview)
+    table.add_row("Commit message", message)
+    console.print(table)
+
+
+def _git_pathspec(root: Path, path: Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _git_changed_paths(root: Path, path: Path) -> list[str]:
+    result = _run_git(root, "status", "--porcelain", "--", _git_pathspec(root, path))
+    paths: list[str] = []
+    for line in result.stdout.splitlines():
+        text = line.strip()
+        if not text:
+            continue
+        paths.append(text[3:] if len(text) > 3 else text)
+    return paths
+
+
+def _git_staged_paths(root: Path, path: Path) -> list[str]:
+    result = _run_git(root, "diff", "--cached", "--name-only", "--", _git_pathspec(root, path))
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def _git_add_path(root: Path, path: Path) -> None:
+    _run_git(root, "add", "--", _git_pathspec(root, path))
+
+
+def _git_commit_path(root: Path, path: Path, message: str) -> None:
+    _run_git(root, "commit", "-m", message, "--", _git_pathspec(root, path))
+
+
+def _run_git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise TmlError(f"git {' '.join(args)} failed: {detail}")
+    return result
 
 
 def _profile_override_keys(project_dir: Path, mode: str) -> set[str]:
