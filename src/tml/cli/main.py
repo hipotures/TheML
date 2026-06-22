@@ -693,7 +693,7 @@ def _print_root_run_summary(
     for row in old_rows:
         table.add_row(*row)
     if old_rows and new_rows:
-        table.add_row(*["" for _ in range(10)], style="reverse")
+        table.add_row(*["" for _ in range(10)], style="dim reverse")
     for row in new_rows:
         table.add_row(*row, style="bold")
     console.print(table)
