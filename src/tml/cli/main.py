@@ -122,6 +122,7 @@ def root_status_cmd(ctx: typer.Context) -> None:
         console.print(f"Evaluated: {counts['evaluated']}")
         console.print(f"Incomplete nodes: {counts['incomplete']}")
         console.print(f"Best ROOT score: {best if best is not None else 'n/a'}")
+        _print_existing_root_hypotheses(ref.path, created_ids=set())
     except Exception as exc:
         _abort(exc)
 
