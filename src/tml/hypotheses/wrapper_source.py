@@ -76,6 +76,20 @@ def main():
     artifacts_dir = work_dir.parent / "artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     target_log = artifacts_dir / "autogluon_stdout.log"
+    reserved_profile_keys = {{
+        "schema_version",
+        "profile_id",
+        "source_profile",
+        "mode",
+        "preprocess_timeout",
+        "validation_strategy",
+        "validation_fraction",
+        "seed",
+        "use_gpu",
+        "class_balance",
+        "fit_args",
+        "predictor_args",
+    }}
 
     class _TeeWriter:
         def __init__(self, primary, log_file):
@@ -113,6 +127,19 @@ def main():
         if gz.exists():
             return gz
         return data_dir / f"{{stem}}.csv"
+
+    def _fit_kwargs_from_profile(profile, train_data):
+        fit_kwargs = {{"train_data": train_data}}
+        for key, value in profile.items():
+            if key in reserved_profile_keys or value is None:
+                continue
+            fit_kwargs[key] = value
+        if profile.get("use_gpu") is not None:
+            fit_kwargs["num_gpus"] = 1 if profile.get("use_gpu") else 0
+        raw_fit_args = profile.get("fit_args")
+        if isinstance(raw_fit_args, dict):
+            fit_kwargs.update(raw_fit_args)
+        return fit_kwargs
 
     try:
         with target_log.open("a", encoding="utf-8", buffering=1) as log_file:
@@ -152,6 +179,9 @@ def main():
 
                 train_out = transformed.iloc[: len(train)].reset_index(drop=True)
                 test_out = transformed.iloc[len(train) :].reset_index(drop=True)
+                if id_col in train_out.columns:
+                    train_out = train_out.drop(columns=[id_col])
+                    test_out = test_out.drop(columns=[id_col], errors="ignore")
                 train_out[target_col] = train[target_col].reset_index(drop=True)
 
                 predictor_args = dict(profile.get("predictor_args", {{}}) or {{}})
@@ -160,13 +190,7 @@ def main():
                 predictor_args.setdefault("path", work_dir / "AutoGluonModels")
                 predictor = TabularPredictor(**predictor_args)
 
-                fit_kwargs = dict(profile.get("fit_args", {{}}) or {{}})
-                fit_kwargs["train_data"] = train_out
-                ignored_columns = list(fit_kwargs.pop("ignored_columns", []) or [])
-                if id_col in train_out.columns and id_col not in ignored_columns:
-                    ignored_columns.append(id_col)
-                if ignored_columns:
-                    fit_kwargs["ignored_columns"] = ignored_columns
+                fit_kwargs = _fit_kwargs_from_profile(profile, train_out)
 
                 print("AutoGluon materialization: starting fit", flush=True)
                 fit_started_at = time.time()

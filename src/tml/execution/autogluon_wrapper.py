@@ -155,6 +155,9 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
 
     train_out = transformed.iloc[: len(train)].reset_index(drop=True)
     test_out = transformed.iloc[len(train) :].reset_index(drop=True)
+    if id_col in train_out.columns:
+        train_out = train_out.drop(columns=[id_col])
+        test_out = test_out.drop(columns=[id_col], errors="ignore")
     train_out[target_col] = train[target_col].reset_index(drop=True)
 
     training_plan = _training_plan_from_profile(train_out, target_col, profile)
@@ -172,11 +175,6 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
         valid_data=training_plan.valid_data,
         fit_args=training_plan.fit_args,
     )
-    ignored_columns = list(fit_kwargs.pop("ignored_columns", []) or [])
-    if id_col in train_out.columns and id_col not in ignored_columns:
-        ignored_columns.append(id_col)
-    if ignored_columns:
-        fit_kwargs["ignored_columns"] = ignored_columns
     predictor.fit(**fit_kwargs)
 
     predictions = predictor.predict(test_out)
