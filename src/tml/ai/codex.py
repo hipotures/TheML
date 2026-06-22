@@ -63,6 +63,7 @@ class CodexAiClient:
                 text=True,
                 capture_output=True,
                 check=False,
+                start_new_session=True,
             )
             if result.returncode != 0:
                 message = result.stderr.strip() or result.stdout.strip()
@@ -116,6 +117,7 @@ class CodexAiClient:
                     cwd=str(thread_cwd),
                     text=True,
                     bufsize=1,
+                    start_new_session=True,
                 )
                 started = perf_counter()
                 try:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import threading
 import time
 from datetime import datetime, timezone
@@ -11,6 +12,7 @@ import typer
 from rich import box
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn
+from rich.prompt import Confirm
 from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
@@ -34,7 +36,12 @@ from tml.db.state import (
     submission_by_sha_prefix,
     submission_rows,
 )
-from tml.hypotheses.generate import GeneratedHypothesis, generate_missing_root_hypotheses
+from tml.hypotheses.generate import (
+    GeneratedHypothesis,
+    RootGenerationPlan,
+    generate_missing_root_hypotheses,
+    root_generation_plan,
+)
 from tml.hypotheses.materialize import materialize_missing
 from tml.hypotheses.run import run_missing
 from tml.prompts.diff import diff_prompt
@@ -133,9 +140,36 @@ def root_generate_cmd(ctx: typer.Context) -> None:
         ref = active_project_ref()
         _reject_positional(ctx.args, "tml root generate")
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"count", "json", "json_output"}, "tml root generate")
+        _validate_override_keys(overrides, {"count", "json", "json_output", "yes"}, "tml root generate")
         count = int(overrides["count"]) if "count" in overrides else None
         json_output = _bool(overrides.get("json", False)) or _bool(overrides.get("json_output", False))
+        assume_yes = _bool(overrides.get("yes", False))
+        if json_output and not assume_yes:
+            raise TmlError("tml root generate json=true requires yes=true because confirmation would break JSON output.")
+        plan = root_generation_plan(ref.path, count=count)
+        if not json_output:
+            _print_root_generation_plan(ref.slug, plan)
+            if plan.iteration_count == 0:
+                console.print("No ROOT hypotheses to generate.")
+                _print_generated_hypotheses(ref.path, [])
+                return
+            if not assume_yes and not Confirm.ask("Start ROOT generation?", default=False, console=console):
+                console.print("ROOT generation cancelled.")
+                return
+        stop_after_current = False
+        interrupted_once = False
+        previous_sigint = signal.getsignal(signal.SIGINT)
+
+        def handle_sigint(signum: int, frame: object) -> None:
+            nonlocal stop_after_current, interrupted_once
+            _ = (signum, frame)
+            if interrupted_once:
+                raise KeyboardInterrupt
+            interrupted_once = True
+            stop_after_current = True
+            console.print("Interrupt received. Finishing current hypothesis, then stopping.")
+
+        signal.signal(signal.SIGINT, handle_sigint)
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -148,7 +182,17 @@ def root_generate_cmd(ctx: typer.Context) -> None:
             def report(message: str) -> None:
                 progress.update(task, description=message)
 
-            created = generate_missing_root_hypotheses(ref.path, count=count, progress=report)
+            try:
+                created = generate_missing_root_hypotheses(
+                    ref.path,
+                    count=count,
+                    progress=report,
+                    stop_requested=lambda: stop_after_current,
+                )
+            finally:
+                signal.signal(signal.SIGINT, previous_sigint)
+        if stop_after_current and not json_output:
+            console.print("ROOT generation stopped after the current hypothesis.")
         if json_output:
             _print_generated_hypotheses_json(ref.path, created)
             return
@@ -621,6 +665,31 @@ def _print_init_project_summary(root: Path, project_dir: Path, slug: str, *, dow
     console.print(table)
     _print_data_tree(root, project_dir)
     console.print(f"[bold]Next:[/bold] uv run tml project use {slug}")
+
+
+def _print_root_generation_plan(project_slug: str, plan: RootGenerationPlan) -> None:
+    ids = plan.hypothesis_ids
+    if len(ids) > 8:
+        id_text = f"{ids[0]}..{ids[-1]}"
+    else:
+        id_text = ", ".join(ids) if ids else "none"
+    table = Table(title="ROOT generation plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Role", plan.role)
+    table.add_row("Model", plan.model)
+    table.add_row("Provider", plan.provider)
+    table.add_row("Provider kind", str(plan.provider_kind or "n/a"))
+    table.add_row("Resolved model", str(plan.resolved_model or "n/a"))
+    table.add_row("Reasoning effort", str(plan.reasoning_effort or "default"))
+    table.add_row("Timeout seconds", str(plan.timeout_seconds or "n/a"))
+    table.add_row("Sandbox", plan.sandbox)
+    table.add_row("Target ROOT count", str(plan.target))
+    table.add_row("Next hypothesis number", str(plan.next_number))
+    table.add_row("Iterations to run", str(plan.iteration_count))
+    table.add_row("Hypothesis IDs", id_text)
+    console.print(table)
 
 
 def _print_generated_hypotheses(project_dir: Path, created: list[GeneratedHypothesis]) -> None:

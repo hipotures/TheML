@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from tml.ai import ModelInvocation, run_model_invocation
-from tml.ai.models import resolve_role_model
+from tml.ai.models import resolve_model_spec, resolve_role_model
 from tml.core.config import load_project_config, repo_models_for_project, repo_providers_for_project, repo_root_for_project
 from tml.db.state import next_hypothesis_number, upsert_hypothesis, upsert_project
 from tml.core.ids import hypothesis_id
@@ -23,11 +23,55 @@ class GeneratedHypothesis:
     path: Path
 
 
+@dataclass(frozen=True)
+class RootGenerationPlan:
+    target: int
+    next_number: int
+    iteration_count: int
+    hypothesis_ids: list[str]
+    role: str
+    model: str
+    provider: str
+    provider_kind: object
+    resolved_model: str | None
+    reasoning_effort: str | None
+    timeout_seconds: object
+    sandbox: str
+
+
+def root_generation_plan(project_dir: Path, count: int | None = None) -> RootGenerationPlan:
+    upsert_project(project_dir)
+    config = load_project_config(project_dir)
+    target = count or int(config.get("root", {}).get("target_count", 20))
+    next_number = next_hypothesis_number(project_dir)
+    models = repo_models_for_project(project_dir)
+    model, role_options = resolve_role_model(models, "hypothesis")
+    providers = repo_providers_for_project(project_dir)
+    spec = resolve_model_spec(model, providers)
+    provider_config = {**(spec.provider_config or {}), **role_options}
+    hypothesis_ids = [hypothesis_id(number) for number in range(next_number, target + 1)]
+    return RootGenerationPlan(
+        target=target,
+        next_number=next_number,
+        iteration_count=len(hypothesis_ids),
+        hypothesis_ids=hypothesis_ids,
+        role="hypothesis",
+        model=model,
+        provider=spec.provider,
+        provider_kind=provider_config.get("kind"),
+        resolved_model=spec.model,
+        reasoning_effort=spec.reasoning_effort,
+        timeout_seconds=provider_config.get("timeout_seconds"),
+        sandbox="read_only",
+    )
+
+
 def generate_missing_root_hypotheses(
     project_dir: Path,
     count: int | None = None,
     *,
     progress: Callable[[str], None] | None = None,
+    stop_requested: Callable[[], bool] | None = None,
 ) -> list[GeneratedHypothesis]:
     upsert_project(project_dir)
     config = load_project_config(project_dir)
@@ -37,6 +81,8 @@ def generate_missing_root_hypotheses(
     model, role_options = resolve_role_model(models, "hypothesis")
     providers = repo_providers_for_project(project_dir)
     for number in range(next_hypothesis_number(project_dir), target + 1):
+        if stop_requested is not None and stop_requested():
+            break
         hid = hypothesis_id(number)
         hdir = project_dir / "hypotheses" / hid
         hdir.mkdir(parents=True, exist_ok=True)
