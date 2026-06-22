@@ -27,6 +27,7 @@ from tml.db.state import (
     root_counts,
     root_hypothesis_rows,
     root_run_rows,
+    run_request_status,
 )
 from tml.hypotheses.generate import GeneratedHypothesis, generate_missing_root_hypotheses
 from tml.hypotheses.materialize import materialize_missing
@@ -248,6 +249,7 @@ def root_run_cmd(ctx: typer.Context) -> None:
             hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
             profile_overrides=run_overrides,
         )
+        _print_root_run_request_status(ref.path, mode=active_run_mode, hypothesis_id=str(hypothesis_id) if hypothesis_id else None)
         _print_root_run_summary(
             ref.path,
             mode=active_run_mode,
@@ -695,6 +697,18 @@ def _print_root_run_summary(
     for row in new_rows:
         table.add_row(*row, style="bold")
     console.print(table)
+
+
+def _print_root_run_request_status(project_dir: Path, *, mode: str, hypothesis_id: str | None) -> None:
+    rows = run_request_status(project_dir, mode, hypothesis_id)
+    if not rows:
+        return
+    status = str(rows[0].get("status") or "")
+    hid = str(rows[0].get("hypothesis_id") or (hypothesis_id or "").zfill(6))
+    if status == "missing_hypothesis":
+        console.print(f"Run skipped: hypothesis {hid} does not exist.")
+    elif status == "missing_materialization":
+        console.print(f"Run skipped: hypothesis {hid} has no {mode} materialization. Run: uv run tml root materialize id={int(hid)}")
 
 
 def _root_run_row(

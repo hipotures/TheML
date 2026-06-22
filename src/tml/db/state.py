@@ -304,6 +304,28 @@ def run_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = Non
     return [dict(row) for row in rows]
 
 
+def run_request_status(project_dir: Path, mode: str, hypothesis_id: str | None) -> list[dict[str, Any]]:
+    if not hypothesis_id:
+        return []
+    db_path = ensure_project_db(project_dir)
+    hid = hypothesis_id.zfill(6)
+    sql = """
+        SELECT
+          h.hypothesis_id,
+          CASE
+            WHEN h.hypothesis_id IS NULL THEN 'missing_hypothesis'
+            WHEN m.file IS NULL THEN 'missing_materialization'
+            ELSE 'ready'
+          END AS status
+        FROM (SELECT ? AS requested_id) r
+        LEFT JOIN hypotheses h ON h.hypothesis_id=r.requested_id
+        LEFT JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
+    """
+    with connect(db_path) as conn:
+        rows = conn.execute(sql, (hid, mode)).fetchall()
+    return [dict(row) for row in rows]
+
+
 def already_evaluated(project_dir: Path, *, hypothesis_id: str, mode: str, profile_id: str, code_hash: str) -> bool:
     db_path = ensure_project_db(project_dir)
     with connect(db_path) as conn:
