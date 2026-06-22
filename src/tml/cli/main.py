@@ -42,7 +42,7 @@ from tml.hypotheses.generate import (
     generate_missing_root_hypotheses,
     root_generation_plan,
 )
-from tml.hypotheses.materialize import materialize_missing
+from tml.hypotheses.materialize import RootMaterializationPlan, materialize_missing, root_materialization_plan
 from tml.hypotheses.run import run_missing
 from tml.prompts.diff import diff_prompt
 from tml.prompts.probe import probe_prompt, render_prompt
@@ -213,22 +213,44 @@ def root_generate_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@root_app.command("materialize", context_settings=EXTRA)
+@root_app.command(
+    "materialize",
+    context_settings=EXTRA,
+    help=(
+        "Materialize missing ROOT hypothesis code for the active project.\n\n"
+        "Accepted key=value parameters:\n"
+        "  mode=<name>        Materialization mode; defaults to the active mode.\n"
+        "  hypothesis=<id>    Materialize only one hypothesis.\n"
+        "  id=<id>            Alias for hypothesis=<id>.\n"
+        "  yes=true           Skip the confirmation prompt."
+    ),
+)
 def root_materialize_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
         _reject_positional(ctx.args, "tml root materialize")
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"mode", "hypothesis", "id"}, "tml root materialize")
+        _validate_override_keys(overrides, {"mode", "hypothesis", "id", "yes"}, "tml root materialize")
         mode = str(overrides.get("mode") or active_mode(config))
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
+        hypothesis_id_text = str(hypothesis_id) if hypothesis_id else None
+        assume_yes = _bool(overrides.get("yes", False))
+        plan = root_materialization_plan(ref.path, mode=mode, hypothesis_id=hypothesis_id_text)
+        _print_root_materialization_plan(ref.slug, plan, hypothesis_id=hypothesis_id_text)
+        if plan.iteration_count == 0:
+            console.print("No ROOT materializations to create.")
+            _print_root_materializations(ref.path, mode=mode, created_count=0, hypothesis_id=hypothesis_id_text)
+            return
+        if not assume_yes and not Confirm.ask("Start ROOT materialization?", default=False, console=console):
+            console.print("ROOT materialization cancelled.")
+            return
         created = _materialize_with_progress(
             ref.path,
             mode=mode,
-            hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
+            hypothesis_id=hypothesis_id_text,
         )
-        _print_root_materializations(ref.path, mode=mode, created_count=created, hypothesis_id=str(hypothesis_id) if hypothesis_id else None)
+        _print_root_materializations(ref.path, mode=mode, created_count=created, hypothesis_id=hypothesis_id_text)
     except Exception as exc:
         _abort(exc)
 
@@ -701,6 +723,40 @@ def _print_root_generation_plan(project_slug: str, plan: RootGenerationPlan) -> 
     table.add_row("Target ROOT count", str(plan.target))
     table.add_row("Next hypothesis number", str(plan.next_number))
     table.add_row("Iterations to run", str(plan.iteration_count))
+    table.add_row("Hypothesis IDs", id_text)
+    console.print(table)
+
+
+def _print_root_materialization_plan(
+    project_slug: str,
+    plan: RootMaterializationPlan,
+    *,
+    hypothesis_id: str | None,
+) -> None:
+    ids = plan.hypothesis_ids
+    if len(ids) > 8:
+        id_text = f"{ids[0]}..{ids[-1]}"
+    else:
+        id_text = ", ".join(ids) if ids else "none"
+    target_text = f"{plan.mode}-001.py" if plan.iteration_count else "none"
+    table = Table(title="ROOT materialization plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Role", plan.role)
+    table.add_row("Mode", plan.mode)
+    table.add_row("Model", plan.model)
+    table.add_row("Provider", plan.provider)
+    table.add_row("Provider kind", str(plan.provider_kind or "n/a"))
+    table.add_row("Resolved model", str(plan.resolved_model or "n/a"))
+    table.add_row("Reasoning effort", str(plan.reasoning_effort or "default"))
+    table.add_row("Timeout seconds", str(plan.timeout_seconds or "n/a"))
+    table.add_row("Sandbox", plan.sandbox)
+    table.add_row("Hypothesis filter", str(hypothesis_id).zfill(6) if hypothesis_id else "all")
+    table.add_row("Candidate hypotheses", str(plan.candidate_count))
+    table.add_row("Existing materializations", str(plan.candidate_count - plan.iteration_count))
+    table.add_row("Iterations to run", str(plan.iteration_count))
+    table.add_row("Target file", target_text)
     table.add_row("Hypothesis IDs", id_text)
     console.print(table)
 

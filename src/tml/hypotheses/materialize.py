@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 from tml.ai import ModelInvocation, run_model_invocation
-from tml.ai.models import resolve_role_model
+from tml.ai.models import resolve_model_spec, resolve_role_model
 from tml.core.config import repo_models_for_project, repo_providers_for_project, repo_root_for_project
 from tml.db.state import materialization_candidates, upsert_materialization, upsert_project
 from tml.features.validation import validate_group_code_source
@@ -15,6 +16,57 @@ from tml.prompts.renderer import render_template
 from tml.utils.atomic import atomic_write_text
 from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml, write_yaml
+
+
+@dataclass(frozen=True)
+class RootMaterializationPlan:
+    mode: str
+    role: str
+    model: str
+    provider: str
+    provider_kind: object
+    resolved_model: str | None
+    reasoning_effort: str | None
+    timeout_seconds: object
+    sandbox: str
+    candidate_count: int
+    iteration_count: int
+    hypothesis_ids: list[str]
+
+
+def root_materialization_plan(
+    project_dir: Path,
+    mode: str,
+    hypothesis_id: str | None = None,
+) -> RootMaterializationPlan:
+    upsert_project(project_dir)
+    models = repo_models_for_project(project_dir)
+    model, role_options = resolve_role_model(models, "materializations", fallback_role="code")
+    providers = repo_providers_for_project(project_dir)
+    spec = resolve_model_spec(model, providers)
+    provider_config = {**(spec.provider_config or {}), **role_options}
+    candidates = materialization_candidates(project_dir, hypothesis_id=hypothesis_id)
+    pending_ids: list[str] = []
+    for record in candidates:
+        hdir = _candidate_hypothesis_dir(project_dir, record)
+        target = _materialization_target(hdir, mode)
+        if target.exists():
+            continue
+        pending_ids.append(str(record["hypothesis_id"]))
+    return RootMaterializationPlan(
+        mode=mode,
+        role="materializations",
+        model=model,
+        provider=spec.provider,
+        provider_kind=provider_config.get("kind"),
+        resolved_model=spec.model,
+        reasoning_effort=spec.reasoning_effort,
+        timeout_seconds=provider_config.get("timeout_seconds"),
+        sandbox="read_only",
+        candidate_count=len(candidates),
+        iteration_count=len(pending_ids),
+        hypothesis_ids=pending_ids,
+    )
 
 
 def materialize_missing(
@@ -28,11 +80,18 @@ def materialize_missing(
     model, role_options = resolve_role_model(models, "materializations", fallback_role="code")
     providers = repo_providers_for_project(project_dir)
     created = 0
-    for record in materialization_candidates(project_dir, hypothesis_id=hypothesis_id):
-        hdir = project_dir / str(record["path"]).rsplit("/", 1)[0]
+    candidates = materialization_candidates(project_dir, hypothesis_id=hypothesis_id)
+    pending_total = sum(
+        1
+        for record in candidates
+        if not _materialization_target(_candidate_hypothesis_dir(project_dir, record), mode).exists()
+    )
+    pending_index = 0
+    for record in candidates:
+        hdir = _candidate_hypothesis_dir(project_dir, record)
         mat_dir = hdir / "materializations"
         mat_dir.mkdir(parents=True, exist_ok=True)
-        target = mat_dir / f"{mode}-001.py"
+        target = _materialization_target(hdir, mode)
         if target.exists():
             if _is_runtime_wrapper(target):
                 hypothesis = read_yaml(hdir / "hypothesis.yaml")
@@ -43,8 +102,15 @@ def materialize_missing(
                 upsert_materialization(project_dir, hdir, mode, target)
             continue
         timeout_seconds = int(role_options.get("timeout_seconds") or 900)
+        pending_index += 1
+        progress_prefix = f"ROOT materialization {hdir.name} {mode} ({pending_index}/{pending_total})"
         if progress is not None:
-            progress(f"Materializing {hdir.name} ({mode}) with {model}...", timeout_seconds)
+            progress(f"Materializing {progress_prefix} with {model}...", timeout_seconds)
+
+        def invocation_progress(message: str, *, prefix: str = progress_prefix) -> None:
+            if progress is not None:
+                progress(f"{prefix}: {message}", timeout_seconds)
+
         hypothesis = read_yaml(hdir / "hypothesis.yaml")
         template_id = f"root.materialize-{mode}"
         rendered = render_template(
@@ -65,7 +131,7 @@ def materialize_missing(
                 cwd=repo_root_for_project(project_dir),
                 sandbox="read_only",
                 metadata={"mode": mode},
-                progress=(lambda message: progress(message, timeout_seconds)) if progress is not None else None,
+                progress=invocation_progress if progress is not None else None,
             ),
             artifact_dir=mat_dir,
             providers=providers,
@@ -79,6 +145,14 @@ def materialize_missing(
         upsert_materialization(project_dir, hdir, mode, target)
         created += 1
     return created
+
+
+def _candidate_hypothesis_dir(project_dir: Path, record: dict[str, object]) -> Path:
+    return project_dir / str(record["path"]).rsplit("/", 1)[0]
+
+
+def _materialization_target(hdir: Path, mode: str) -> Path:
+    return hdir / "materializations" / f"{mode}-001.py"
 
 
 def _is_runtime_wrapper(path: Path) -> bool:
