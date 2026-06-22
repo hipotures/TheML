@@ -704,7 +704,7 @@ def _print_root_run_summary(
         )
         if not row:
             continue
-        if hdir.name in executed_ids or (target_id is not None and hdir.name == target_id):
+        if hdir.name in executed_ids:
             new_rows.append(row)
         else:
             old_rows.append(row)
