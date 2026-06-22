@@ -56,7 +56,6 @@ def run_missing(
         shutil.copy2(hdir / "hypothesis.yaml", node_dir / "01-hypothesis.yaml")
         group_code = materialization.read_text(encoding="utf-8")
         validate_group_code_source(group_code)
-        shutil.copy2(materialization, node_dir / "02-features.py")
         atomic_write_text(
             node_dir / "02-code.py",
             build_wrapped_materialization_source(
@@ -178,7 +177,6 @@ def _write_success_markers(
         "files": {
             "hypothesis": "01-hypothesis.yaml",
             "code": "02-code.py",
-            "features": "02-features.py",
         },
         "created_at": datetime.now().isoformat(timespec="seconds"),
     }
