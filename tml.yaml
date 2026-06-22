@@ -13,7 +13,7 @@ active_project:
 active_run: null
 root:
   active_profiles:
-    autogluon: ag-medium-10m-v1
+    autogluon: ag-s6e6-boost-gpu-ens-v1
     legacy: legacy-root-start-v1
 models:
   metadata:
