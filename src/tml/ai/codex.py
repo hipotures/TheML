@@ -486,7 +486,8 @@ def _web_search_event_summary(events: list[dict[str, Any]]) -> str | None:
 
     for event in events:
         item = _event_item(event)
-        if not isinstance(item, dict) or "web_search" not in str(item.get("type") or ""):
+        item_type = str(item.get("type") if isinstance(item, dict) else "")
+        if not isinstance(item, dict) or "websearch" not in item_type.replace("_", "").lower():
             continue
         action = item.get("action")
         if not isinstance(action, dict):
