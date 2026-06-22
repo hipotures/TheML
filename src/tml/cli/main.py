@@ -801,7 +801,7 @@ def kaggle_submit_cmd(ctx: typer.Context) -> None:
         config = load_project_config(ref.path)
         competition = str(config.get("kaggle_slug") or ref.slug)
         row = submission_by_sha_prefix(ref.path, sha)
-        _validate_submit_row(row)
+        _validate_submit_row(row, allow_submitted=dry_run)
         submission_path = ref.path / str(row["submission_path"])
         message = _kaggle_submit_message(row)
         upload_path = submission_path.with_name(_upload_submission_filename(row))
@@ -1755,11 +1755,11 @@ def _print_submission_actions(rows: list[dict[str, object]]) -> None:
     console.print("Remote Kaggle submissions visible: not synced")
 
 
-def _validate_submit_row(row: dict[str, object]) -> None:
+def _validate_submit_row(row: dict[str, object], *, allow_submitted: bool = False) -> None:
     sha = str(row.get("submission_sha256") or "")[:10]
     if str(row.get("status") or "") != "complete":
         raise TmlError(f"Submission {sha} is not submit-ready: run status is {row.get('status')}.")
-    if str(row.get("submit_status") or "") == "submitted":
+    if not allow_submitted and str(row.get("submit_status") or "") == "submitted":
         raise TmlError(f"Submission {sha} is already marked as submitted.")
     if not isinstance(row.get("local_score"), int | float):
         raise TmlError(f"Submission {sha} is not submit-ready: missing local score.")
@@ -1820,7 +1820,7 @@ def _upload_submission_filename(row: dict[str, object]) -> str:
     node = str(row.get("node_id") or "unknown")[:8]
     step = _step_text(row.get("step")) or "na"
     date = _date_yyyymmdd(row.get("created_at")) or "unknown"
-    return f"sub_{date}_step-{step}_node-{node}_sha-{sha}_cv-{score_text}.csv.gz"
+    return f"sub_{date}_step-{step}_node-{node}_sha-{sha}_cv-{score_text}.csv"
 
 
 def _repo_relative(base_dir: Path, path: Path) -> str:

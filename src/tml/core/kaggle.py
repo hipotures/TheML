@@ -58,8 +58,17 @@ def submit_competition_file(slug: str, submission_path: Path, message: str, uplo
     api = KaggleApi()
     api.authenticate()
     if upload_path != submission_path:
-        shutil.copy2(submission_path, upload_path)
+        _prepare_submission_upload(submission_path, upload_path)
     return api.competition_submit(str(upload_path), message, slug, quiet=False)
+
+
+def _prepare_submission_upload(submission_path: Path, upload_path: Path) -> None:
+    upload_path.parent.mkdir(parents=True, exist_ok=True)
+    if submission_path.name.endswith(".csv.gz") and upload_path.suffix == ".csv":
+        with gzip.open(submission_path, "rb") as source, upload_path.open("wb") as target:
+            shutil.copyfileobj(source, target)
+        return
+    shutil.copy2(submission_path, upload_path)
 
 
 def _one_line(message: str) -> str:
