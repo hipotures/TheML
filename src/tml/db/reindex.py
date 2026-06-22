@@ -24,6 +24,9 @@ def reindex_project(project_dir: Path, db_path: Path) -> dict[str, int]:
             "profiles",
             "hypotheses",
             "materializations",
+            "branches",
+            "branch_components",
+            "branch_edges",
             "runs",
             "nodes",
             "evaluations",
@@ -38,6 +41,7 @@ def reindex_project(project_dir: Path, db_path: Path) -> dict[str, int]:
         )
         _index_profiles(conn, project_dir)
         _index_hypotheses(conn, project_dir)
+        _index_branches(conn, project_dir)
         _index_runs(conn, project_dir)
         conn.commit()
         counts = {
@@ -45,6 +49,7 @@ def reindex_project(project_dir: Path, db_path: Path) -> dict[str, int]:
             "materializations": conn.execute("SELECT count(*) FROM materializations").fetchone()[0],
             "nodes": conn.execute("SELECT count(*) FROM nodes").fetchone()[0],
             "submissions": conn.execute("SELECT count(*) FROM submissions").fetchone()[0],
+            "branches": conn.execute("SELECT count(*) FROM branches").fetchone()[0],
         }
     return counts
 
@@ -122,6 +127,76 @@ def _index_hypotheses(conn, project_dir: Path) -> None:
             )
 
 
+def _index_branches(conn, project_dir: Path) -> None:
+    for path in sorted((project_dir / "branches").glob("*/branch.yaml")):
+        branch_dir = path.parent
+        payload = read_yaml(path)
+        branch_id = str(payload.get("branch_id") or branch_dir.name)
+        mode = str(payload.get("mode") or "autogluon")
+        materialization_file = str(payload.get("materialization_file") or f"{mode}-001.py")
+        code_path = branch_dir / "materializations" / materialization_file
+        code_hash = str(payload.get("code_hash") or (sha256_file(code_path) if code_path.exists() else ""))
+        parent_ref = str(payload.get("parent_ref") or "")
+        source_ref = str(payload.get("source_ref") or "")
+        conn.execute(
+            """
+            INSERT INTO branches(
+              branch_id, parent_ref, source_ref, mode, status, created_at, path,
+              materialization_file, code_hash, composition_hash, summary
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                branch_id,
+                parent_ref,
+                source_ref,
+                mode,
+                str(payload.get("status") or "materialized"),
+                payload.get("created_at"),
+                _project_path(project_dir, path),
+                materialization_file,
+                code_hash,
+                str(payload.get("composition_hash") or ""),
+                payload.get("summary"),
+            ),
+        )
+        components = payload.get("components") if isinstance(payload.get("components"), list) else []
+        for component in components:
+            if not isinstance(component, dict):
+                continue
+            conn.execute(
+                """
+                INSERT INTO branch_components(
+                  branch_id, role, source_type, source_id, mode, file, code_hash, path
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    branch_id,
+                    component.get("role"),
+                    component.get("source_type"),
+                    component.get("source_id"),
+                    component.get("mode"),
+                    component.get("file"),
+                    component.get("code_hash"),
+                    component.get("path"),
+                ),
+            )
+        parent_edge = payload.get("parent_edge") if isinstance(payload.get("parent_edge"), dict) else {}
+        parent = payload.get("parent") if isinstance(payload.get("parent"), dict) else {}
+        parent_kind = str(parent_edge.get("kind") or parent.get("source_type") or "unknown")
+        parent_id = str(parent_edge.get("id") or parent.get("source_id") or parent_ref)
+        conn.execute(
+            """
+            INSERT INTO branch_edges(
+              branch_id, parent_kind, parent_id, child_kind, child_id, edge_kind, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (branch_id, parent_kind, parent_id, "branch", branch_id, str(payload.get("operation") or "add_existing_groups"), payload.get("created_at")),
+        )
+
+
 def _index_runs(conn, project_dir: Path) -> None:
     for run_yaml in sorted((project_dir / "runs").glob("*/run.yaml")):
         run_dir = run_yaml.parent
@@ -141,16 +216,18 @@ def _index_runs(conn, project_dir: Path) -> None:
             conn.execute(
                 """
                 INSERT INTO nodes(
-                  node_id, run_id, step, hypothesis_id, mode, profile_id, status,
+                  node_id, run_id, step, kind, hypothesis_id, branch_id, mode, profile_id, status,
                   created_at, finished_at, run_seconds, path
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     node_id,
                     run_id,
                     start.get("step"),
+                    start.get("kind") or "root",
                     start.get("hypothesis_id") or done.get("hypothesis_id") or failed.get("hypothesis_id"),
+                    start.get("branch_id") or done.get("branch_id") or failed.get("branch_id"),
                     start.get("mode") or done.get("mode"),
                     start.get("profile_id") or done.get("profile_id"),
                     status,
@@ -163,12 +240,14 @@ def _index_runs(conn, project_dir: Path) -> None:
             if manifest or done or failed:
                 conn.execute(
                     """
-                    INSERT INTO evaluations(node_id, hypothesis_id, mode, profile_id, code_hash, metric, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO evaluations(node_id, kind, hypothesis_id, branch_id, mode, profile_id, code_hash, metric, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         node_id,
+                        start.get("kind") or manifest.get("kind") or "root",
                         manifest.get("hypothesis_id") or start.get("hypothesis_id"),
+                        manifest.get("branch_id") or start.get("branch_id"),
                         manifest.get("mode") or start.get("mode"),
                         manifest.get("profile_id") or start.get("profile_id"),
                         manifest.get("code_hash"),
@@ -205,7 +284,7 @@ def classify_node(node_dir: Path) -> str:
         return "failed"
     if (node_dir / "artifact-manifest.yaml").exists():
         return "ready_to_finalize"
-    if not (node_dir / "01-hypothesis.yaml").exists():
+    if not (node_dir / "01-hypothesis.yaml").exists() and not (node_dir / "01-branch.yaml").exists():
         return "missing_hypothesis"
     if not (node_dir / "02-code.py").exists():
         return "missing_code"

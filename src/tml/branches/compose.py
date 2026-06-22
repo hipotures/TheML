@@ -72,6 +72,7 @@ def add_branch(project_dir: Path, *, parent_ref: str, source_ref: str, mode: str
             "source_ref": stored_source_ref,
             "parent": _source_manifest(parent),
             "source": _source_manifest(source),
+            "parent_edge": {"kind": parent.parent_kind, "id": parent.parent_id},
             "mode": mode,
             "status": "materialized",
             "materialization_file": materialization_path.name,
