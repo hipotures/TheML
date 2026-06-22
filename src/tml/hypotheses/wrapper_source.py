@@ -539,13 +539,13 @@ def main():
 
                 fit_kwargs = _fit_kwargs_from_profile(profile, train_data, valid_data, fit_args)
 
-                print("AutoGluon materialization: starting fit", flush=True)
+                print("TML_RUNTIME|event=start|stage=autogluon_fit", flush=True)
                 fit_started_at = time.time()
                 predictor.fit(**fit_kwargs)
                 training_time = time.time() - fit_started_at
-                print(f"AutoGluon materialization: finished fit elapsed={{training_time:.3f}}s", flush=True)
+                print(f"TML_RUNTIME|event=end|stage=autogluon_fit|elapsed_s={{training_time:.3f}}", flush=True)
 
-                print("AutoGluon materialization: starting validation and prediction", flush=True)
+                print("TML_RUNTIME|event=start|stage=autogluon_predict", flush=True)
                 valid_pred = None
                 metric_value = _metric_from_leaderboard(predictor)
                 lower_is_better = False
@@ -577,18 +577,18 @@ def main():
                 submission = _make_submission(sample, test[id_col], predictions, id_col, target_col)
                 submission_path = artifacts_dir / "submission.csv.gz"
                 submission.to_csv(submission_path, index=False, compression="gzip")
-                print("AutoGluon materialization: finished validation and prediction", flush=True)
-                print(f"AutoGluon materialization: submission saved to {{submission_path}}", flush=True)
+                print("TML_RUNTIME|event=end|stage=autogluon_predict", flush=True)
+                print(f"TML_RUNTIME|artifact=submission|path={{submission_path}}", flush=True)
                 if prediction_artifacts.get("oof_predictions"):
-                    print(f"AutoGluon materialization: OOF predictions saved to {{prediction_artifacts['oof_predictions']}}", flush=True)
+                    print(f"TML_RUNTIME|artifact=oof_predictions|path={{prediction_artifacts['oof_predictions']}}", flush=True)
                 elif prediction_artifacts.get("oof_error"):
-                    print(f"AutoGluon materialization: OOF predictions unavailable: {{prediction_artifacts['oof_error']}}", flush=True)
+                    print(f"TML_RUNTIME|artifact=oof_predictions|status=unavailable|reason={{prediction_artifacts['oof_error']}}", flush=True)
                 if prediction_artifacts.get("validation_predictions"):
-                    print(f"AutoGluon materialization: validation predictions saved to {{prediction_artifacts['validation_predictions']}}", flush=True)
-                print(f"AutoGluon materialization: test predictions saved to {{prediction_artifacts['test_predictions']}}", flush=True)
+                    print(f"TML_RUNTIME|artifact=validation_predictions|path={{prediction_artifacts['validation_predictions']}}", flush=True)
+                print(f"TML_RUNTIME|artifact=test_predictions|path={{prediction_artifacts['test_predictions']}}", flush=True)
                 if metric_value is not None:
-                    print(f"Validation {{metric}}: {{metric_value:.6f}}", flush=True)
-                print("Submission saved successfully.", flush=True)
+                    print(f"TML_RUNTIME|metric={{metric}}|value={{metric_value:.6f}}", flush=True)
+                print("TML_RUNTIME|event=complete|status=ok", flush=True)
                 result = {{
                     "is_bug": False,
                     "summary": "AutoGluon materialization completed.",
