@@ -1167,7 +1167,6 @@ def _print_root_materializations(
     table = Table(title=title, box=box.SIMPLE_HEAVY)
     table.add_column("ID", style="bold", no_wrap=True)
     table.add_column("S", justify="center", no_wrap=True, width=1)
-    table.add_column("Mode", no_wrap=True)
     table.add_column("File", no_wrap=True)
     table.add_column("Model", no_wrap=True)
     table.add_column("Res/Tokens", justify="right", no_wrap=True)
@@ -1190,7 +1189,6 @@ def _root_materialization_row(db_row: dict[str, object]) -> list[object]:
     return [
         str(db_row.get("hypothesis_id") or ""),
         _materialization_status_icon(status, active=active),
-        str(db_row.get("mode") or ""),
         str(db_row.get("file") or ""),
         str(db_row.get("model") or ""),
         _token_summary(db_row),
