@@ -204,6 +204,63 @@ def branch_by_composition(project_dir: Path, *, mode: str, composition_hash: str
     return dict(row) if row else None
 
 
+def branch_by_id(project_dir: Path, branch_id: str) -> dict[str, Any] | None:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT * FROM branches WHERE branch_id=?",
+            (_normalize_branch_id(branch_id),),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def branch_node_count(project_dir: Path, branch_id: str) -> int:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT count(*) FROM nodes WHERE kind='branch' AND branch_id=?",
+            (_normalize_branch_id(branch_id),),
+        ).fetchone()
+    return int(row[0]) if row else 0
+
+
+def branch_node_paths(project_dir: Path, branch_id: str) -> list[str]:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT path FROM nodes WHERE kind='branch' AND branch_id=?",
+            (_normalize_branch_id(branch_id),),
+        ).fetchall()
+    return [str(row["path"]) for row in rows]
+
+
+def delete_branch_records(project_dir: Path, branch_id: str, *, force: bool = False) -> None:
+    normalized = _normalize_branch_id(branch_id)
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        if not force:
+            row = conn.execute(
+                "SELECT count(*) FROM nodes WHERE kind='branch' AND branch_id=?",
+                (normalized,),
+            ).fetchone()
+            if int(row[0] if row else 0):
+                raise ValueError(f"Branch {normalized} has run nodes; use force=true.")
+        node_rows = conn.execute(
+            "SELECT node_id FROM nodes WHERE kind='branch' AND branch_id=?",
+            (normalized,),
+        ).fetchall()
+        node_ids = [str(row["node_id"]) for row in node_rows]
+        for node_id_value in node_ids:
+            conn.execute("DELETE FROM submissions WHERE node_id=?", (node_id_value,))
+            conn.execute("DELETE FROM artifacts WHERE node_id=?", (node_id_value,))
+            conn.execute("DELETE FROM evaluations WHERE node_id=?", (node_id_value,))
+            conn.execute("DELETE FROM nodes WHERE node_id=?", (node_id_value,))
+        conn.execute("DELETE FROM branch_edges WHERE branch_id=? OR child_id=?", (normalized, normalized))
+        conn.execute("DELETE FROM branch_components WHERE branch_id=?", (normalized,))
+        conn.execute("DELETE FROM branches WHERE branch_id=?", (normalized,))
+        conn.commit()
+
+
 def upsert_branch(
     project_dir: Path,
     branch_dir: Path,

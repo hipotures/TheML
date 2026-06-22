@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -9,7 +10,16 @@ from typing import Any
 
 from tml.core.config import active_mode, load_project_config
 from tml.core.errors import TmlError
-from tml.db.state import branch_by_composition, branch_component_rows, next_branch_id, upsert_branch
+from tml.db.state import (
+    branch_by_composition,
+    branch_by_id,
+    branch_component_rows,
+    branch_node_count,
+    branch_node_paths,
+    delete_branch_records,
+    next_branch_id,
+    upsert_branch,
+)
 from tml.features.validation import validate_group_code_source
 from tml.utils.hashing import sha256_file, sha256_text
 from tml.utils.yaml_io import read_yaml, write_yaml
@@ -37,6 +47,17 @@ class CreatedBranch:
     parent: BranchSource
     source: BranchSource
     composition_hash: str
+
+
+@dataclass(frozen=True)
+class BranchDeletePlan:
+    branch_id: str
+    path: Path
+    mode: str
+    parent_ref: str
+    source_ref: str
+    node_count: int
+    force: bool
 
 
 def add_branch(project_dir: Path, *, parent_ref: str, source_ref: str, mode: str | None = None) -> CreatedBranch:
@@ -118,6 +139,35 @@ def add_branch(project_dir: Path, *, parent_ref: str, source_ref: str, mode: str
         source=source,
         composition_hash=composition_hash,
     )
+
+
+def branch_delete_plan(project_dir: Path, *, branch_id: str, force: bool = False) -> BranchDeletePlan:
+    normalized = _normalize_branch_id(branch_id)
+    row = branch_by_id(project_dir, normalized)
+    if row is None:
+        raise TmlError(f"Branch does not exist: {normalized}")
+    branch_path = project_dir / str(row["path"]).rsplit("/", 1)[0]
+    return BranchDeletePlan(
+        branch_id=normalized,
+        path=branch_path,
+        mode=str(row.get("mode") or ""),
+        parent_ref=str(row.get("parent_ref") or ""),
+        source_ref=str(row.get("source_ref") or ""),
+        node_count=branch_node_count(project_dir, normalized),
+        force=force,
+    )
+
+
+def delete_branch(project_dir: Path, *, branch_id: str, force: bool = False) -> BranchDeletePlan:
+    plan = branch_delete_plan(project_dir, branch_id=branch_id, force=force)
+    if plan.node_count and not force:
+        raise TmlError(f"Branch {plan.branch_id} has {plan.node_count} run node(s); use force=true.")
+    node_paths = branch_node_paths(project_dir, plan.branch_id) if force else []
+    delete_branch_records(project_dir, plan.branch_id, force=force)
+    for node_path in node_paths:
+        shutil.rmtree(project_dir / node_path, ignore_errors=True)
+    shutil.rmtree(plan.path, ignore_errors=True)
+    return plan
 
 
 def resolve_branch_source(project_dir: Path, ref: str, *, mode: str) -> BranchSource:

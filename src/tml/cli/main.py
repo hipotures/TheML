@@ -18,7 +18,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
-from tml.branches.compose import CreatedBranch, add_branch
+from tml.branches.compose import BranchDeletePlan, CreatedBranch, add_branch, branch_delete_plan, delete_branch
 from tml.branches.run import BranchRunPlan, branch_run_plan, run_missing_branches
 from tml.cli.prompt_output import print_prompt_choices, print_prompt_probe_summary, print_prompt_render_summary
 from tml.core.config import active_mode, active_profile_id, load_project_config
@@ -676,6 +676,32 @@ def branch_run_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
+@branch_app.command("delete", context_settings=EXTRA)
+def branch_delete_cmd(ctx: typer.Context) -> None:
+    try:
+        ref = active_project_ref()
+        _reject_positional(ctx.args, "tml branch delete")
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"branch", "id", "force", "yes"}, "tml branch delete")
+        branch_id = _optional_text(overrides.get("branch") or overrides.get("id"))
+        if not branch_id:
+            raise TmlError("Missing required parameter: id=<branch>.")
+        force = _bool(overrides.get("force", False))
+        assume_yes = _bool(overrides.get("yes", False))
+        plan = branch_delete_plan(ref.path, branch_id=branch_id, force=force)
+        _print_branch_delete_plan(ref.slug, plan)
+        if plan.node_count and not force:
+            raise TmlError(f"Branch {plan.branch_id} has {plan.node_count} run node(s); use force=true.")
+        if not assume_yes and not Confirm.ask("Delete BRANCH?", default=False, console=console):
+            console.print("BRANCH delete cancelled.")
+            return
+        deleted = delete_branch(ref.path, branch_id=branch_id, force=force)
+        console.print(f"Deleted branch {deleted.branch_id}.")
+        _print_branch_status(ref.path, mode=deleted.mode, branch_id=None, executed_ids=set(), executed_count=None)
+    except Exception as exc:
+        _abort(exc)
+
+
 @app.command("reindex")
 def reindex_cmd(scope: str | None = None, run_id: str | None = None) -> None:
     try:
@@ -1234,6 +1260,21 @@ def _print_branch_run_plan(project_slug: str, plan: BranchRunPlan, *, branch_id:
     table.add_row("Already evaluated", str(plan.already_evaluated_count))
     table.add_row("Iterations to run", str(plan.iteration_count))
     table.add_row("Branch IDs", id_text)
+    console.print(table)
+
+
+def _print_branch_delete_plan(project_slug: str, plan: BranchDeletePlan) -> None:
+    table = Table(title="BRANCH delete plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Branch", plan.branch_id)
+    table.add_row("Mode", plan.mode)
+    table.add_row("Parent", plan.parent_ref)
+    table.add_row("Source", plan.source_ref)
+    table.add_row("Path", _repo_relative(workspace_root(), plan.path))
+    table.add_row("Run nodes", str(plan.node_count))
+    table.add_row("Force", "true" if plan.force else "false")
     console.print(table)
 
 
