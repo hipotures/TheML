@@ -52,11 +52,11 @@ def run_feature_groups(
         status = "ok"
         warnings: list[dict[str, Any]] = []
         print(
-            f"TheML feature group: start name={name} depends_on={','.join(depends_on) or '-'}",
+            f"TheML feature group: start name={name}",
             flush=True,
         )
         try:
-            block = group["fn"](raw.copy(), {k: v.copy() for k, v in deps.items()}, aux.copy(), runtime_ctx)
+            block = group["fn"](raw.copy(), {key: value.copy() for key, value in deps.items()}, aux.copy())
             block = _normalize_block(block, raw=raw, group_name=name)
             warnings = _column_warnings(block)
             local_blocks[name] = block.copy()

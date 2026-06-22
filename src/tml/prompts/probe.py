@@ -12,6 +12,7 @@ from tml.core.ids import run_id
 from tml.core.metadata import render_project_metadata_prompt
 from tml.features.validation import validate_group_code_source
 from tml.hypotheses.materialize import _parse_code
+from tml.hypotheses.wrapper_source import build_wrapped_materialization_source
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
 from tml.utils.atomic import atomic_write_json, atomic_write_text
@@ -61,6 +62,11 @@ def probe_prompt(
         progress(f"Output dir: {out_dir}", timeout_seconds)
         progress(f"Request will be written to {out_dir / 'request.md'}", timeout_seconds)
         progress(f"Sending {role} prompt to {model}...", timeout_seconds)
+    invocation_metadata: dict[str, object] = {"kind": "probe"}
+    if rendered.get("hypothesis_id"):
+        invocation_metadata["hypothesis_id"] = rendered["hypothesis_id"]
+    if rendered.get("hypothesis_path"):
+        invocation_metadata["hypothesis_path"] = rendered["hypothesis_path"]
     response = run_model_invocation(
         ModelInvocation(
             role=role,
@@ -72,7 +78,7 @@ def probe_prompt(
             rendered_prompt_hash=rendered["rendered_hash"],
             cwd=repo_root_for_project(project_dir),
             sandbox="read_only",
-            metadata={"kind": "probe"},
+            metadata=invocation_metadata,
             progress=(lambda message: progress(message, timeout_seconds)) if progress is not None else None,
         ),
         artifact_dir=out_dir,
@@ -83,7 +89,8 @@ def probe_prompt(
         mode = active_mode(load_project_config(project_dir))
         code = _parse_code(response.text)
         validate_group_code_source(code)
-        atomic_write_text(out_dir / f"{mode}-001.py", _probe_wrapper_source(mode, code, project_dir))
+        atomic_write_text(out_dir / f"{mode}-001.group.py", code)
+        atomic_write_text(out_dir / f"{mode}-001.py", build_wrapped_materialization_source(mode, code, project_dir))
     return out_dir
 
 
@@ -98,12 +105,15 @@ def _render_for_target(project_dir: Path, *, target: str | None, stage: str | No
         )
     if target and stage == "code":
         mode = active_mode(config)
-        hypothesis = _hypothesis_for_target(project_dir, target)
-        return render_template(
+        hypothesis, hypothesis_path = _hypothesis_for_target(project_dir, target)
+        rendered = render_template(
             project_dir,
             f"root.materialize-{mode}",
             project_prompt_context(project_dir, hypothesis=hypothesis),
         )
+        rendered["hypothesis_id"] = str(hypothesis.get("hypothesis_id") or target)
+        rendered["hypothesis_path"] = str(hypothesis_path) if hypothesis_path else ""
+        return rendered
     raise TmlError(_unknown_prompt_target_message(target, stage))
 
 
@@ -134,14 +144,14 @@ def _unknown_prompt_target_message(target: str | None, stage: str | None) -> str
     )
 
 
-def _hypothesis_for_target(project_dir: Path, target: str | None) -> dict[str, object]:
+def _hypothesis_for_target(project_dir: Path, target: str | None) -> tuple[dict[str, object], Path | None]:
     if target and target.isdigit():
         path = project_dir / "hypotheses" / target.zfill(6) / "hypothesis.yaml"
         if path.exists():
             from tml.utils.yaml_io import read_yaml
 
-            return read_yaml(path)
-    return {"hypothesis_id": target or "next"}
+            return read_yaml(path), path
+    return {"hypothesis_id": target or "next"}, None
 
 
 def _request_json(project_dir: Path, rendered: dict[str, str], kind: str, model: str = "mock") -> dict[str, object]:
@@ -156,6 +166,8 @@ def _request_json(project_dir: Path, rendered: dict[str, str], kind: str, model:
         "context_hash": rendered["rendered_hash"],
         "rendered_prompt_hash": rendered["rendered_hash"],
         "project_dir": ".",
+        "hypothesis_id": rendered.get("hypothesis_id"),
+        "hypothesis_path": rendered.get("hypothesis_path"),
         "created_at": datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -164,36 +176,3 @@ def _tmp_dir(project_dir: Path, tmp_root: Path | None) -> Path:
     root = tmp_root or Path("/tmp")
     return root / "tml" / project_dir.name / run_id()
 
-
-def _probe_wrapper_source(mode: str, group_code: str, project_dir: Path) -> str:
-    project_literal = repr(str(project_dir.resolve()))
-    if mode == "legacy":
-        runner_import = "from tml.execution.executor import run_legacy_group_materialization"
-        runner_call = (
-            "run_legacy_group_materialization("
-            "code_path=Path(__file__), project_dir=project_dir, work_dir=work_dir)"
-        )
-    else:
-        runner_import = "from tml.execution.autogluon_wrapper import run_autogluon_materialization"
-        runner_call = (
-            "run_autogluon_materialization("
-            "code_path=Path(__file__), project_dir=project_dir, work_dir=work_dir)"
-        )
-    return (
-        "# TheML probe artifact.\n"
-        "# Generated feature-group code is below.\n"
-        f"# Fixed wrapper implementation: src/tml/execution/{'executor.py' if mode == 'legacy' else 'autogluon_wrapper.py'}.\n"
-        "# The __main__ block is a local preview wrapper so this file can be\n"
-        "# inspected or run manually without changing the real materialization.\n\n"
-        f"{group_code.rstrip()}\n\n\n"
-        "if __name__ == \"__main__\":\n"
-        "    import json\n"
-        "    from dataclasses import asdict\n"
-        "    from pathlib import Path\n\n"
-        f"    {runner_import}\n\n"
-        f"    project_dir = Path({project_literal})\n"
-        f"    work_dir = Path(__file__).with_suffix(\"\") / \"{mode}-probe-workdir\"\n"
-        f"    result = {runner_call}\n"
-        "    print(\"TML_PROBE_RESULT_JSON: \" + json.dumps(asdict(result), default=str, sort_keys=True))\n"
-        "    raise SystemExit(result.returncode)\n"
-    )

@@ -1,4 +1,32 @@
 {
-  "backend": "mock",
-  "text": "{\n  \"code\": \"from __future__ import annotations\\n\\nimport pandas as pd\\n\\n\\ndef add_numeric_missingness_indicators(raw, deps, aux, ctx):\\n    _ = (deps, aux, ctx)\\n    out = pd.DataFrame(index=raw.index)\\n    for column in raw.select_dtypes(include='number').columns:\\n        if str(column).lower() == 'id':\\n            continue\\n        out[f'{column}_is_missing'] = raw[column].isna().astype('int8')\\n    return out\\n\\n\\nFEATURE_GROUPS = [\\n    {\\n        'name': 'numeric_missingness_indicators',\\n        'fn': add_numeric_missingness_indicators,\\n        'depends_on': [],\\n        'description': 'Binary missingness indicators for numeric raw columns.',\\n    }\\n]\\n\"\n}"
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "high",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\ndef _safe_subtract(raw: pd.DataFrame, left: str, right: str) -> pd.Series:\n    left_col = raw[left]\n    right_col = raw[right]\n    valid = np.isfinite(left_col) & np.isfinite(right_col)\n    result = pd.Series(np.nan, index=raw.index, dtype=float)\n    result.loc[valid] = left_col.loc[valid] - right_col.loc[valid]\n    return result\n\n\ndef add_broadband_color_shape(raw, deps, aux):\n    u = raw[\"u\"]\n    g = raw[\"g\"]\n    r = raw[\"r\"]\n    i = raw[\"i\"]\n    z = raw[\"z\"]\n\n    color_u_g = _safe_subtract(raw, \"u\", \"g\")\n    color_g_r = _safe_subtract(raw, \"g\", \"r\")\n    color_r_i = _safe_subtract(raw, \"r\", \"i\")\n    color_i_z = _safe_subtract(raw, \"i\", \"z\")\n    color_u_r = _safe_subtract(raw, \"u\", \"r\")\n    color_g_i = _safe_subtract(raw, \"g\", \"i\")\n    color_r_z = _safe_subtract(raw, \"r\", \"z\")\n    color_u_z = _safe_subtract(raw, \"u\", \"z\")\n\n    curve_ugr = pd.Series(np.nan, index=raw.index, dtype=float)\n    curve_ugr_valid = np.isfinite(u) & np.isfinite(g) & np.isfinite(r)\n    curve_ugr.loc[curve_ugr_valid] = u.loc[curve_ugr_valid] - 2.0 * g.loc[curve_ugr_valid] + r.loc[curve_ugr_valid]\n\n    curve_gri = pd.Series(np.nan, index=raw.index, dtype=float)\n    curve_gri_valid = np.isfinite(g) & np.isfinite(r) & np.isfinite(i)\n    curve_gri.loc[curve_gri_valid] = g.loc[curve_gri_valid] - 2.0 * r.loc[curve_gri_valid] + i.loc[curve_gri_valid]\n\n    curve_riz = pd.Series(np.nan, index=raw.index, dtype=float)\n    curve_riz_valid = np.isfinite(r) & np.isfinite(i) & np.isfinite(z)\n    curve_riz.loc[curve_riz_valid] = r.loc[curve_riz_valid] - 2.0 * i.loc[curve_riz_valid] + z.loc[curve_riz_valid]\n\n    return pd.DataFrame(\n        {\n            \"color_u_g\": color_u_g,\n            \"color_g_r\": color_g_r,\n            \"color_r_i\": color_r_i,\n            \"color_i_z\": color_i_z,\n            \"color_u_r\": color_u_r,\n            \"color_g_i\": color_g_i,\n            \"color_r_z\": color_r_z,\n            \"color_u_z\": color_u_z,\n            \"curve_ugr\": curve_ugr,\n            \"curve_gri\": curve_gri,\n            \"curve_riz\": curve_riz,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"broadband_color_shape\",\n        \"fn\": add_broadband_color_shape,\n        \"depends_on\": [],\n        \"description\": \"Create broadband color and curvature features from ugriz magnitudes.\",\n    }\n]",
+  "usage": {
+    "threadId": "019eeca9-dd15-7d11-85c7-ccb342dd1542",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 0,
+        "inputTokens": 7079,
+        "outputTokens": 1845,
+        "reasoningOutputTokens": 1108,
+        "totalTokens": 8924
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 0,
+        "inputTokens": 7079,
+        "outputTokens": 1845,
+        "reasoningOutputTokens": 1108,
+        "totalTokens": 8924
+      }
+    },
+    "turnId": "019eeca9-dd24-78d2-a726-d09d122ffdd4"
+  },
+  "wall_ms": 3209
 }

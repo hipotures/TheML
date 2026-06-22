@@ -83,7 +83,7 @@ class CodexAiClient:
         sandbox = _codex_app_server_sandbox(
             invocation.sandbox or str(provider_config.get("sandbox") or "read_only")
         )
-        summary = str(provider_config.get("summary") or "concise")
+        summary = _codex_summary_for_model(model, provider_config)
         timeout_seconds = int(provider_config.get("timeout_seconds") or 120)
         isolated_home = _as_bool(provider_config.get("isolated_home"), default=True)
         log_event_deltas = _as_bool(provider_config.get("log_event_deltas"), default=False)
@@ -217,7 +217,10 @@ class CodexAiClient:
                                 post_final_deadline = perf_counter() + 2
                         elif method == "thread/status/changed":
                             status = params.get("status") if isinstance(params, dict) else {}
-                            thread_idle = isinstance(status, dict) and status.get("type") == "idle"
+                            status_type = status.get("type") if isinstance(status, dict) else None
+                            if status_type == "systemError":
+                                raise RuntimeError("Codex app-server thread entered systemError state.")
+                            thread_idle = status_type == "idle"
                             if final_answer_completed and thread_idle and usage is not None:
                                 break
                         elif method == "error":
@@ -349,6 +352,15 @@ def _codex_app_server_sandbox(value: str) -> str:
     if normalized in {"full-access", "danger-full-access", "full"}:
         return "danger-full-access"
     raise RuntimeError(f"Unsupported Codex sandbox {value!r}. Expected read_only, workspace_write, or full_access.")
+
+
+def _codex_summary_for_model(model: str, provider_config: dict[str, Any]) -> str | None:
+    if model.endswith("-codex-spark"):
+        return None
+    value = provider_config.get("summary")
+    if value is False or value is None:
+        return None
+    return str(value or "concise")
 
 
 def _flush_live_artifacts(

@@ -66,6 +66,9 @@ def print_prompt_probe_summary(console: Console, out_dir: Path) -> None:
     raw_provider = provider_meta.get("raw", {}) if isinstance(provider_meta, dict) else {}
     role = _metadata_value(request_meta, "role") or _metadata_value(raw_provider, "role")
     template = _metadata_value(request_meta, "template_id")
+    request_nested_meta = _metadata_value(request_meta, "metadata")
+    hypothesis_id = _metadata_value(request_meta, "hypothesis_id") or _metadata_value(request_nested_meta, "hypothesis_id")
+    hypothesis_path = _metadata_value(request_meta, "hypothesis_path") or _metadata_value(request_nested_meta, "hypothesis_path")
     provider = _metadata_value(request_meta, "provider") or _metadata_value(raw_provider, "provider")
     model = _metadata_value(request_meta, "model") or _metadata_value(raw_provider, "model")
     provider_kind = _metadata_value(request_meta, "provider_kind")
@@ -78,6 +81,10 @@ def print_prompt_probe_summary(console: Console, out_dir: Path) -> None:
         table.add_row("Role", str(role))
     if template:
         table.add_row("Template", str(template))
+    if hypothesis_id:
+        table.add_row("Hypothesis", str(hypothesis_id))
+    if hypothesis_path:
+        table.add_row("Hypothesis file", str(hypothesis_path))
     if provider:
         table.add_row("Provider", str(provider))
     if provider_kind and provider_kind != provider:

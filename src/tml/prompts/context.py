@@ -26,11 +26,16 @@ def project_prompt_context(project_dir: Path, **extra: Any) -> dict[str, Any]:
     task_text = task_file.read_text(encoding="utf-8") if task_file.exists() else ""
     data_overview_file = project_dir / "docs" / "data-overview.md"
     data_overview = data_overview_file.read_text(encoding="utf-8") if data_overview_file.exists() else ""
+    materialization_data_overview = _materialization_data_overview(
+        data_overview,
+        target_column=project.get("target", {}).get("target_column"),
+    )
     return {
         "project_dir": str(project_dir),
         "project": project,
         "task_text": task_text,
         "data_overview": data_overview,
+        "materialization_data_overview": materialization_data_overview,
         "prior_root_group_results": _existing_hypothesis_memory(project_dir),
         "existing_hypotheses": _existing_hypothesis_memory(project_dir),
         "hypothesis_count": len(enabled_hypotheses(project_dir)),
@@ -55,3 +60,18 @@ def _truncate_text(value: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _materialization_data_overview(data_overview: str, *, target_column: object | None) -> str:
+    target_prefix = f"{target_column} " if target_column else None
+    kept: list[str] = []
+    skipping_file = False
+    for line in data_overview.splitlines():
+        if line.startswith("-> "):
+            skipping_file = "sample_submission.csv" in line
+        if skipping_file:
+            continue
+        if target_prefix and line.startswith(target_prefix):
+            continue
+        kept.append(line)
+    return "\n".join(kept).strip()

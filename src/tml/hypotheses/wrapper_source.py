@@ -1,73 +1,22 @@
-# Generated AutoGluon materialization.
+from __future__ import annotations
+
+from pathlib import Path
+
+
+def build_wrapped_materialization_source(mode: str, group_code: str, project_dir: Path) -> str:
+    if mode == "legacy":
+        return _legacy_wrapper_source(group_code, project_dir)
+    if mode == "autogluon":
+        return _autogluon_wrapper_source(group_code, project_dir)
+    raise ValueError(f"Unsupported materialization mode: {mode}")
+
+
+def _autogluon_wrapper_source(group_code: str, project_dir: Path) -> str:
+    project_literal = repr(str(project_dir.resolve()))
+    return f'''# Generated AutoGluon materialization.
 # Feature-group code is followed by the fixed executable AutoGluon wrapper.
 
-import numpy as np
-import pandas as pd
-
-
-def _safe_subtract(raw: pd.DataFrame, left: str, right: str) -> pd.Series:
-    left_col = raw[left]
-    right_col = raw[right]
-    valid = np.isfinite(left_col) & np.isfinite(right_col)
-    result = pd.Series(np.nan, index=raw.index, dtype=float)
-    result.loc[valid] = left_col.loc[valid] - right_col.loc[valid]
-    return result
-
-
-def add_broadband_color_shape(raw, deps, aux):
-    u = raw["u"]
-    g = raw["g"]
-    r = raw["r"]
-    i = raw["i"]
-    z = raw["z"]
-
-    color_u_g = _safe_subtract(raw, "u", "g")
-    color_g_r = _safe_subtract(raw, "g", "r")
-    color_r_i = _safe_subtract(raw, "r", "i")
-    color_i_z = _safe_subtract(raw, "i", "z")
-    color_u_r = _safe_subtract(raw, "u", "r")
-    color_g_i = _safe_subtract(raw, "g", "i")
-    color_r_z = _safe_subtract(raw, "r", "z")
-    color_u_z = _safe_subtract(raw, "u", "z")
-
-    curve_ugr = pd.Series(np.nan, index=raw.index, dtype=float)
-    curve_ugr_valid = np.isfinite(u) & np.isfinite(g) & np.isfinite(r)
-    curve_ugr.loc[curve_ugr_valid] = u.loc[curve_ugr_valid] - 2.0 * g.loc[curve_ugr_valid] + r.loc[curve_ugr_valid]
-
-    curve_gri = pd.Series(np.nan, index=raw.index, dtype=float)
-    curve_gri_valid = np.isfinite(g) & np.isfinite(r) & np.isfinite(i)
-    curve_gri.loc[curve_gri_valid] = g.loc[curve_gri_valid] - 2.0 * r.loc[curve_gri_valid] + i.loc[curve_gri_valid]
-
-    curve_riz = pd.Series(np.nan, index=raw.index, dtype=float)
-    curve_riz_valid = np.isfinite(r) & np.isfinite(i) & np.isfinite(z)
-    curve_riz.loc[curve_riz_valid] = r.loc[curve_riz_valid] - 2.0 * i.loc[curve_riz_valid] + z.loc[curve_riz_valid]
-
-    return pd.DataFrame(
-        {
-            "color_u_g": color_u_g,
-            "color_g_r": color_g_r,
-            "color_r_i": color_r_i,
-            "color_i_z": color_i_z,
-            "color_u_r": color_u_r,
-            "color_g_i": color_g_i,
-            "color_r_z": color_r_z,
-            "color_u_z": color_u_z,
-            "curve_ugr": curve_ugr,
-            "curve_gri": curve_gri,
-            "curve_riz": curve_riz,
-        },
-        index=raw.index,
-    )
-
-
-FEATURE_GROUPS = [
-    {
-        "name": "broadband_color_shape",
-        "fn": add_broadband_color_shape,
-        "depends_on": [],
-        "description": "Create broadband color and curvature features from ugriz magnitudes.",
-    }
-]
+{group_code.rstrip()}
 
 
 def main():
@@ -86,7 +35,7 @@ def main():
     from tml.core.profiles import load_profile
     from tml.features.groups import run_feature_groups
 
-    project_dir = Path('/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6')
+    project_dir = Path({project_literal})
     data_dir = project_dir / "data"
     work_dir = Path.cwd()
     artifacts_dir = work_dir.parent / "artifacts"
@@ -114,7 +63,7 @@ def main():
         previous = signal.getsignal(signal.SIGALRM)
 
         def _raise_timeout(_signum, _frame):
-            raise TimeoutError(f"AutoGluon preprocess exceeded {seconds} seconds")
+            raise TimeoutError(f"AutoGluon preprocess exceeded {{seconds}} seconds")
 
         signal.signal(signal.SIGALRM, _raise_timeout)
         signal.alarm(int(seconds))
@@ -125,10 +74,10 @@ def main():
             signal.signal(signal.SIGALRM, previous)
 
     def _data_file(stem):
-        gz = data_dir / f"{stem}.csv.gz"
+        gz = data_dir / f"{{stem}}.csv.gz"
         if gz.exists():
             return gz
-        return data_dir / f"{stem}.csv"
+        return data_dir / f"{{stem}}.csv"
 
     try:
         with target_log.open("a", encoding="utf-8", buffering=1) as log_file:
@@ -136,7 +85,7 @@ def main():
             stderr = _TeeWriter(__import__("sys").stderr, log_file)
             with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                 config = load_project_config(project_dir)
-                target = config.get("target", {}) if isinstance(config.get("target"), dict) else {}
+                target = config.get("target", {{}}) if isinstance(config.get("target"), dict) else {{}}
                 target_col = str(target.get("target_column") or "target")
                 id_col = str(target.get("id_column") or "id")
                 metric = str(target.get("autogluon_metric") or target.get("metric") or "balanced_accuracy")
@@ -159,7 +108,7 @@ def main():
                     )
                 preprocess_time = time.time() - preprocess_started_at
                 print(
-                    f"AutoGluon materialization: finished feature groups rows={len(transformed)} cols={len(transformed.columns)} elapsed={preprocess_time:.3f}s",
+                    f"AutoGluon materialization: finished feature groups rows={{len(transformed)}} cols={{len(transformed.columns)}} elapsed={{preprocess_time:.3f}}s",
                     flush=True,
                 )
                 if len(transformed) != len(combined):
@@ -169,13 +118,13 @@ def main():
                 test_out = transformed.iloc[len(train) :].reset_index(drop=True)
                 train_out[target_col] = train[target_col].reset_index(drop=True)
 
-                predictor_args = dict(profile.get("predictor_args", {}) or {})
+                predictor_args = dict(profile.get("predictor_args", {{}}) or {{}})
                 predictor_args.setdefault("label", target_col)
                 predictor_args.setdefault("eval_metric", metric)
                 predictor_args.setdefault("path", work_dir / "AutoGluonModels")
                 predictor = TabularPredictor(**predictor_args)
 
-                fit_kwargs = dict(profile.get("fit_args", {}) or {})
+                fit_kwargs = dict(profile.get("fit_args", {{}}) or {{}})
                 fit_kwargs["train_data"] = train_out
                 ignored_columns = list(fit_kwargs.pop("ignored_columns", []) or [])
                 if id_col in train_out.columns and id_col not in ignored_columns:
@@ -187,7 +136,7 @@ def main():
                 fit_started_at = time.time()
                 predictor.fit(**fit_kwargs)
                 training_time = time.time() - fit_started_at
-                print(f"AutoGluon materialization: finished fit elapsed={training_time:.3f}s", flush=True)
+                print(f"AutoGluon materialization: finished fit elapsed={{training_time:.3f}}s", flush=True)
 
                 predictions = predictor.predict(test_out)
                 submission = sample.copy()
@@ -197,18 +146,18 @@ def main():
                 submission[prediction_cols[0]] = predictions.values
                 submission_path = artifacts_dir / "submission.csv"
                 submission.to_csv(submission_path, index=False)
-                result = {
+                result = {{
                     "is_bug": False,
                     "summary": "AutoGluon materialization completed.",
                     "metric": None,
                     "maximize": True,
                     "lower_is_better": False,
-                    "run_stats": {
+                    "run_stats": {{
                         "feature_count": int(len(transformed.columns)),
                         "preprocess_time": float(preprocess_time),
                         "training_time": float(training_time),
-                    },
-                }
+                    }},
+                }}
                 print("TML_RESULT_JSON: " + json.dumps(result, sort_keys=True), flush=True)
     except Exception:
         traceback.print_exc()
@@ -216,3 +165,34 @@ def main():
 
 
 main()
+'''
+
+
+def _legacy_wrapper_source(group_code: str, project_dir: Path) -> str:
+    project_literal = repr(str(project_dir.resolve()))
+    return f'''# Generated legacy materialization.
+# Feature-group code is followed by the fixed executable legacy wrapper.
+
+{group_code.rstrip()}
+
+
+def main():
+    import json
+    from dataclasses import asdict
+    from pathlib import Path
+
+    from tml.execution.executor import run_legacy_group_materialization
+
+    project_dir = Path({project_literal})
+    work_dir = Path.cwd()
+    result = run_legacy_group_materialization(
+        code_path=Path(__file__),
+        project_dir=project_dir,
+        work_dir=work_dir,
+    )
+    print("TML_RESULT_JSON: " + json.dumps(asdict(result), default=str, sort_keys=True))
+    raise SystemExit(result.returncode)
+
+
+main()
+'''

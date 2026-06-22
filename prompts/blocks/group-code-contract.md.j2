@@ -6,30 +6,29 @@ Define semantic feature-group functions and `FEATURE_GROUPS`.
 
 This file is not a standalone solution script. It is imported by a fixed
 wrapper. The wrapper executes the registered groups and is responsible for
-logging, timing, dependency ordering, final column prefixes, final DataFrame
-assembly, model training, prediction, scoring, and artifact writing.
+logging, timing, dependency ordering, output-column renaming, final DataFrame
+assembly, and all non-preprocessing work.
 
 Each feature function must use this signature:
 
 ```python
-def add_group_name(raw, deps, aux, ctx):
+def add_group_name(raw, deps, aux):
     ...
     return new_features
 ```
 
 Rules:
 - `raw` is the raw/base train+test covariate frame without target labels. It includes ID columns.
-- `deps` is a dict of dependency outputs by logical group name. Use `deps["group_name"]["local_feature"]`; never use final `G001_` prefixes.
+- `deps` is a dict of dependency outputs by logical group name. Use it only when this group declares dependencies.
 - `aux` is an auxiliary DataFrame when available, otherwise empty.
-- `ctx` is runtime context.
 - Return a pandas DataFrame containing only new local feature columns with `index=raw.index`.
 - Preserve row count, row order, and index exactly.
 - Do not return raw/input columns.
-- Do not mutate `raw`, `deps`, `aux`, or `ctx` in place.
-- Do not create columns starting with `G001_` or any `G\\d+_` prefix.
+- Do not mutate `raw`, `deps`, or `aux` in place.
+- Use clear local feature names. The executor will rename returned columns after the function finishes.
 - Outputs may be numeric, boolean, categorical, or string scalar columns. Do not return nested lists, dicts, tuples, or sets.
-- You may compute covariate-only train+test statistics from `raw`; do not use target labels, validation labels, predictions, or leaderboard feedback.
-- Do not read train/test/sample_submission files, write files, train models, create `main()`, sort dependency DAGs, assign final prefixes, concatenate final blocks, or implement orchestration.
+- You may compute covariate-only train+test statistics from `raw`; do not use target labels, validation labels, model outputs, or leaderboard feedback.
+- Do not read project data files, write files, train models, create `main()`, concatenate final blocks, or implement orchestration.
 - Do not implement timing decorators or logging wrappers. The group executor logs every group call and duration.
 
 Register groups like this:

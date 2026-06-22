@@ -1,20 +1,17 @@
-Write AutoGluon-wrapped preprocessing code.
+Write preprocessing feature-group code for an AutoGluon wrapper.
 
-The generated file is imported by a fixed AutoGluon wrapper. Your job is
-only to define one semantic feature group for preprocessing. The wrapper will
-run the group executor, log group timing, assign final column prefixes,
-concatenate raw features with prefixed group outputs, attach the target, train
-AutoGluon, predict, and write artifacts.
+Your output must define one semantic feature group for preprocessing.
+The fixed wrapper imports this file, runs `FEATURE_GROUPS`, logs group timing,
+renames returned columns, assembles the final DataFrame, and handles all
+non-preprocessing work.
 
 Do not write the wrapper.
 
-{% include "blocks/task-context.md.j2" %}
+{% include "blocks/materialization-context.md.j2" %}
 
-# Hypothesis 
-{% for key in ["hypothesis_id", "title", "group_name", "family", "summary", "depends_on", "strategy", "expected_signal", "risk"] %}
-{% if hypothesis.get(key) is not none -%}
+# Hypothesis
+{% for key in ["title", "group_name", "family", "summary", "depends_on", "strategy", "expected_signal", "risk"] if hypothesis.get(key) is not none and hypothesis.get(key) != [] -%}
 - {{ key }}: {{ hypothesis.get(key) }}
-{% endif %}
 {% endfor %}
 
 {% include "blocks/group-code-contract.md.j2" %}
@@ -23,8 +20,7 @@ AutoGluon wrapper boundary:
 - Do not train AutoGluon.
 - Do not import or instantiate `TabularPredictor`.
 - Do not call `.fit()`, `.predict()`, `.predict_proba()`, or `.leaderboard()`.
-- Do not create `submission.csv`.
 - Do not define `main()`.
 - Do not define `preprocess(df)`.
-- Do not read `train.csv`, `test.csv`, `sample_submission.csv`, or `./input`.
+- Do not read project data files or `./input`.
 - The fixed AutoGluon wrapper handles all of those steps outside this generated file.

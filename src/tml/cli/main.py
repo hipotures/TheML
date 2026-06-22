@@ -156,7 +156,7 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
             mode=mode,
             hypothesis_id=str(hypothesis_id) if hypothesis_id else None,
         )
-        console.print(f"Materializations created: {created}")
+        _print_root_materializations(ref.path, mode=mode, created_count=created, hypothesis_id=str(hypothesis_id) if hypothesis_id else None)
     except Exception as exc:
         _abort(exc)
 
@@ -551,6 +551,55 @@ def _print_existing_root_hypotheses(project_dir: Path, *, created_ids: set[str])
     for row in new_rows:
         table.add_row(*row, style="bold")
     console.print(table)
+
+
+def _print_root_materializations(
+    project_dir: Path,
+    *,
+    mode: str,
+    created_count: int,
+    hypothesis_id: str | None,
+) -> None:
+    target_id = hypothesis_id.zfill(6) if hypothesis_id else None
+    table = Table(title=f"ROOT materializations (created: {created_count})", box=box.SIMPLE_HEAVY)
+    table.add_column("ID", style="bold", no_wrap=True)
+    table.add_column("S", no_wrap=True)
+    table.add_column("Mode", no_wrap=True)
+    table.add_column("File", no_wrap=True)
+    table.add_column("Model", no_wrap=True)
+    table.add_column("Res/Tokens", justify="right", no_wrap=True)
+    table.add_column("Gen", justify="right", no_wrap=True)
+    table.add_column("Summary", overflow="fold", min_width=40, ratio=1)
+    summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
+    for hdir in hypothesis_dirs(project_dir):
+        if target_id and hdir.name != target_id:
+            continue
+        row = _root_materialization_row(hdir, mode=mode, summary_limit=summary_limit)
+        if row:
+            table.add_row(*row)
+    console.print(table)
+
+
+def _root_materialization_row(hdir: Path, *, mode: str, summary_limit: int) -> list[str] | None:
+    hypothesis = read_yaml(hdir / "hypothesis.yaml")
+    if not isinstance(hypothesis, dict):
+        return None
+    mat_dir = hdir / "materializations"
+    code = mat_dir / f"{mode}-001.py"
+    response = mat_dir / f"{mode}-001.response.json"
+    if not code.exists() and not response.exists():
+        return None
+    run = _run_summary_from_paths(mat_dir / f"{mode}-001.request.json", response)
+    return [
+        str(hypothesis.get("hypothesis_id") or hdir.name),
+        "⌘" if code.exists() else "⚠",
+        mode,
+        code.name if code.exists() else "",
+        run["model"] if run else "",
+        run["reasoning_tokens"] if run else "",
+        run["duration"] if run else "",
+        _short_text(str(hypothesis.get("summary") or ""), summary_limit),
+    ]
 
 
 def _root_hypothesis_json_row(hdir: Path, *, created_ids: set[str]) -> dict[str, object]:

@@ -1,20 +1,17 @@
-Write legacy-wrapped preprocessing code.
+Write preprocessing feature-group code for a legacy wrapper.
 
-The generated file is imported by a fixed legacy wrapper. Your job is
-only to define one semantic feature group for preprocessing. The wrapper will
-run the group executor, log group timing, assign final column prefixes,
-concatenate raw features with prefixed group outputs, train the fixed legacy
-baseline, compute the metric, and write artifacts.
+Your output must define one semantic feature group for preprocessing.
+The fixed wrapper imports this file, runs `FEATURE_GROUPS`, logs group timing,
+renames returned columns, assembles the final DataFrame, and handles all
+non-preprocessing work.
 
 Do not write the wrapper.
 
-{% include "blocks/task-context.md.j2" %}
+{% include "blocks/materialization-context.md.j2" %}
 
 # Hypothesis
-{% for key in ["hypothesis_id", "title", "group_name", "family", "summary", "depends_on", "uses_aux", "uses_id", "uses_train_test_covariate_stats", "strategy", "expected_signal", "risk"] %}
-{% if hypothesis.get(key) is not none -%}
+{% for key in ["title", "group_name", "family", "summary", "depends_on", "strategy", "expected_signal", "risk"] if hypothesis.get(key) is not none and hypothesis.get(key) != [] -%}
 - {{ key }}: {{ hypothesis.get(key) }}
-{% endif %}
 {% endfor %}
 
 {% include "blocks/group-code-contract.md.j2" %}

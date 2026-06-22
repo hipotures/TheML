@@ -6,8 +6,7 @@ from pathlib import Path
 
 from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.ids import node_id, run_id
-from tml.execution.autogluon_wrapper import run_autogluon_materialization
-from tml.execution.executor import run_legacy_group_materialization, run_python_script, write_attempt_result
+from tml.execution.executor import run_python_script, write_attempt_result
 from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml, write_yaml
 
@@ -54,22 +53,7 @@ def run_missing(project_dir: Path, mode: str | None = None) -> int:
         attempt_dir = node_dir / "03-execute" / "attempt-001"
         attempt_dir.mkdir(parents=True, exist_ok=True)
         write_yaml(attempt_dir / "started.yaml", {"created_at": datetime.now().isoformat(timespec="seconds")})
-        if mode == "legacy":
-            code_source = (node_dir / "02-code.py").read_text(encoding="utf-8")
-            if "FEATURE_GROUPS" in code_source:
-                result = run_legacy_group_materialization(
-                    code_path=node_dir / "02-code.py",
-                    project_dir=project_dir,
-                    work_dir=node_dir / "work",
-                )
-            else:
-                result = run_python_script(node_dir / "02-code.py", node_dir / "work")
-        else:
-            result = run_autogluon_materialization(
-                code_path=node_dir / "02-code.py",
-                project_dir=project_dir,
-                work_dir=node_dir / "work",
-            )
+        result = run_python_script(node_dir / "02-code.py", node_dir / "work")
         write_attempt_result(attempt_dir, result)
         if result.status == "ok":
             _write_success_markers(node_dir, nid, hid, mode, profile_id, materialization, result.metric)

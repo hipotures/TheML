@@ -16,6 +16,7 @@ from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml, write_yaml
 
 from .model import hypothesis_dirs
+from .wrapper_source import build_wrapped_materialization_source
 
 
 def materialize_missing(
@@ -36,6 +37,11 @@ def materialize_missing(
         mat_dir.mkdir(parents=True, exist_ok=True)
         target = mat_dir / f"{mode}-001.py"
         if target.exists():
+            if _is_wrapped_materialization(target, mode):
+                continue
+            if _repair_existing_materialization(project_dir, hdir, mat_dir, mode, target):
+                created += 1
+                continue
             continue
         timeout_seconds = int(role_options.get("timeout_seconds") or 900)
         if progress is not None:
@@ -47,12 +53,12 @@ def materialize_missing(
             template_id,
             project_prompt_context(project_dir, hypothesis=hypothesis),
         )
-        prompt = f"{mode}\n\n{rendered['rendered']}"
+        _validate_materialization_prompt(rendered["rendered"])
         response = run_model_invocation(
             ModelInvocation(
                 role="materializations",
                 model=model,
-                prompt=prompt,
+                prompt=rendered["rendered"],
                 template_id=rendered["template_id"],
                 template_path=rendered["template_path"],
                 template_hash=rendered["template_hash"],
@@ -67,12 +73,51 @@ def materialize_missing(
             role_options=role_options,
             response_prefix=f"{mode}-001",
         )
-        code = _parse_code(response.text)
-        validate_group_code_source(code)
-        atomic_write_text(target, code)
+        group_code = _parse_code(response.text)
+        validate_group_code_source(group_code)
+        atomic_write_text(mat_dir / f"{mode}-001.group.py", group_code)
+        atomic_write_text(target, build_wrapped_materialization_source(mode, group_code, project_dir))
         _update_manifest(hdir, mode, target, hypothesis)
         created += 1
     return created
+
+
+def _is_wrapped_materialization(path: Path, mode: str) -> bool:
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    if mode == "autogluon":
+        return "# Generated AutoGluon materialization." in source and "def main():" in source
+    if mode == "legacy":
+        return "# Generated legacy materialization." in source and "def main():" in source
+    return False
+
+
+def _repair_existing_materialization(project_dir: Path, hdir: Path, mat_dir: Path, mode: str, target: Path) -> bool:
+    response_path = mat_dir / f"{mode}-001.response.md"
+    if not response_path.exists():
+        return False
+    response_text = response_path.read_text(encoding="utf-8")
+    group_code = _parse_code(response_text)
+    validate_group_code_source(group_code)
+    atomic_write_text(mat_dir / f"{mode}-001.group.py", group_code)
+    atomic_write_text(target, build_wrapped_materialization_source(mode, group_code, project_dir))
+    _update_manifest(hdir, mode, target, read_yaml(hdir / "hypothesis.yaml"))
+    return True
+
+
+def _validate_materialization_prompt(prompt: str) -> None:
+    banned = [
+        "- hypothesis_id:",
+        "# Project Target",
+        "sample_submission",
+        "def add_group_name(raw, deps, aux, ctx)",
+        "- depends_on: []",
+    ]
+    found = [item for item in banned if item in prompt]
+    if found:
+        raise ValueError(f"Materialization prompt contains stale/banned content: {found}")
 
 
 def _parse_code(text: str) -> str:

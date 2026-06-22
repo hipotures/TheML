@@ -101,8 +101,8 @@ def validate_group_code_source(source: str) -> None:
         if name.startswith("add_"):
             function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == name)
             args = [arg.arg for arg in function.args.args]
-            if args[:4] != ["raw", "deps", "aux", "ctx"]:
-                raise ValueError(f"Feature function {name} must use signature (raw, deps, aux, ctx)")
+            if args[:3] != ["raw", "deps", "aux"]:
+                raise ValueError(f"Feature function {name} must use signature (raw, deps, aux)")
 
 
 def _call_name(node: ast.AST) -> str:
