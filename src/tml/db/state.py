@@ -626,7 +626,7 @@ def root_run_rows(
         SELECT
           h.hypothesis_id, h.summary, h.created_at, h.model, h.reasoning_tokens,
           h.total_tokens, h.generation_seconds, h.enabled,
-          m.code_hash,
+          m.code_hash, m.status AS materialization_status,
           n.node_id, n.status AS node_status, n.run_seconds,
           e.metric
         FROM hypotheses h
