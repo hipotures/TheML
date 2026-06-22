@@ -32,14 +32,18 @@ class RootMaterializationPlan:
     timeout_seconds: object
     sandbox: str
     candidate_count: int
+    existing_count: int
     iteration_count: int
     hypothesis_ids: list[str]
+    target_files: list[str]
+    version: str | None
 
 
 def root_materialization_plan(
     project_dir: Path,
     mode: str,
     hypothesis_id: str | None = None,
+    version: str | None = None,
 ) -> RootMaterializationPlan:
     upsert_project(project_dir)
     ensure_root_baseline(project_dir)
@@ -50,14 +54,18 @@ def root_materialization_plan(
     provider_config = {**(spec.provider_config or {}), **role_options}
     candidates = materialization_candidates(project_dir, hypothesis_id=hypothesis_id)
     pending_ids: list[str] = []
+    target_files: list[str] = []
+    existing_count = 0
     for record in candidates:
         if str(record["hypothesis_id"]) == BASELINE_HYPOTHESIS_ID and mode != BASELINE_MODE:
             continue
         hdir = _candidate_hypothesis_dir(project_dir, record)
-        target = _materialization_target(hdir, mode)
+        target = _materialization_target(hdir, mode, version=version)
         if target.exists():
+            existing_count += 1
             continue
         pending_ids.append(str(record["hypothesis_id"]))
+        target_files.append(target.name)
     return RootMaterializationPlan(
         mode=mode,
         role="materializations",
@@ -69,8 +77,11 @@ def root_materialization_plan(
         timeout_seconds=provider_config.get("timeout_seconds"),
         sandbox="read_only",
         candidate_count=len(candidates),
+        existing_count=existing_count,
         iteration_count=len(pending_ids),
         hypothesis_ids=pending_ids,
+        target_files=target_files,
+        version=version,
     )
 
 
@@ -78,6 +89,7 @@ def materialize_missing(
     project_dir: Path,
     mode: str,
     hypothesis_id: str | None = None,
+    version: str | None = None,
     progress: Callable[[str, int | None], None] | None = None,
 ) -> int:
     upsert_project(project_dir)
@@ -91,7 +103,7 @@ def materialize_missing(
         1
         for record in candidates
         if str(record["hypothesis_id"]) != BASELINE_HYPOTHESIS_ID
-        and not _materialization_target(_candidate_hypothesis_dir(project_dir, record), mode).exists()
+        and not _materialization_target(_candidate_hypothesis_dir(project_dir, record), mode, version=version).exists()
     )
     pending_index = 0
     for record in candidates:
@@ -100,7 +112,7 @@ def materialize_missing(
         hdir = _candidate_hypothesis_dir(project_dir, record)
         mat_dir = hdir / "materializations"
         mat_dir.mkdir(parents=True, exist_ok=True)
-        target = _materialization_target(hdir, mode)
+        target = _materialization_target(hdir, mode, version=version)
         if target.exists():
             active_file = _manifest_active_file(hdir, mode)
             is_active_target = active_file is None or active_file == target.name
@@ -147,7 +159,7 @@ def materialize_missing(
             artifact_dir=mat_dir,
             providers=providers,
             role_options=role_options,
-            response_prefix=f"{mode}-001",
+            response_prefix=target.stem,
         )
         group_code = _parse_code(response.text)
         try:
@@ -169,8 +181,29 @@ def _candidate_hypothesis_dir(project_dir: Path, record: dict[str, object]) -> P
     return project_dir / str(record["path"]).rsplit("/", 1)[0]
 
 
-def _materialization_target(hdir: Path, mode: str) -> Path:
+def _materialization_target(hdir: Path, mode: str, *, version: str | None = None) -> Path:
+    if version is not None:
+        text = str(version).strip()
+        if text == "new":
+            return _new_materialization_target(hdir, mode)
+        if text.endswith(".py"):
+            return hdir / "materializations" / text
+        if text.isdigit():
+            return hdir / "materializations" / f"{mode}-{int(text):03d}.py"
+        if text.startswith(f"{mode}-") and text.removeprefix(f"{mode}-").isdigit():
+            return hdir / "materializations" / f"{text}.py"
+        raise ValueError("version must be 'new', a number like 2, or a file like autogluon-002.py")
     return hdir / "materializations" / f"{mode}-001.py"
+
+
+def _new_materialization_target(hdir: Path, mode: str) -> Path:
+    mat_dir = hdir / "materializations"
+    max_index = 0
+    for path in mat_dir.glob(f"{mode}-*.py"):
+        suffix = path.stem.removeprefix(f"{mode}-")
+        if suffix.isdigit():
+            max_index = max(max_index, int(suffix))
+    return mat_dir / f"{mode}-{max_index + 1:03d}.py"
 
 
 def _is_runtime_wrapper(path: Path) -> bool:

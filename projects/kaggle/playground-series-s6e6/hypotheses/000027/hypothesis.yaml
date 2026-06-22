@@ -1,7 +1,8 @@
 title: AIDE id sequence scan context
 group_name: aide_id_sequence_scan_context
 family: aide_sequence_context
-summary: Evaluate the AIDE id-sequence feature path directly in TheML by encoding
+summary: >
+  Evaluate the AIDE id-sequence feature path directly in TheML by encoding
   row/order structure through id rank, normalized rank, coarse blocks, modulo
   cycles, parity, log id, and neighboring id gaps.
 depends_on: []

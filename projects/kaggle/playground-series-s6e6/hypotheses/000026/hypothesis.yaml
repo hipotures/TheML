@@ -1,7 +1,8 @@
 title: AIDE smooth spline SED interactions
 group_name: aide_smooth_spline_sed_interactions
 family: aide_smooth_basis
-summary: Add the AIDE spline-basis expansion over sky coordinates, magnitudes,
+summary: >
+  Add the AIDE spline-basis expansion over sky coordinates, magnitudes,
   redshift, and color indices, plus compact tensor interactions between redshift
   and colors and between adjacent color-shape bases.
 depends_on: []

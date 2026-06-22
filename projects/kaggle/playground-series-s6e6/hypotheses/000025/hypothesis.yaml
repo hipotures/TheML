@@ -1,7 +1,8 @@
 title: AIDE auxiliary reference distance
 group_name: aide_aux_reference_distribution_distance
 family: aide_auxiliary_reference
-summary: Compare each object to the auxiliary star_classification reference distribution
+summary: >
+  Compare each object to the auxiliary star_classification reference distribution
   using robust per-column z-scores, empirical CDF positions, absolute median deltas,
   joint L2 distance, and robust Mahalanobis distance.
 depends_on: []

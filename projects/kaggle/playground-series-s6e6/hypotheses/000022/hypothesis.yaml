@@ -1,7 +1,8 @@
 title: AIDE sky-cell local residuals
 group_name: aide_sky_cell_local_residuals
 family: aide_spatial_context
-summary: Encode local empirical sky context from the AIDE top-5 solutions: half-degree
+summary: >
+  Encode local empirical sky context from the AIDE top-5 solutions: half-degree
   sky-cell density, 3x3 neighbor density, concentration, and within-cell residual
   statistics for magnitudes, redshift, and color-shape features.
 depends_on: []

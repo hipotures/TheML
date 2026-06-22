@@ -1,7 +1,8 @@
 title: AIDE catalog rank-frequency context
 group_name: aide_catalog_rank_frequency_context
 family: aide_catalog_context
-summary: Add the AIDE catalog-frequency and distribution-rank context: category
+summary: >
+  Add the AIDE catalog-frequency and distribution-rank context: category
   frequencies, spectral-population cross frequency, global percentile ranks,
   quantile-bin frequencies, and within-category numeric ranks.
 depends_on: []

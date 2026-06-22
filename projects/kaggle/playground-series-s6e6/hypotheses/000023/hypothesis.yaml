@@ -1,7 +1,8 @@
 title: AIDE redshift-bin color residuals
 group_name: aide_redshift_bin_color_residuals
 family: aide_photometric_redshift
-summary: Recreate the AIDE empirical redshift-bin residual features by comparing each
+summary: >
+  Recreate the AIDE empirical redshift-bin residual features by comparing each
   object's colors and color curvatures against objects in the same quantile redshift
   regime.
 depends_on: []

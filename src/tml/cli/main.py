@@ -256,6 +256,8 @@ def root_generate_cmd(ctx: typer.Context) -> None:
         "  mode=<name>        Materialization mode; defaults to the active mode.\n"
         "  hypothesis=<id>    Materialize only one hypothesis.\n"
         "  id=<id>            Alias for hypothesis=<id>.\n"
+        "  version=new        Create the next materialization version, e.g. autogluon-002.py.\n"
+        "  version=<number>   Create a specific materialization version, e.g. version=2.\n"
         "  yes=true           Skip the confirmation prompt."
     ),
 )
@@ -266,7 +268,7 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
         status_only = _command_status_requested(ctx.args, "tml root materialize")
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"mode", "hypothesis", "id", "yes"}, "tml root materialize")
+        _validate_override_keys(overrides, {"mode", "hypothesis", "id", "version", "yes"}, "tml root materialize")
         mode = str(overrides.get("mode") or active_mode(config))
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         hypothesis_id_text = _optional_text(hypothesis_id)
@@ -274,7 +276,8 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
             _print_root_materializations(ref.path, mode=mode, created_count=None, hypothesis_id=hypothesis_id_text)
             return
         assume_yes = _bool(overrides.get("yes", False))
-        plan = root_materialization_plan(ref.path, mode=mode, hypothesis_id=hypothesis_id_text)
+        version = _optional_text(overrides.get("version"))
+        plan = root_materialization_plan(ref.path, mode=mode, hypothesis_id=hypothesis_id_text, version=version)
         _print_root_materialization_plan(ref.slug, plan, hypothesis_id=hypothesis_id_text)
         if plan.iteration_count == 0:
             console.print("No ROOT materializations to create.")
@@ -287,6 +290,7 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
             ref.path,
             mode=mode,
             hypothesis_id=hypothesis_id_text,
+            version=version,
         )
         _print_root_materializations(ref.path, mode=mode, created_count=created, hypothesis_id=hypothesis_id_text)
     except Exception as exc:
@@ -341,7 +345,7 @@ def root_bugfix_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | None) -> int:
+def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | None, version: str | None = None) -> int:
     state: dict[str, object] = {
         "message": "Preparing materialization...",
         "timeout": 1,
@@ -359,7 +363,13 @@ def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: s
 
     def run() -> None:
         try:
-            created = materialize_missing(project_dir, mode=mode, hypothesis_id=hypothesis_id, progress=report)
+            created = materialize_missing(
+                project_dir,
+                mode=mode,
+                hypothesis_id=hypothesis_id,
+                version=version,
+                progress=report,
+            )
             with lock:
                 state["created"] = created
         except Exception as exc:  # pragma: no cover - re-raised in caller thread
@@ -1155,7 +1165,12 @@ def _print_root_materialization_plan(
         id_text = f"{ids[0]}..{ids[-1]}"
     else:
         id_text = ", ".join(ids) if ids else "none"
-    target_text = f"{plan.mode}-001.py" if plan.iteration_count else "none"
+    if len(plan.target_files) == 1:
+        target_text = plan.target_files[0]
+    elif plan.target_files:
+        target_text = f"{plan.target_files[0]} ... {plan.target_files[-1]}"
+    else:
+        target_text = "none"
     table = Table(title="ROOT materialization plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
     table.add_column("Parameter", style="bold", no_wrap=True)
     table.add_column("Value", overflow="fold")
@@ -1169,9 +1184,10 @@ def _print_root_materialization_plan(
     table.add_row("Reasoning effort", str(plan.reasoning_effort or "default"))
     table.add_row("Timeout seconds", str(plan.timeout_seconds or "n/a"))
     table.add_row("Sandbox", plan.sandbox)
+    table.add_row("Version", str(plan.version or "default"))
     table.add_row("Hypothesis filter", str(hypothesis_id).zfill(6) if hypothesis_id else "all")
     table.add_row("Candidate hypotheses", str(plan.candidate_count))
-    table.add_row("Existing materializations", str(plan.candidate_count - plan.iteration_count))
+    table.add_row("Existing materializations", str(plan.existing_count))
     table.add_row("Iterations to run", str(plan.iteration_count))
     table.add_row("Target file", target_text)
     table.add_row("Hypothesis IDs", id_text)

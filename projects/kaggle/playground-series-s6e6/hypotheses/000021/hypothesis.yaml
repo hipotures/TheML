@@ -1,7 +1,8 @@
 title: AIDE broadband flux ratios
 group_name: aide_broadband_flux_ratios
 family: aide_photometry
-summary: Add the non-duplicate broadband transforms used by the top AIDE submissions:
+summary: >
+  Add the non-duplicate broadband transforms used by the top AIDE submissions:
   safe band ratios, absolute color gaps, pseudo-flux encodings, selected curvature
   terms, and low-order redshift transforms.
 depends_on: []
