@@ -55,6 +55,7 @@ uv run <command>
 - Keep plain text only when machine-readable output is explicitly requested.
 - Flush or live-update long-running output so the terminal does not appear idle while work is in progress.
 - Do not tune Rich table column widths based on Codex tool output screenshots/logs; the user's real terminal renders differently. Only change column layout or widths when explicitly requested.
+- Do not add, remove, reorder, rename, or resize CLI table columns while fixing data/state bugs unless the user explicitly asks for table layout changes. If a table displays wrong data, fix the data/query/sync logic, not the table layout.
 - When verifying CLI data for yourself, prefer JSON output flags such as `json=true`/`json_output=true` over Rich table output whenever available.
 
 ## Testing policy

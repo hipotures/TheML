@@ -1719,7 +1719,7 @@ def _print_submissions(project_dir: Path) -> None:
     table.add_column("PUB#", justify="right", no_wrap=True)
     table.add_column("cv", justify="right", no_wrap=True)
     table.add_column("public", justify="right", no_wrap=True)
-    table.add_column("submit", no_wrap=True)
+    table.add_column("S", no_wrap=True)
     table.add_column("kind/profile", no_wrap=True)
     table.add_column("time", justify="right", no_wrap=True)
     table.add_column("metric", no_wrap=True)
@@ -1888,12 +1888,14 @@ def _score_text(value: object, *, best: float | None, style: str) -> str | Text:
 def _submit_status_text(value: object) -> Text:
     text = str(value or "")
     if text == "submitted":
-        return Text(text, style="green")
+        return Text("S", style="green")
     if text == "uploaded":
-        return Text(text, style="yellow")
+        return Text("U", style="yellow")
     if text == "not_submitted":
-        return Text(text, style="dim")
-    return Text(text)
+        return Text("-", style="dim")
+    if text == "failed":
+        return Text("F", style="red")
+    return Text((text[:1] or "?").upper())
 
 
 def _kind_profile_text(row: dict[str, object]) -> str:

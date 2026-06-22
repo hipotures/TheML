@@ -822,11 +822,12 @@ def sync_submission_remote_rows(project_dir: Path, remote_submissions: list[obje
     with connect(db_path) as conn:
         changed += _normalize_remote_error_submit_status(conn)
         rows = [dict(row) for row in conn.execute("SELECT * FROM submissions").fetchall()]
-        for remote in remote_submissions:
-            remote_fields = _remote_submission_fields(remote, synced_at=synced_at)
-            match = _match_remote_submission(rows, remote_fields)
-            if match is None:
+        remote_rows = [_remote_submission_fields(remote, synced_at=synced_at) for remote in remote_submissions]
+        for row in rows:
+            candidates = [remote for remote in remote_rows if _remote_matches_submission_row(row, remote)]
+            if not candidates:
                 continue
+            remote_fields = max(candidates, key=_remote_preference_key)
             update = {
                 "submit_status": _submit_status_from_remote(remote_fields.get("remote_status")),
                 **remote_fields,
@@ -843,7 +844,7 @@ def sync_submission_remote_rows(project_dir: Path, remote_submissions: list[obje
                     "private_score",
                 )
             }
-            before = {key: match.get(key) for key in persisted_update}
+            before = {key: row.get(key) for key in persisted_update}
             if before == persisted_update:
                 continue
             conn.execute(
@@ -866,11 +867,11 @@ def sync_submission_remote_rows(project_dir: Path, remote_submissions: list[obje
                     update["remote_url"],
                     update["public_score"],
                     update["private_score"],
-                    match["node_id"],
-                    match["submission_path"],
+                    row["node_id"],
+                    row["submission_path"],
                 ),
             )
-            match.update(persisted_update)
+            row.update(persisted_update)
             changed += 1
         conn.commit()
     return changed
@@ -904,31 +905,44 @@ def _remote_submission_fields(remote: object, *, synced_at: str) -> dict[str, An
     }
 
 
-def _match_remote_submission(rows: list[dict[str, Any]], remote_fields: dict[str, Any]) -> dict[str, Any] | None:
+def _remote_matches_submission_row(row: dict[str, Any], remote_fields: dict[str, Any]) -> bool:
     remote_ref = str(remote_fields.get("kaggle_ref") or "")
-    if remote_ref:
-        for row in rows:
-            if str(row.get("kaggle_ref") or "") == remote_ref:
-                return row
+    if remote_ref and str(row.get("kaggle_ref") or "") == remote_ref:
+        return True
     filename = str(remote_fields.get("remote_filename") or "")
-    if filename:
-        for row in rows:
-            if str(row.get("uploaded_filename") or "") == filename:
-                return row
+    if filename and str(row.get("uploaded_filename") or "") == filename:
+        return True
     parsed = remote_fields.get("parsed_description")
     parsed_description = parsed if isinstance(parsed, dict) else {}
     sha = str(parsed_description.get("sha") or "").lower()
-    if sha:
-        matches = [row for row in rows if str(row.get("submission_sha256") or "").lower().startswith(sha)]
-        run = str(parsed_description.get("run") or "")
-        if run and len(matches) > 1:
-            matches = [row for row in matches if str(row.get("run_id") or "") == run]
-        step = str(parsed_description.get("step") or "")
-        if step and len(matches) > 1:
-            matches = [row for row in matches if str(row.get("step") or "") == step]
-        if len(matches) == 1:
-            return matches[0]
-    return None
+    if not sha or not str(row.get("submission_sha256") or "").lower().startswith(sha):
+        return False
+    run = str(parsed_description.get("run") or "")
+    if run and str(row.get("run_id") or "") != run:
+        return False
+    step = str(parsed_description.get("step") or "")
+    if step and str(row.get("step") or "") != step:
+        return False
+    return True
+
+
+def _remote_preference_key(remote_fields: dict[str, Any]) -> tuple[int, str, int]:
+    status = str(remote_fields.get("remote_status") or "").strip().upper()
+    status_rank = {
+        "COMPLETE": 4,
+        "SUBMITTED": 3,
+        "PENDING": 2,
+        "RUNNING": 2,
+        "ERROR": 1,
+        "FAILED": 1,
+        "FAILURE": 1,
+    }.get(status, 0)
+    ref_text = str(remote_fields.get("kaggle_ref") or "")
+    try:
+        ref = int(ref_text)
+    except ValueError:
+        ref = 0
+    return status_rank, str(remote_fields.get("remote_date") or ""), ref
 
 
 def _remote_attr(remote: object, snake_name: str) -> Any:
