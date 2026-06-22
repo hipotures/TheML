@@ -4,6 +4,7 @@ import json
 import os
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -676,17 +677,16 @@ def _print_root_run_summary(
     executed_ids: set[str],
     hypothesis_id: str | None,
 ) -> None:
-    target_id = hypothesis_id.zfill(6) if hypothesis_id else None
     config = load_project_config(project_dir)
     profile_id = active_profile_id(config, mode)
     table = Table(title=f"ROOT run (executed: {len(executed_ids)})", box=box.SIMPLE_HEAVY)
-    table.add_column("Run", justify="center", no_wrap=True)
     table.add_column("ID", style="bold", no_wrap=True)
     table.add_column("S", justify="center", no_wrap=True)
     table.add_column("Created", no_wrap=True)
     table.add_column("Model", no_wrap=True)
     table.add_column("Res/Tokens", justify="right", no_wrap=True)
     table.add_column("Gen", no_wrap=True)
+    table.add_column("Run", justify="right", no_wrap=True)
     table.add_column("Score", justify="right", no_wrap=True)
     table.add_column("Node", no_wrap=True)
     table.add_column("Summary", overflow="fold", min_width=36, ratio=1)
@@ -700,7 +700,6 @@ def _print_root_run_summary(
             mode=mode,
             profile_id=profile_id,
             summary_limit=summary_limit,
-            is_target=(target_id is None or hdir.name == target_id),
         )
         if not row:
             continue
@@ -724,7 +723,6 @@ def _root_run_row(
     mode: str,
     profile_id: str,
     summary_limit: int,
-    is_target: bool,
 ) -> list[str] | None:
     hypothesis = read_yaml(hdir / "hypothesis.yaml")
     if not isinstance(hypothesis, dict):
@@ -738,22 +736,25 @@ def _root_run_row(
         status = "▶" if state["status"] == "complete" else "⚠"
         score = _format_score(state.get("metric"))
         node = str(state.get("node_id") or "")
+        run_duration = _node_run_duration(project_dir, node)
     elif materialization.exists():
         status = "⌘"
         score = ""
         node = ""
+        run_duration = ""
     else:
         status = "◇"
         score = ""
         node = ""
+        run_duration = ""
     return [
-        "●" if is_target else "",
         hid,
         status,
         str(hypothesis.get("created_at") or ""),
         hypothesis_summary["model"] if hypothesis_summary else "",
         hypothesis_summary["reasoning_tokens"] if hypothesis_summary else "",
         hypothesis_summary["duration"] if hypothesis_summary else "",
+        run_duration,
         score,
         node,
         _short_text(str(hypothesis.get("summary") or ""), summary_limit),
@@ -783,9 +784,35 @@ def _current_run_state(
     return None
 
 
+def _node_run_duration(project_dir: Path, node_id_value: str) -> str:
+    if not node_id_value:
+        return ""
+    for node_dir in (project_dir / "runs").glob(f"*/artifacts/{node_id_value}"):
+        start = read_yaml(node_dir / "node.start.yaml")
+        done = read_yaml(node_dir / "node.done.yaml")
+        if not isinstance(start, dict) or not isinstance(done, dict):
+            continue
+        started_at = _parse_datetime(start.get("created_at"))
+        finished_at = _parse_datetime(done.get("created_at"))
+        if started_at is None or finished_at is None:
+            continue
+        seconds = max(0, round((finished_at - started_at).total_seconds()))
+        return f"{seconds}s"
+    return ""
+
+
+def _parse_datetime(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def _format_score(value: object) -> str:
     if isinstance(value, int | float):
-        return f"{float(value):.6f}"
+        return f"{float(value):.5f}"
     return ""
 
 
