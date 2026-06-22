@@ -5,7 +5,7 @@ parent_ref: '000001'
 mode: autogluon
 status: materialized
 materialization_file: autogluon-001.py
-code_hash: c149bb971b4541a23c017b827194a37445697839f9a6907812fb0921ca7ebdef
+code_hash: dd40178916eea95d0468b56f87ef36a0549dad40e639ed9a3de70b00c26efb30
 summary: Add AIDE top-5 feature groups to the existing broadband color baseline.
 created_at: '2026-06-22T00:00:00+02:00'
 origin:
@@ -78,9 +78,9 @@ components:
     source_type: hypothesis
     source_id: '000026'
     mode: autogluon
-    file: autogluon-001.py
-    code_hash: c29ebeafc9385c36b569c8785481c27f0ded8f16a82f8d56395f0634089a2c22
-    path: hypotheses/000026/materializations/autogluon-001.py
+    file: autogluon-004.py
+    code_hash: 55fdd092020e56ad941d7ae932491f42cc03895ca724f15495806d2c3b2214dd
+    path: hypotheses/000026/materializations/autogluon-004.py
   - role: aide_port
     source_type: hypothesis
     source_id: '000027'

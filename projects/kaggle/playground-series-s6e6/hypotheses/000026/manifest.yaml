@@ -3,9 +3,9 @@ hypothesis_id: '000026'
 slug: aide_smooth_spline_sed_interactions
 materializations:
   autogluon:
-    active: autogluon-002.py
-    sha256: 4dd4666110312204d8fd4441b79414f49fc851a13e3f531b06b4dbcdc668de0b
-    created_at: '2026-06-22T21:41:23'
+    active: autogluon-004.py
+    sha256: 55fdd092020e56ad941d7ae932491f42cc03895ca724f15495806d2c3b2214dd
+    created_at: '2026-06-22T22:34:40'
 origin:
   run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
   source_artifacts:
@@ -20,4 +20,4 @@ feature_group:
   source_hypothesis_id: '000026'
   operation: create_new_root_group
   depends_on: []
-  code_artifact: autogluon-002.py
+  code_artifact: autogluon-004.py
