@@ -1172,8 +1172,6 @@ def _print_root_materializations(
     table.add_column("Model", no_wrap=True)
     table.add_column("Res/Tokens", justify="right", no_wrap=True)
     table.add_column("Gen", justify="right", no_wrap=True)
-    table.add_column("Summary", overflow="fold", min_width=40, ratio=1)
-    summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
     group_index = -1
     previous_hypothesis_id: str | None = None
     for db_row in materialization_rows(project_dir, mode=mode, hypothesis_id=target_id):
@@ -1182,11 +1180,11 @@ def _print_root_materializations(
             group_index += 1
             previous_hypothesis_id = current_hypothesis_id
         row_style = _zebra_style(group_index)
-        table.add_row(*_root_materialization_row(db_row, summary_limit=summary_limit), style=row_style)
+        table.add_row(*_root_materialization_row(db_row), style=row_style)
     console.print(table)
 
 
-def _root_materialization_row(db_row: dict[str, object], *, summary_limit: int) -> list[object]:
+def _root_materialization_row(db_row: dict[str, object]) -> list[object]:
     active = bool(db_row.get("active"))
     status = str(db_row.get("status") or "")
     return [
@@ -1197,7 +1195,6 @@ def _root_materialization_row(db_row: dict[str, object], *, summary_limit: int) 
         str(db_row.get("model") or ""),
         _token_summary(db_row),
         _seconds_text(db_row.get("generation_seconds")),
-        _short_text(str(db_row.get("summary") or ""), summary_limit),
     ]
 
 
