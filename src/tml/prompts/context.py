@@ -44,7 +44,7 @@ def project_prompt_context(project_dir: Path, **extra: Any) -> dict[str, Any]:
     }
 
 
-def _existing_hypothesis_memory(project_dir: Path, *, limit: int = 12) -> list[dict[str, object]]:
+def _existing_hypothesis_memory(project_dir: Path, *, limit: int = 100) -> list[dict[str, object]]:
     memory: list[dict[str, object]] = []
     for hypothesis in enabled_hypotheses(project_dir)[-limit:]:
         entry = {key: hypothesis[key] for key in HYPOTHESIS_MEMORY_FIELDS if hypothesis.get(key)}
