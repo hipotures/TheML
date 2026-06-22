@@ -4,6 +4,7 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import threading
 import time
 from datetime import datetime, timezone
@@ -17,6 +18,7 @@ from rich.prompt import Confirm
 from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
+from typer.core import TyperGroup
 
 from tml.branches.compose import BranchDeletePlan, CreatedBranch, add_branch, branch_delete_plan, delete_branch
 from tml.branches.run import BranchRunPlan, branch_run_plan, run_missing_branches
@@ -59,7 +61,25 @@ from tml.utils.yaml_io import read_yaml
 
 
 console = Console(highlight=False)
-app = typer.Typer(no_args_is_help=True)
+
+
+class TmlGroup(TyperGroup):
+    def main(self, args=None, **kwargs):
+        requested_args = list(sys.argv[1:] if args is None else args)
+        if requested_args == ["help"]:
+            _print_help_topics()
+            return None
+        if requested_args in (["help=metrics"], ["--help", "metrics"]):
+            _print_metrics_help()
+            return None
+        return super().main(args=args, **kwargs)
+
+
+app = typer.Typer(
+    cls=TmlGroup,
+    no_args_is_help=True,
+    epilog="[bold]Metrics[/bold]\n  Run [cyan]uv run tml help=metrics[/cyan] to show metric aliases.",
+)
 init_app = typer.Typer(no_args_is_help=True)
 project_app = typer.Typer(no_args_is_help=True)
 root_app = typer.Typer(no_args_is_help=True)
@@ -76,6 +96,98 @@ ROOT_HYPOTHESIS_COLUMNS = [
     {"key": "duration", "label": "Gen", "no_wrap": True},
     {"key": "summary", "label": "Summary", "overflow": "fold", "min_width": 40, "ratio": 1, "truncate": True},
 ]
+
+METRIC_ALIAS_ROWS = [
+    ("ROC-AUC / AUROC / AUC", "area under ROC curve"),
+    ("PR-AUC / AUPRC / AP", "area under precision-recall curve / average precision"),
+    ("BA / BAcc", "balanced accuracy"),
+    ("ACC", "accuracy"),
+    ("ERR", "error rate"),
+    ("F1", "F1 score"),
+    ("P / PPV", "precision / positive predictive value"),
+    ("R / TPR / REC", "recall / true positive rate"),
+    ("TNR / SP", "specificity / true negative rate"),
+    ("FPR", "false positive rate"),
+    ("FNR", "false negative rate"),
+    ("NPV", "negative predictive value"),
+    ("MCC", "Matthews correlation coefficient"),
+    ("LL / NLL / CE", "log loss / negative log likelihood / cross entropy"),
+    ("Brier / BS", "Brier score"),
+    ("MAE", "mean absolute error"),
+    ("MSE", "mean squared error"),
+    ("RMSE", "root mean squared error"),
+    ("R2 / R²", "coefficient of determination"),
+    ("MAPE", "mean absolute percentage error"),
+    ("SMAPE", "symmetric MAPE"),
+    ("NDCG", "normalized discounted cumulative gain"),
+    ("MAP", "mean average precision"),
+    ("MRR", "mean reciprocal rank"),
+]
+
+METRIC_SHORT_SYMBOLS = {
+    "roc_auc": "AUC",
+    "auroc": "AUC",
+    "auc": "AUC",
+    "average_precision": "AP",
+    "pr_auc": "AP",
+    "auprc": "AP",
+    "ap": "AP",
+    "balanced_accuracy": "BA",
+    "balanced_acc": "BA",
+    "bacc": "BA",
+    "ba": "BA",
+    "accuracy": "ACC",
+    "acc": "ACC",
+    "error_rate": "ERR",
+    "err": "ERR",
+    "f1": "F1",
+    "precision": "P",
+    "positive_predictive_value": "PPV",
+    "ppv": "PPV",
+    "recall": "R",
+    "true_positive_rate": "TPR",
+    "tpr": "TPR",
+    "rec": "R",
+    "specificity": "TNR",
+    "true_negative_rate": "TNR",
+    "tnr": "TNR",
+    "sp": "TNR",
+    "false_positive_rate": "FPR",
+    "fpr": "FPR",
+    "false_negative_rate": "FNR",
+    "fnr": "FNR",
+    "negative_predictive_value": "NPV",
+    "npv": "NPV",
+    "matthews_correlation_coefficient": "MCC",
+    "matthews_corrcoef": "MCC",
+    "mcc": "MCC",
+    "log_loss": "LL",
+    "negative_log_likelihood": "NLL",
+    "nll": "NLL",
+    "cross_entropy": "CE",
+    "ce": "CE",
+    "brier_score": "BS",
+    "brier_score_loss": "BS",
+    "bs": "BS",
+    "mean_absolute_error": "MAE",
+    "mae": "MAE",
+    "mean_squared_error": "MSE",
+    "mse": "MSE",
+    "root_mean_squared_error": "RMSE",
+    "rmse": "RMSE",
+    "r2": "R2",
+    "r_squared": "R2",
+    "mean_absolute_percentage_error": "MAPE",
+    "mape": "MAPE",
+    "symmetric_mean_absolute_percentage_error": "SMAPE",
+    "smape": "SMAPE",
+    "normalized_discounted_cumulative_gain": "NDCG",
+    "ndcg": "NDCG",
+    "mean_average_precision": "MAP",
+    "map": "MAP",
+    "mean_reciprocal_rank": "MRR",
+    "mrr": "MRR",
+}
 
 app.add_typer(init_app, name="init")
 app.add_typer(project_app, name="project")
@@ -1747,7 +1859,7 @@ def _print_submissions(project_dir: Path) -> None:
             _submit_status_text(row.get("submit_status")),
             _kind_profile_text(row),
             _minutes_text(row.get("run_seconds")),
-            str(row.get("metric") or ""),
+            _metric_short_text(row.get("metric")),
             _run_short_text(row.get("run_id")),
             _step_text(row.get("step")),
             _date_yyyymmdd(row.get("created_at")),
@@ -1911,6 +2023,17 @@ def _kind_profile_text(row: dict[str, object]) -> str:
 def _run_short_text(value: object) -> str:
     text = str(value or "")
     return text.rsplit("-", 1)[-1] if "-" in text else text
+
+
+def _metric_short_text(value: object) -> str:
+    text = str(value or "")
+    if not text:
+        return ""
+    return METRIC_SHORT_SYMBOLS.get(_metric_key(text), text)
+
+
+def _metric_key(value: str) -> str:
+    return value.strip().lower().replace("-", "_").replace(" ", "_").replace("²", "2")
 
 
 def _minutes_text(value: object) -> str:
@@ -2212,6 +2335,24 @@ def _abort(exc: Exception) -> None:
     message = str(exc)
     console.print(f"Error: {message}")
     raise typer.Exit(code=1)
+
+
+def _print_metrics_help() -> None:
+    table = Table(title="Metrics", box=box.SIMPLE_HEAVY)
+    table.add_column("Aliases", no_wrap=True)
+    table.add_column("Meaning", overflow="fold")
+    for aliases, meaning in METRIC_ALIAS_ROWS:
+        table.add_row(aliases, meaning)
+    console.print(table)
+
+
+def _print_help_topics() -> None:
+    table = Table(title="Help topics", box=box.SIMPLE_HEAVY)
+    table.add_column("Topic", no_wrap=True)
+    table.add_column("Command", no_wrap=True)
+    table.add_column("Description", overflow="fold")
+    table.add_row("metrics", "uv run tml help=metrics", "Metric aliases and short symbols.")
+    console.print(table)
 
 
 if __name__ == "__main__":
