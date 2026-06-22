@@ -1,116 +1,121 @@
 from __future__ import annotations
 
-import importlib.util
-from pathlib import Path
-
 
 _MODULE_CACHE = {}
 
+HYPOTHESIS_000001_AUTOGLUON_001_PY_SOURCE = 'import numpy as np\nimport pandas as pd\n\n\ndef _safe_subtract(raw: pd.DataFrame, left: str, right: str) -> pd.Series:\n    left_col = raw[left]\n    right_col = raw[right]\n    valid = np.isfinite(left_col) & np.isfinite(right_col)\n    result = pd.Series(np.nan, index=raw.index, dtype=float)\n    result.loc[valid] = left_col.loc[valid] - right_col.loc[valid]\n    return result\n\n\ndef add_broadband_color_shape(raw, deps, aux):\n    u = raw["u"]\n    g = raw["g"]\n    r = raw["r"]\n    i = raw["i"]\n    z = raw["z"]\n\n    color_u_g = _safe_subtract(raw, "u", "g")\n    color_g_r = _safe_subtract(raw, "g", "r")\n    color_r_i = _safe_subtract(raw, "r", "i")\n    color_i_z = _safe_subtract(raw, "i", "z")\n    color_u_r = _safe_subtract(raw, "u", "r")\n    color_g_i = _safe_subtract(raw, "g", "i")\n    color_r_z = _safe_subtract(raw, "r", "z")\n    color_u_z = _safe_subtract(raw, "u", "z")\n\n    curve_ugr = pd.Series(np.nan, index=raw.index, dtype=float)\n    curve_ugr_valid = np.isfinite(u) & np.isfinite(g) & np.isfinite(r)\n    curve_ugr.loc[curve_ugr_valid] = u.loc[curve_ugr_valid] - 2.0 * g.loc[curve_ugr_valid] + r.loc[curve_ugr_valid]\n\n    curve_gri = pd.Series(np.nan, index=raw.index, dtype=float)\n    curve_gri_valid = np.isfinite(g) & np.isfinite(r) & np.isfinite(i)\n    curve_gri.loc[curve_gri_valid] = g.loc[curve_gri_valid] - 2.0 * r.loc[curve_gri_valid] + i.loc[curve_gri_valid]\n\n    curve_riz = pd.Series(np.nan, index=raw.index, dtype=float)\n    curve_riz_valid = np.isfinite(r) & np.isfinite(i) & np.isfinite(z)\n    curve_riz.loc[curve_riz_valid] = r.loc[curve_riz_valid] - 2.0 * i.loc[curve_riz_valid] + z.loc[curve_riz_valid]\n\n    return pd.DataFrame(\n        {\n            "color_u_g": color_u_g,\n            "color_g_r": color_g_r,\n            "color_r_i": color_r_i,\n            "color_i_z": color_i_z,\n            "color_u_r": color_u_r,\n            "color_g_i": color_g_i,\n            "color_r_z": color_r_z,\n            "color_u_z": color_u_z,\n            "curve_ugr": curve_ugr,\n            "curve_gri": curve_gri,\n            "curve_riz": curve_riz,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        "name": "broadband_color_shape",\n        "fn": add_broadband_color_shape,\n        "depends_on": [],\n        "description": "Create broadband color and curvature features from ugriz magnitudes.",\n    }\n]\n'
 
-def _project_dir() -> Path:
-    return Path(__file__).resolve().parents[3]
+HYPOTHESIS_000021_AUTOGLUON_001_PY_SOURCE = 'from __future__ import annotations\n\nimport numpy as np\nimport pandas as pd\n\n\nMAGS = ("u", "g", "r", "i", "z")\nCOLOR_PAIRS = (("u", "g"), ("g", "r"), ("r", "i"), ("i", "z"), ("u", "i"), ("u", "r"), ("g", "z"), ("r", "z"))\n\n\ndef _num(raw: pd.DataFrame, col: str) -> pd.Series:\n    if col not in raw:\n        return pd.Series(np.nan, index=raw.index, dtype="float64")\n    return pd.to_numeric(raw[col], errors="coerce").astype("float64")\n\n\ndef aide_broadband_flux_ratios(raw: pd.DataFrame, deps: dict[str, pd.DataFrame] | None = None, aux: pd.DataFrame | None = None) -> pd.DataFrame:\n    out = pd.DataFrame(index=raw.index)\n    eps = 1e-6\n\n    mags = {col: _num(raw, col) for col in MAGS}\n    for left, right in COLOR_PAIRS:\n        color = mags[left] - mags[right]\n        out[f"aide_abs_{left}_{right}"] = color.abs()\n        out[f"aide_ratio_{left}_over_{right}"] = mags[left] / (mags[right].abs() + eps)\n\n    for col, values in mags.items():\n        clipped = values.clip(-50, 50)\n        out[f"aide_log_flux_{col}"] = -0.4 * np.log(10.0) * values\n        out[f"aide_exp_flux_{col}"] = np.exp(-0.4 * np.log(10.0) * clipped)\n\n    redshift = _num(raw, "redshift")\n    clipped_z = redshift.clip(lower=0)\n    out["aide_redshift_clipped"] = clipped_z\n    out["aide_redshift_log1p"] = np.log1p(clipped_z)\n    out["aide_redshift_sq"] = clipped_z ** 2\n    out["aide_redshift_cube"] = clipped_z ** 3\n    out["aide_u_r_i_curv"] = mags["u"] - 2.0 * mags["r"] + mags["i"]\n    out["aide_g_i_z_curv"] = mags["g"] - 2.0 * mags["i"] + mags["z"]\n    return out.replace([np.inf, -np.inf], np.nan)\n\n\nFEATURE_GROUPS = [\n    {\n        "name": "aide_broadband_flux_ratios",\n        "fn": aide_broadband_flux_ratios,\n        "depends_on": [],\n        "description": "AIDE top-5 broadband ratios, absolute colors, pseudo-flux values, and redshift powers.",\n    }\n]\n'
 
+HYPOTHESIS_000022_AUTOGLUON_001_PY_SOURCE = 'from __future__ import annotations\n\nimport numpy as np\nimport pandas as pd\n\n\nMAGS = ("u", "g", "r", "i", "z")\n\n\ndef _num(raw: pd.DataFrame, col: str) -> pd.Series:\n    if col not in raw:\n        return pd.Series(np.nan, index=raw.index, dtype="float64")\n    return pd.to_numeric(raw[col], errors="coerce").astype("float64")\n\n\ndef _sky_key(raw: pd.DataFrame) -> pd.Series:\n    alpha = _num(raw, "alpha").fillna(0.0)\n    delta = _num(raw, "delta").fillna(0.0)\n    a_bin = np.floor(alpha * 2.0).astype("int64")\n    d_bin = np.floor((delta + 90.0) * 2.0).astype("int64")\n    return pd.Series(a_bin.astype(str) + "_" + d_bin.astype(str), index=raw.index)\n\n\ndef _colors(raw: pd.DataFrame) -> pd.DataFrame:\n    u, g, r, i, z = (_num(raw, col) for col in MAGS)\n    return pd.DataFrame(\n        {\n            "u_g": u - g,\n            "g_r": g - r,\n            "r_i": r - i,\n            "i_z": i - z,\n            "u_i": u - i,\n            "u_r": u - r,\n            "g_z": g - z,\n            "r_z": r - z,\n            "u_r_i_curv": u - 2.0 * r + i,\n            "g_i_z_curv": g - 2.0 * i + z,\n        },\n        index=raw.index,\n    )\n\n\ndef aide_sky_cell_local_residuals(raw: pd.DataFrame, deps: dict[str, pd.DataFrame] | None = None, aux: pd.DataFrame | None = None) -> pd.DataFrame:\n    out = pd.DataFrame(index=raw.index)\n    key = _sky_key(raw)\n    counts = key.map(key.value_counts()).astype("float64")\n    out["aide_sky_cell_count"] = counts\n\n    parts = key.str.split("_", expand=True).astype("int64")\n    a_bin = parts[0]\n    d_bin = parts[1]\n    count_map = key.value_counts().to_dict()\n    neighbor_counts = []\n    for a_val, d_val in zip(a_bin.to_numpy(), d_bin.to_numpy()):\n        total = 0\n        for da in (-1, 0, 1):\n            for dd in (-1, 0, 1):\n                total += count_map.get(f"{a_val + da}_{d_val + dd}", 0)\n        neighbor_counts.append(total)\n    out["aide_sky_cell_3x3_count"] = np.asarray(neighbor_counts, dtype="float64")\n    out["aide_sky_concentration"] = out["aide_sky_cell_count"] / (out["aide_sky_cell_3x3_count"] + 1.0)\n\n    values = pd.DataFrame({col: _num(raw, col) for col in MAGS}, index=raw.index)\n    values["redshift_clipped"] = _num(raw, "redshift").clip(lower=0)\n    residual_l2 = pd.Series(0.0, index=raw.index)\n    residual_l1 = pd.Series(0.0, index=raw.index)\n    z_max = pd.Series(0.0, index=raw.index)\n\n    for col in values.columns:\n        mean = values[col].groupby(key).transform("mean")\n        std = values[col].groupby(key).transform("std").replace(0, np.nan)\n        delta = values[col] - mean\n        z_score = delta / std\n        out[f"aide_{col}_sky_cell_delta"] = delta\n        out[f"aide_{col}_sky_cell_z"] = z_score\n        residual_l2 = residual_l2 + delta.fillna(0.0) ** 2\n        residual_l1 = residual_l1 + delta.abs().fillna(0.0)\n        z_max = np.maximum(z_max, z_score.abs().fillna(0.0))\n\n    out["aide_sky_cell_residual_l2"] = np.sqrt(residual_l2)\n    out["aide_sky_cell_residual_abs_l1"] = residual_l1\n    out["aide_sky_cell_z_max"] = z_max\n\n    color_values = _colors(raw)\n    color_l2 = pd.Series(0.0, index=raw.index)\n    color_l1 = pd.Series(0.0, index=raw.index)\n    color_z_max = pd.Series(0.0, index=raw.index)\n    color_deltas = []\n    for col in color_values.columns:\n        mean = color_values[col].groupby(key).transform("mean")\n        std = color_values[col].groupby(key).transform("std").replace(0, np.nan)\n        delta = color_values[col] - mean\n        z_score = delta / std\n        out[f"aide_{col}_sky_color_cell_delta"] = delta\n        out[f"aide_{col}_sky_color_cell_z"] = z_score\n        color_l2 = color_l2 + delta.fillna(0.0) ** 2\n        color_l1 = color_l1 + delta.abs().fillna(0.0)\n        color_z_max = np.maximum(color_z_max, z_score.abs().fillna(0.0))\n        color_deltas.append(delta)\n\n    delta_frame = pd.concat(color_deltas, axis=1)\n    out["aide_sky_color_cell_residual_l2"] = np.sqrt(color_l2)\n    out["aide_sky_color_cell_residual_abs_l1"] = color_l1\n    out["aide_sky_color_cell_delta_mean"] = delta_frame.mean(axis=1)\n    out["aide_sky_color_cell_delta_std"] = delta_frame.std(axis=1)\n    out["aide_sky_color_cell_z_max"] = color_z_max\n    return out.replace([np.inf, -np.inf], np.nan)\n\n\nFEATURE_GROUPS = [\n    {\n        "name": "aide_sky_cell_local_residuals",\n        "fn": aide_sky_cell_local_residuals,\n        "depends_on": [],\n        "description": "AIDE half-degree sky-cell densities and local residual/z-score features.",\n    }\n]\n'
 
-def _load_component_module(hypothesis_id: str, filename: str):
-    cache_key = (hypothesis_id, filename)
-    if cache_key in _MODULE_CACHE:
-        return _MODULE_CACHE[cache_key]
+HYPOTHESIS_000023_AUTOGLUON_001_PY_SOURCE = 'from __future__ import annotations\n\nimport numpy as np\nimport pandas as pd\n\n\nMAGS = ("u", "g", "r", "i", "z")\n\n\ndef _num(raw: pd.DataFrame, col: str) -> pd.Series:\n    if col not in raw:\n        return pd.Series(np.nan, index=raw.index, dtype="float64")\n    return pd.to_numeric(raw[col], errors="coerce").astype("float64")\n\n\ndef _colors(raw: pd.DataFrame) -> pd.DataFrame:\n    u, g, r, i, z = (_num(raw, col) for col in MAGS)\n    return pd.DataFrame(\n        {\n            "u_g": u - g,\n            "g_r": g - r,\n            "r_i": r - i,\n            "i_z": i - z,\n            "u_i": u - i,\n            "u_r": u - r,\n            "g_z": g - z,\n            "r_z": r - z,\n            "u_r_i_curv": u - 2.0 * r + i,\n            "g_i_z_curv": g - 2.0 * i + z,\n        },\n        index=raw.index,\n    )\n\n\ndef aide_redshift_bin_color_residuals(raw: pd.DataFrame, deps: dict[str, pd.DataFrame] | None = None, aux: pd.DataFrame | None = None) -> pd.DataFrame:\n    out = pd.DataFrame(index=raw.index)\n    redshift = _num(raw, "redshift").clip(lower=0)\n    bins = pd.qcut(redshift.rank(method="first"), q=24, duplicates="drop", labels=False)\n    bins = pd.Series(bins, index=raw.index)\n    colors = _colors(raw)\n\n    residual_l2 = pd.Series(0.0, index=raw.index)\n    residual_l1 = pd.Series(0.0, index=raw.index)\n    z_max = pd.Series(0.0, index=raw.index)\n    deltas = []\n    for col in colors.columns:\n        mean = colors[col].groupby(bins).transform("mean")\n        std = colors[col].groupby(bins).transform("std").replace(0, np.nan)\n        delta = colors[col] - mean\n        z_score = delta / std\n        out[f"aide_{col}_redshift_bin_delta"] = delta\n        out[f"aide_{col}_redshift_bin_z"] = z_score\n        residual_l2 = residual_l2 + delta.fillna(0.0) ** 2\n        residual_l1 = residual_l1 + delta.abs().fillna(0.0)\n        z_max = np.maximum(z_max, z_score.abs().fillna(0.0))\n        deltas.append(delta)\n\n    delta_frame = pd.concat(deltas, axis=1)\n    out["aide_redshift_color_residual_l2"] = np.sqrt(residual_l2)\n    out["aide_redshift_color_residual_abs_l1"] = residual_l1\n    out["aide_redshift_color_delta_mean"] = delta_frame.mean(axis=1)\n    out["aide_redshift_color_delta_std"] = delta_frame.std(axis=1)\n    out["aide_redshift_color_z_max"] = z_max\n    return out.replace([np.inf, -np.inf], np.nan)\n\n\nFEATURE_GROUPS = [\n    {\n        "name": "aide_redshift_bin_color_residuals",\n        "fn": aide_redshift_bin_color_residuals,\n        "depends_on": [],\n        "description": "AIDE qcut-redshift color residuals and aggregate residual scores.",\n    }\n]\n'
 
-    source_path = _project_dir() / "hypotheses" / hypothesis_id / "materializations" / filename
-    module_name = f"_tml_branch_b000022_{hypothesis_id}_{filename.replace('-', '_').replace('.', '_')}"
-    spec = importlib.util.spec_from_file_location(module_name, source_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Cannot load materialization {source_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    _MODULE_CACHE[cache_key] = module
+HYPOTHESIS_000024_AUTOGLUON_001_PY_SOURCE = 'from __future__ import annotations\n\nimport numpy as np\nimport pandas as pd\n\n\nNUMERIC_COLS = ("u", "g", "r", "i", "z", "redshift")\nCAT_COLS = ("spectral_type", "galaxy_population")\n\n\ndef _num(raw: pd.DataFrame, col: str) -> pd.Series:\n    if col not in raw:\n        return pd.Series(np.nan, index=raw.index, dtype="float64")\n    return pd.to_numeric(raw[col], errors="coerce").astype("float64")\n\n\ndef _cat(raw: pd.DataFrame, col: str) -> pd.Series:\n    if col not in raw:\n        return pd.Series("__missing__", index=raw.index, dtype="object")\n    return raw[col].astype("string").fillna("__missing__").astype("object")\n\n\ndef _qbin(values: pd.Series, q: int = 12) -> pd.Series:\n    ranked = values.rank(method="first")\n    try:\n        return pd.qcut(ranked, q=q, labels=False, duplicates="drop")\n    except ValueError:\n        return pd.Series(0, index=values.index, dtype="float64")\n\n\ndef aide_catalog_rank_frequency_context(raw: pd.DataFrame, deps: dict[str, pd.DataFrame] | None = None, aux: pd.DataFrame | None = None) -> pd.DataFrame:\n    out = pd.DataFrame(index=raw.index)\n    cats = {col: _cat(raw, col) for col in CAT_COLS}\n\n    for col, values in cats.items():\n        freq = values.map(values.value_counts(normalize=True)).astype("float64")\n        out[f"aide_{col}_freq"] = freq\n\n    cross = cats["spectral_type"].astype(str) + "__" + cats["galaxy_population"].astype(str)\n    out["aide_spectral_type_x_pop_freq"] = cross.map(cross.value_counts(normalize=True)).astype("float64")\n\n    rank_cols = {col: _num(raw, col) for col in NUMERIC_COLS}\n    rank_cols["redshift_log1p"] = np.log1p(rank_cols["redshift"].clip(lower=0))\n    rank_values = []\n    for col, values in rank_cols.items():\n        rank = values.rank(pct=True)\n        qbin = pd.Series(_qbin(values), index=raw.index)\n        out[f"aide_{col}_rank_pct"] = rank\n        out[f"aide_{col}_qbin"] = qbin.astype("float64")\n        out[f"aide_{col}_qbin_freq"] = qbin.map(qbin.value_counts(normalize=True)).astype("float64")\n        rank_values.append(rank)\n\n        for cat_col, cat_values in cats.items():\n            grouped_rank = values.groupby(cat_values).rank(pct=True)\n            out[f"aide_{col}_rank_within_{cat_col}"] = grouped_rank\n\n    rank_frame = pd.concat(rank_values, axis=1)\n    out["aide_numeric_rank_mean"] = rank_frame.mean(axis=1)\n    out["aide_numeric_rank_std"] = rank_frame.std(axis=1)\n    return out.replace([np.inf, -np.inf], np.nan)\n\n\nFEATURE_GROUPS = [\n    {\n        "name": "aide_catalog_rank_frequency_context",\n        "fn": aide_catalog_rank_frequency_context,\n        "depends_on": [],\n        "description": "AIDE category frequency, cross-frequency, global rank, qbin, and within-category rank context.",\n    }\n]\n'
+
+HYPOTHESIS_000025_AUTOGLUON_001_PY_SOURCE = 'from __future__ import annotations\n\nimport numpy as np\nimport pandas as pd\n\n\nAUX_COLS = ("alpha", "delta", "u", "g", "r", "i", "z", "redshift")\n\n\ndef _num(frame: pd.DataFrame, col: str, index: pd.Index | None = None) -> pd.Series:\n    if col not in frame:\n        idx = frame.index if index is None else index\n        return pd.Series(np.nan, index=idx, dtype="float64")\n    return pd.to_numeric(frame[col], errors="coerce").astype("float64")\n\n\ndef _clean_aux(aux: pd.DataFrame | None) -> pd.DataFrame:\n    if aux is None or aux.empty:\n        return pd.DataFrame(columns=AUX_COLS)\n    cleaned = pd.DataFrame(index=aux.index)\n    for col in AUX_COLS:\n        values = _num(aux, col)\n        if col in {"u", "g", "r", "i", "z"}:\n            values = values.mask(values <= -9000)\n        if col == "redshift":\n            values = values.clip(lower=0)\n        cleaned[col] = values\n    return cleaned.dropna(how="all")\n\n\ndef aide_aux_reference_distribution_distance(raw: pd.DataFrame, deps: dict[str, pd.DataFrame] | None = None, aux: pd.DataFrame | None = None) -> pd.DataFrame:\n    out = pd.DataFrame(index=raw.index)\n    aux_ref = _clean_aux(aux)\n    raw_values = pd.DataFrame(index=raw.index)\n    for col in AUX_COLS:\n        values = _num(raw, col)\n        if col == "redshift":\n            values = values.clip(lower=0)\n        raw_values[col] = values\n\n    if aux_ref.empty:\n        for col in AUX_COLS:\n            out[f"aide_aux_{col}_z"] = 0.0\n            out[f"aide_aux_{col}_med_delta_abs"] = 0.0\n            out[f"aide_aux_{col}_cdf"] = 0.5\n        out["aide_aux_joint_l2"] = 0.0\n        out["aide_aux_ref_mahalanobis2"] = 0.0\n        out["aide_aux_ref_mahalanobis"] = 0.0\n        out["aide_aux_ref_mahalanobis_inlier"] = 1.0\n        return out\n\n    joint = pd.Series(0.0, index=raw.index)\n    for col in AUX_COLS:\n        ref = aux_ref[col].dropna()\n        if ref.empty:\n            out[f"aide_aux_{col}_z"] = 0.0\n            out[f"aide_aux_{col}_med_delta_abs"] = 0.0\n            out[f"aide_aux_{col}_cdf"] = 0.5\n            continue\n        median = ref.median()\n        mad = (ref - median).abs().median()\n        scale = 1.4826 * mad if mad and np.isfinite(mad) else ref.std(ddof=0)\n        if not scale or not np.isfinite(scale):\n            scale = 1.0\n        z_score = (raw_values[col] - median) / scale\n        out[f"aide_aux_{col}_z"] = z_score\n        out[f"aide_aux_{col}_med_delta_abs"] = (raw_values[col] - median).abs()\n        ranks = np.searchsorted(np.sort(ref.to_numpy()), raw_values[col].to_numpy(), side="right") / max(len(ref), 1)\n        out[f"aide_aux_{col}_cdf"] = ranks\n        joint = joint + z_score.fillna(0.0) ** 2\n\n    out["aide_aux_joint_l2"] = np.sqrt(joint)\n\n    matrix = aux_ref[list(AUX_COLS)].dropna()\n    if len(matrix) <= len(AUX_COLS):\n        out["aide_aux_ref_mahalanobis2"] = out["aide_aux_joint_l2"] ** 2\n    else:\n        center = matrix.median(axis=0)\n        spread = (matrix - center).abs().median(axis=0).replace(0, np.nan)\n        standardized_ref = ((matrix - center) / spread.fillna(1.0)).fillna(0.0)\n        standardized_raw = ((raw_values[list(AUX_COLS)] - center) / spread.fillna(1.0)).fillna(0.0)\n        cov = np.cov(standardized_ref.to_numpy(), rowvar=False)\n        inv_cov = np.linalg.pinv(cov)\n        vals = standardized_raw.to_numpy()\n        out["aide_aux_ref_mahalanobis2"] = np.einsum("ij,jk,ik->i", vals, inv_cov, vals)\n\n    out["aide_aux_ref_mahalanobis"] = np.sqrt(out["aide_aux_ref_mahalanobis2"].clip(lower=0))\n    threshold = np.nanpercentile(out["aide_aux_ref_mahalanobis"], 95)\n    out["aide_aux_ref_mahalanobis_inlier"] = (out["aide_aux_ref_mahalanobis"] <= threshold).astype("float64")\n    return out.replace([np.inf, -np.inf], np.nan)\n\n\nFEATURE_GROUPS = [\n    {\n        "name": "aide_aux_reference_distribution_distance",\n        "fn": aide_aux_reference_distribution_distance,\n        "depends_on": [],\n        "description": "AIDE robust auxiliary-reference z, CDF, joint distance, and Mahalanobis features.",\n    }\n]\n'
+
+HYPOTHESIS_000026_AUTOGLUON_001_PY_SOURCE = 'from __future__ import annotations\n\nimport numpy as np\nimport pandas as pd\n\ntry:\n    from sklearn.preprocessing import SplineTransformer\nexcept Exception:  # pragma: no cover - sklearn is expected in the modeling env.\n    SplineTransformer = None\n\n\nMAGS = ("u", "g", "r", "i", "z")\n\n\ndef _num(frame: pd.DataFrame, col: str, index: pd.Index | None = None) -> pd.Series:\n    if col not in frame:\n        idx = frame.index if index is None else index\n        return pd.Series(np.nan, index=idx, dtype="float64")\n    return pd.to_numeric(frame[col], errors="coerce").astype("float64")\n\n\ndef _base_features(frame: pd.DataFrame) -> pd.DataFrame:\n    out = pd.DataFrame(index=frame.index)\n    for col in ("alpha", "delta", "u", "g", "r", "i", "z", "redshift"):\n        values = _num(frame, col)\n        if col == "redshift":\n            values = values.clip(lower=0)\n        out[col] = values\n    out["u_g"] = out["u"] - out["g"]\n    out["g_r"] = out["g"] - out["r"]\n    out["r_i"] = out["r"] - out["i"]\n    out["i_z"] = out["i"] - out["z"]\n    out["u_r"] = out["u"] - out["r"]\n    out["g_i"] = out["g"] - out["i"]\n    out["r_z"] = out["r"] - out["z"]\n    out["u_z"] = out["u"] - out["z"]\n    return out.replace([np.inf, -np.inf], np.nan)\n\n\ndef _spline(values: pd.Series, fit_values: pd.Series, n_knots: int, periodic: bool) -> np.ndarray:\n    filled_fit = fit_values.dropna().to_numpy(dtype="float64").reshape(-1, 1)\n    filled_values = values.fillna(fit_values.median()).to_numpy(dtype="float64").reshape(-1, 1)\n    if SplineTransformer is None or len(filled_fit) < n_knots:\n        centered = filled_values - np.nanmean(filled_fit) if len(filled_fit) else filled_values\n        return np.hstack([filled_values, centered])\n    transformer = SplineTransformer(\n        n_knots=n_knots,\n        degree=3,\n        extrapolation="periodic" if periodic else "constant",\n        include_bias=False,\n    )\n    transformer.fit(filled_fit)\n    return transformer.transform(filled_values)\n\n\ndef aide_smooth_spline_sed_interactions(raw: pd.DataFrame, deps: dict[str, pd.DataFrame] | None = None, aux: pd.DataFrame | None = None) -> pd.DataFrame:\n    base = _base_features(raw)\n    aux_base = _base_features(aux) if aux is not None and not aux.empty else pd.DataFrame(columns=base.columns)\n    out = pd.DataFrame(index=raw.index)\n\n    specs = {\n        "alpha": (7, True),\n        "delta": (5, False),\n        "u": (5, False),\n        "g": (5, False),\n        "r": (5, False),\n        "i": (5, False),\n        "z": (5, False),\n        "redshift": (5, False),\n        "u_g": (5, False),\n        "g_r": (5, False),\n        "r_i": (5, False),\n        "i_z": (5, False),\n        "u_r": (5, False),\n        "g_i": (5, False),\n        "r_z": (5, False),\n        "u_z": (5, False),\n    }\n    spline_blocks: dict[str, np.ndarray] = {}\n    for col, (n_knots, periodic) in specs.items():\n        fit_values = pd.concat([base[col], aux_base[col]], axis=0) if col in aux_base else base[col]\n        block = _spline(base[col], fit_values, n_knots=n_knots, periodic=periodic)\n        spline_blocks[col] = block\n        for idx in range(min(block.shape[1], 6)):\n            out[f"aide_spline_{col}_{idx}"] = block[:, idx]\n\n    for left, right in (("redshift", "u_g"), ("redshift", "g_r"), ("redshift", "r_i"), ("g_r", "r_i")):\n        left_block = spline_blocks[left][:, :2]\n        right_block = spline_blocks[right][:, :2]\n        for i in range(left_block.shape[1]):\n            for j in range(right_block.shape[1]):\n                out[f"aide_tx_{left}_{i}_x_{right}_{j}"] = left_block[:, i] * right_block[:, j]\n\n    return out.replace([np.inf, -np.inf], np.nan)\n\n\nFEATURE_GROUPS = [\n    {\n        "name": "aide_smooth_spline_sed_interactions",\n        "fn": aide_smooth_spline_sed_interactions,\n        "depends_on": [],\n        "description": "AIDE spline basis features and compact tensor interactions.",\n    }\n]\n'
+
+HYPOTHESIS_000027_AUTOGLUON_001_PY_SOURCE = 'from __future__ import annotations\n\nimport numpy as np\nimport pandas as pd\n\n\ndef _id_values(raw: pd.DataFrame) -> pd.Series:\n    if "id" not in raw:\n        return pd.Series(np.arange(len(raw), dtype="float64"), index=raw.index)\n    return pd.to_numeric(raw["id"], errors="coerce").astype("float64")\n\n\ndef aide_id_sequence_scan_context(raw: pd.DataFrame, deps: dict[str, pd.DataFrame] | None = None, aux: pd.DataFrame | None = None) -> pd.DataFrame:\n    out = pd.DataFrame(index=raw.index)\n    ids = _id_values(raw)\n    fallback = pd.Series(np.arange(len(raw), dtype="float64"), index=raw.index)\n    filled = ids.fillna(fallback)\n\n    rank = filled.rank(method="first")\n    denom = max(len(raw) - 1, 1)\n    out["aide_id_is_missing"] = ids.isna().astype("float64")\n    out["aide_id_rank"] = rank\n    out["aide_id_rank_norm"] = (rank - 1.0) / denom\n    out["aide_id_block_1k"] = np.floor(filled / 1_000.0)\n    out["aide_id_block_100k"] = np.floor(filled / 100_000.0)\n    out["aide_id_mod_2"] = np.mod(filled, 2.0)\n    out["aide_id_mod_11"] = np.mod(filled, 11.0)\n    out["aide_id_mod_97"] = np.mod(filled, 97.0)\n    out["aide_id_even"] = (np.mod(filled, 2.0) == 0).astype("float64")\n    out["aide_id_log1p"] = np.log1p(filled.clip(lower=0))\n\n    ordered = pd.DataFrame({"id": filled, "position": np.arange(len(raw))}, index=raw.index).sort_values("id", kind="mergesort")\n    prev_gap = ordered["id"].diff()\n    next_gap = ordered["id"].shift(-1) - ordered["id"]\n    ordered["aide_id_gap_prev"] = prev_gap\n    ordered["aide_id_gap_next"] = next_gap\n    restored = ordered.sort_values("position", kind="mergesort")\n    out["aide_id_gap_prev"] = restored["aide_id_gap_prev"].to_numpy()\n    out["aide_id_gap_next"] = restored["aide_id_gap_next"].to_numpy()\n    return out.replace([np.inf, -np.inf], np.nan)\n\n\nFEATURE_GROUPS = [\n    {\n        "name": "aide_id_sequence_scan_context",\n        "fn": aide_id_sequence_scan_context,\n        "depends_on": [],\n        "description": "AIDE id rank, block, modulo, parity, log, and neighbor-gap sequence features.",\n    }\n]\n'
+
+def _load_branch_module(key, source):
+    import types
+
+    if key in _MODULE_CACHE:
+        return _MODULE_CACHE[key]
+    module = types.ModuleType(key)
+    exec(source, module.__dict__)
+    _MODULE_CACHE[key] = module
     return module
 
+def _branch_hypothesis_000001_autogluon_001_py_001(raw, deps, aux):
+    module = _load_branch_module('hypothesis_000001_autogluon_001_py', HYPOTHESIS_000001_AUTOGLUON_001_PY_SOURCE)
+    original_deps = {}
+    return getattr(module, 'add_broadband_color_shape')(raw, original_deps, aux)
 
-def _call_component(hypothesis_id: str, filename: str, fn_name: str, raw, aux):
-    module = _load_component_module(hypothesis_id, filename)
-    return getattr(module, fn_name)(raw, {}, aux)
+def _branch_hypothesis_000021_autogluon_001_py_001(raw, deps, aux):
+    module = _load_branch_module('hypothesis_000021_autogluon_001_py', HYPOTHESIS_000021_AUTOGLUON_001_PY_SOURCE)
+    original_deps = {}
+    return getattr(module, 'aide_broadband_flux_ratios')(raw, original_deps, aux)
 
+def _branch_hypothesis_000022_autogluon_001_py_001(raw, deps, aux):
+    module = _load_branch_module('hypothesis_000022_autogluon_001_py', HYPOTHESIS_000022_AUTOGLUON_001_PY_SOURCE)
+    original_deps = {}
+    return getattr(module, 'aide_sky_cell_local_residuals')(raw, original_deps, aux)
 
-def _branch_000001_broadband_color_shape(raw, deps, aux):
-    return _call_component("000001", "autogluon-001.py", "add_broadband_color_shape", raw, aux)
+def _branch_hypothesis_000023_autogluon_001_py_001(raw, deps, aux):
+    module = _load_branch_module('hypothesis_000023_autogluon_001_py', HYPOTHESIS_000023_AUTOGLUON_001_PY_SOURCE)
+    original_deps = {}
+    return getattr(module, 'aide_redshift_bin_color_residuals')(raw, original_deps, aux)
 
+def _branch_hypothesis_000024_autogluon_001_py_001(raw, deps, aux):
+    module = _load_branch_module('hypothesis_000024_autogluon_001_py', HYPOTHESIS_000024_AUTOGLUON_001_PY_SOURCE)
+    original_deps = {}
+    return getattr(module, 'aide_catalog_rank_frequency_context')(raw, original_deps, aux)
 
-def _branch_000021_aide_broadband_flux_ratios(raw, deps, aux):
-    return _call_component("000021", "autogluon-001.py", "aide_broadband_flux_ratios", raw, aux)
+def _branch_hypothesis_000025_autogluon_001_py_001(raw, deps, aux):
+    module = _load_branch_module('hypothesis_000025_autogluon_001_py', HYPOTHESIS_000025_AUTOGLUON_001_PY_SOURCE)
+    original_deps = {}
+    return getattr(module, 'aide_aux_reference_distribution_distance')(raw, original_deps, aux)
 
+def _branch_hypothesis_000026_autogluon_001_py_001(raw, deps, aux):
+    module = _load_branch_module('hypothesis_000026_autogluon_001_py', HYPOTHESIS_000026_AUTOGLUON_001_PY_SOURCE)
+    original_deps = {}
+    return getattr(module, 'aide_smooth_spline_sed_interactions')(raw, original_deps, aux)
 
-def _branch_000022_aide_sky_cell_local_residuals(raw, deps, aux):
-    return _call_component("000022", "autogluon-001.py", "aide_sky_cell_local_residuals", raw, aux)
-
-
-def _branch_000023_aide_redshift_bin_color_residuals(raw, deps, aux):
-    return _call_component("000023", "autogluon-001.py", "aide_redshift_bin_color_residuals", raw, aux)
-
-
-def _branch_000024_aide_catalog_rank_frequency_context(raw, deps, aux):
-    return _call_component("000024", "autogluon-001.py", "aide_catalog_rank_frequency_context", raw, aux)
-
-
-def _branch_000025_aide_aux_reference_distribution_distance(raw, deps, aux):
-    return _call_component("000025", "autogluon-001.py", "aide_aux_reference_distribution_distance", raw, aux)
-
-
-def _branch_000026_aide_smooth_spline_sed_interactions(raw, deps, aux):
-    return _call_component("000026", "autogluon-001.py", "aide_smooth_spline_sed_interactions", raw, aux)
-
-
-def _branch_000027_aide_id_sequence_scan_context(raw, deps, aux):
-    return _call_component("000027", "autogluon-001.py", "aide_id_sequence_scan_context", raw, aux)
-
+def _branch_hypothesis_000027_autogluon_001_py_001(raw, deps, aux):
+    module = _load_branch_module('hypothesis_000027_autogluon_001_py', HYPOTHESIS_000027_AUTOGLUON_001_PY_SOURCE)
+    original_deps = {}
+    return getattr(module, 'aide_id_sequence_scan_context')(raw, original_deps, aux)
 
 FEATURE_GROUPS = [
     {
-        "name": "broadband_color_shape",
-        "fn": _branch_000001_broadband_color_shape,
+        "name": 'broadband_color_shape',
+        "fn": _branch_hypothesis_000001_autogluon_001_py_001,
         "depends_on": [],
-        "description": "Create broadband color and curvature features from ugriz magnitudes.",
+        "description": 'Create broadband color and curvature features from ugriz magnitudes.',
     },
     {
-        "name": "aide_broadband_flux_ratios",
-        "fn": _branch_000021_aide_broadband_flux_ratios,
+        "name": 'aide_broadband_flux_ratios',
+        "fn": _branch_hypothesis_000021_autogluon_001_py_001,
         "depends_on": [],
-        "description": "AIDE top-5 broadband ratios, absolute colors, pseudo-flux values, and redshift powers.",
+        "description": 'AIDE top-5 broadband ratios, absolute colors, pseudo-flux values, and redshift powers.',
     },
     {
-        "name": "aide_sky_cell_local_residuals",
-        "fn": _branch_000022_aide_sky_cell_local_residuals,
+        "name": 'aide_sky_cell_local_residuals',
+        "fn": _branch_hypothesis_000022_autogluon_001_py_001,
         "depends_on": [],
-        "description": "AIDE half-degree sky-cell densities and local residual/z-score features.",
+        "description": 'AIDE half-degree sky-cell densities and local residual/z-score features.',
     },
     {
-        "name": "aide_redshift_bin_color_residuals",
-        "fn": _branch_000023_aide_redshift_bin_color_residuals,
+        "name": 'aide_redshift_bin_color_residuals',
+        "fn": _branch_hypothesis_000023_autogluon_001_py_001,
         "depends_on": [],
-        "description": "AIDE qcut-redshift color residuals and aggregate residual scores.",
+        "description": 'AIDE qcut-redshift color residuals and aggregate residual scores.',
     },
     {
-        "name": "aide_catalog_rank_frequency_context",
-        "fn": _branch_000024_aide_catalog_rank_frequency_context,
+        "name": 'aide_catalog_rank_frequency_context',
+        "fn": _branch_hypothesis_000024_autogluon_001_py_001,
         "depends_on": [],
-        "description": "AIDE category frequency, cross-frequency, global rank, qbin, and within-category rank context.",
+        "description": 'AIDE category frequency, cross-frequency, global rank, qbin, and within-category rank context.',
     },
     {
-        "name": "aide_aux_reference_distribution_distance",
-        "fn": _branch_000025_aide_aux_reference_distribution_distance,
+        "name": 'aide_aux_reference_distribution_distance',
+        "fn": _branch_hypothesis_000025_autogluon_001_py_001,
         "depends_on": [],
-        "description": "AIDE robust auxiliary-reference z, CDF, joint distance, and Mahalanobis features.",
+        "description": 'AIDE robust auxiliary-reference z, CDF, joint distance, and Mahalanobis features.',
     },
     {
-        "name": "aide_smooth_spline_sed_interactions",
-        "fn": _branch_000026_aide_smooth_spline_sed_interactions,
+        "name": 'aide_smooth_spline_sed_interactions',
+        "fn": _branch_hypothesis_000026_autogluon_001_py_001,
         "depends_on": [],
-        "description": "AIDE spline basis features and compact tensor interactions.",
+        "description": 'AIDE spline basis features and compact tensor interactions.',
     },
     {
-        "name": "aide_id_sequence_scan_context",
-        "fn": _branch_000027_aide_id_sequence_scan_context,
+        "name": 'aide_id_sequence_scan_context',
+        "fn": _branch_hypothesis_000027_autogluon_001_py_001,
         "depends_on": [],
-        "description": "AIDE id rank, block, modulo, parity, log, and neighbor-gap sequence features.",
+        "description": 'AIDE id rank, block, modulo, parity, log, and neighbor-gap sequence features.',
     },
 ]
