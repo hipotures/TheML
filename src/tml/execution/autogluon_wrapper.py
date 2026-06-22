@@ -32,6 +32,7 @@ RESERVED_PROFILE_KEYS = {
     "class_balance",
     "fit_args",
     "predictor_args",
+    "ignored_columns",
 }
 
 
@@ -155,9 +156,7 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
 
     train_out = transformed.iloc[: len(train)].reset_index(drop=True)
     test_out = transformed.iloc[len(train) :].reset_index(drop=True)
-    if id_col in train_out.columns:
-        train_out = train_out.drop(columns=[id_col])
-        test_out = test_out.drop(columns=[id_col], errors="ignore")
+    ignored_columns = _ignored_columns_from_profile(profile, id_col=id_col, columns=train_out.columns)
     train_out[target_col] = train[target_col].reset_index(drop=True)
 
     training_plan = _training_plan_from_profile(train_out, target_col, profile)
@@ -167,6 +166,7 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
             eval_metric=metric,
             model_path=work_dir / "tml-autogluon-workdir" / "AutoGluonModels",
             profile=profile,
+            ignored_columns=ignored_columns,
         )
     )
     fit_kwargs = _fit_kwargs_from_profile(
@@ -205,6 +205,7 @@ def _predictor_kwargs_from_profile(
     eval_metric: str,
     model_path: Path,
     profile: dict[str, object],
+    ignored_columns: list[str] | None = None,
 ) -> dict[str, object]:
     predictor_kwargs: dict[str, object] = {
         "label": label,
@@ -217,6 +218,10 @@ def _predictor_kwargs_from_profile(
     if profile.get("class_balance") == "balanced":
         predictor_kwargs["sample_weight"] = CLASS_WEIGHT_COL
         predictor_kwargs["weight_evaluation"] = False
+    if ignored_columns:
+        learner_kwargs = dict(predictor_kwargs.get("learner_kwargs") or {})
+        learner_kwargs["ignored_columns"] = list(ignored_columns)
+        predictor_kwargs["learner_kwargs"] = learner_kwargs
     return predictor_kwargs
 
 
@@ -280,6 +285,18 @@ def _fit_kwargs_from_profile(
         fit_args = dict(raw_fit_args) if isinstance(raw_fit_args, dict) else {}
     fit_kwargs.update(fit_args)
     return fit_kwargs
+
+
+def _ignored_columns_from_profile(profile: dict[str, object], *, id_col: str, columns) -> list[str]:
+    raw_ignored = profile.get("ignored_columns")
+    if raw_ignored is None:
+        ignored = [id_col]
+    elif isinstance(raw_ignored, str):
+        ignored = [raw_ignored]
+    else:
+        ignored = list(raw_ignored)
+    available = set(columns)
+    return [str(column) for column in ignored if str(column) in available]
 
 
 def _balanced_sample_weight(labels):

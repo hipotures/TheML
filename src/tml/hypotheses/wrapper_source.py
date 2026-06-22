@@ -95,6 +95,7 @@ def main():
         "class_balance",
         "fit_args",
         "predictor_args",
+        "ignored_columns",
         "aux_file",
         "auxiliary_file",
     }}
@@ -501,9 +502,16 @@ def main():
 
                 train_out = transformed.iloc[: len(train)].reset_index(drop=True)
                 test_out = transformed.iloc[len(train) :].reset_index(drop=True)
-                if id_col in train_out.columns:
-                    train_out = train_out.drop(columns=[id_col])
-                    test_out = test_out.drop(columns=[id_col], errors="ignore")
+                raw_ignored_columns = profile.get("ignored_columns")
+                if raw_ignored_columns is None:
+                    ignored_columns = [id_col] if id_col in train_out.columns else []
+                elif isinstance(raw_ignored_columns, str):
+                    ignored_columns = [raw_ignored_columns]
+                else:
+                    ignored_columns = list(raw_ignored_columns)
+                ignored_columns = [column for column in ignored_columns if column in train_out.columns]
+                if ignored_columns:
+                    print(f"AutoGluon materialization: ignored_columns={{ignored_columns}}", flush=True)
                 train_out[target_col] = train[target_col].reset_index(drop=True)
                 train_target = train[target_col].reset_index(drop=True)
                 train_data, valid_data, fit_args, defer_save_space = _training_plan_from_profile(
@@ -520,6 +528,10 @@ def main():
                 if profile.get("class_balance") == "balanced":
                     predictor_args["sample_weight"] = class_weight_col
                     predictor_args["weight_evaluation"] = False
+                learner_kwargs = dict(predictor_args.get("learner_kwargs", {{}}) or {{}})
+                if ignored_columns:
+                    learner_kwargs["ignored_columns"] = ignored_columns
+                    predictor_args["learner_kwargs"] = learner_kwargs
                 shutil.rmtree(Path(predictor_args["path"]), ignore_errors=True)
                 predictor = TabularPredictor(**predictor_args)
 
@@ -584,6 +596,7 @@ def main():
                     "lower_is_better": lower_is_better,
                     "run_stats": {{
                         "feature_count": int(len(transformed.columns)),
+                        "ignored_columns": ignored_columns,
                         "preprocess_time": float(preprocess_time),
                         "training_time": float(training_time),
                         "eval_metric": str(getattr(predictor.eval_metric, "name", predictor.eval_metric)),

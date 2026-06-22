@@ -8,4 +8,6 @@ included_model_types:
 - XGB
 - GBM
 - CAT
+ignored_columns:
+- id
 use_gpu: false
