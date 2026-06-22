@@ -1362,7 +1362,7 @@ def _root_run_row(
         run_duration = _seconds_text(db_row.get("run_seconds"))
     elif db_row.get("code_hash"):
         materialization_status = str(db_row.get("materialization_status") or "")
-        status = Text("⌘", style="green" if materialization_status == "fixed" else "yellow")
+        status = Text("⌘", style="bold yellow" if materialization_status == "fixed" else "cyan")
         score = ""
         node = ""
         run_duration = ""
