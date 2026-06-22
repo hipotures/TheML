@@ -1748,7 +1748,7 @@ def _print_submissions(project_dir: Path) -> None:
             _kind_profile_text(row),
             _minutes_text(row.get("run_seconds")),
             str(row.get("metric") or ""),
-            str(row.get("run_id") or ""),
+            _run_short_text(row.get("run_id")),
             _step_text(row.get("step")),
             _date_yyyymmdd(row.get("created_at")),
             str(row.get("submission_sha256") or "")[:10],
@@ -1906,6 +1906,11 @@ def _kind_profile_text(row: dict[str, object]) -> str:
     if kind and profile:
         return f"{kind}/{profile}"
     return profile or kind
+
+
+def _run_short_text(value: object) -> str:
+    text = str(value or "")
+    return text.rsplit("-", 1)[-1] if "-" in text else text
 
 
 def _minutes_text(value: object) -> str:
