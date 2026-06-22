@@ -176,17 +176,117 @@ def upsert_run(project_dir: Path, run_dir: Path) -> None:
         conn.commit()
 
 
+def next_branch_id(project_dir: Path) -> str:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT max(CAST(substr(branch_id, 2) AS INTEGER)) AS max_id
+            FROM branches
+            WHERE branch_id GLOB 'B[0-9][0-9][0-9][0-9][0-9][0-9]'
+            """
+        ).fetchone()
+    return f"B{int(row['max_id'] or 0) + 1:06d}"
+
+
+def upsert_branch(
+    project_dir: Path,
+    branch_dir: Path,
+    *,
+    parent_ref: str,
+    source_ref: str,
+    parent_kind: str,
+    parent_id: str,
+    mode: str,
+    materialization_file: str,
+    code_hash: str,
+    composition_hash: str,
+    summary: str,
+    components: list[dict[str, Any]],
+) -> None:
+    db_path = ensure_project_db(project_dir)
+    payload = read_yaml(branch_dir / "branch.yaml")
+    branch_id = str(payload.get("branch_id") or branch_dir.name)
+    created_at = str(payload.get("created_at") or "")
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO branches(
+              branch_id, parent_ref, source_ref, mode, status, created_at, path,
+              materialization_file, code_hash, composition_hash, summary
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(branch_id) DO UPDATE SET
+              parent_ref=excluded.parent_ref,
+              source_ref=excluded.source_ref,
+              mode=excluded.mode,
+              status=excluded.status,
+              created_at=excluded.created_at,
+              path=excluded.path,
+              materialization_file=excluded.materialization_file,
+              code_hash=excluded.code_hash,
+              composition_hash=excluded.composition_hash,
+              summary=excluded.summary
+            """,
+            (
+                branch_id,
+                parent_ref,
+                source_ref,
+                mode,
+                "materialized",
+                created_at,
+                _project_path(project_dir, branch_dir / "branch.yaml"),
+                materialization_file,
+                code_hash,
+                composition_hash,
+                summary,
+            ),
+        )
+        conn.execute("DELETE FROM branch_components WHERE branch_id=?", (branch_id,))
+        for component in components:
+            conn.execute(
+                """
+                INSERT INTO branch_components(
+                  branch_id, role, source_type, source_id, mode, file, code_hash, path
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    branch_id,
+                    component.get("role"),
+                    component.get("source_type"),
+                    component.get("source_id"),
+                    component.get("mode"),
+                    component.get("file"),
+                    component.get("code_hash"),
+                    component.get("path"),
+                ),
+            )
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO branch_edges(
+              branch_id, parent_kind, parent_id, child_kind, child_id, edge_kind, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (branch_id, parent_kind, parent_id, "branch", branch_id, "add_existing_groups", created_at),
+        )
+        conn.commit()
+
+
 def upsert_node_start(project_dir: Path, node_dir: Path, payload: dict[str, Any]) -> None:
     db_path = ensure_project_db(project_dir)
     with connect(db_path) as conn:
         conn.execute(
             """
-            INSERT INTO nodes(node_id, run_id, step, hypothesis_id, mode, profile_id, status, created_at, path)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO nodes(node_id, run_id, step, kind, hypothesis_id, branch_id, mode, profile_id, status, created_at, path)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(node_id) DO UPDATE SET
               run_id=excluded.run_id,
               step=excluded.step,
+              kind=excluded.kind,
               hypothesis_id=excluded.hypothesis_id,
+              branch_id=excluded.branch_id,
               mode=excluded.mode,
               profile_id=excluded.profile_id,
               status=excluded.status,
@@ -197,7 +297,9 @@ def upsert_node_start(project_dir: Path, node_dir: Path, payload: dict[str, Any]
                 payload.get("node_id"),
                 payload.get("run_id"),
                 payload.get("step"),
+                payload.get("kind") or "root",
                 payload.get("hypothesis_id"),
+                payload.get("branch_id"),
                 payload.get("mode"),
                 payload.get("profile_id"),
                 "started",
@@ -235,10 +337,12 @@ def upsert_node_result(
         )
         conn.execute(
             """
-            INSERT INTO evaluations(node_id, hypothesis_id, mode, profile_id, code_hash, metric, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO evaluations(node_id, kind, hypothesis_id, branch_id, mode, profile_id, code_hash, metric, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(node_id) DO UPDATE SET
+              kind=excluded.kind,
               hypothesis_id=excluded.hypothesis_id,
+              branch_id=excluded.branch_id,
               mode=excluded.mode,
               profile_id=excluded.profile_id,
               code_hash=excluded.code_hash,
@@ -247,7 +351,9 @@ def upsert_node_result(
             """,
             (
                 node_dir.name,
+                start.get("kind") or "root",
                 start.get("hypothesis_id"),
+                start.get("branch_id"),
                 start.get("mode"),
                 start.get("profile_id"),
                 code_hash,
@@ -260,6 +366,7 @@ def upsert_node_result(
             node_dir,
             [
                 "01-hypothesis.yaml",
+                "01-branch.yaml",
                 "02-code.py",
                 "started.yaml",
                 "stdout.log",
@@ -382,6 +489,23 @@ def run_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = Non
     return [dict(row) for row in rows]
 
 
+def branch_run_candidates(project_dir: Path, mode: str, branch_id: str | None = None) -> list[dict[str, Any]]:
+    db_path = ensure_project_db(project_dir)
+    sql = """
+        SELECT branch_id, path, materialization_file AS file, code_hash, composition_hash, summary, created_at
+        FROM branches
+        WHERE mode=? AND status='materialized'
+    """
+    params: list[Any] = [mode]
+    if branch_id:
+        sql += " AND branch_id=?"
+        params.append(_normalize_branch_id(branch_id))
+    sql += " ORDER BY branch_id"
+    with connect(db_path) as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(row) for row in rows]
+
+
 def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = None) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
     sql = """
@@ -458,6 +582,20 @@ def already_evaluated(project_dir: Path, *, hypothesis_id: str, mode: str, profi
     return row is not None
 
 
+def branch_already_evaluated(project_dir: Path, *, branch_id: str, mode: str, profile_id: str, code_hash: str) -> bool:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT 1 FROM evaluations
+            WHERE kind='branch' AND branch_id=? AND mode=? AND profile_id=? AND code_hash=?
+            LIMIT 1
+            """,
+            (_normalize_branch_id(branch_id), mode, profile_id, code_hash),
+        ).fetchone()
+    return row is not None
+
+
 def active_or_create_run(project_dir: Path) -> Path:
     db_path = ensure_project_db(project_dir)
     with connect(db_path) as conn:
@@ -500,10 +638,14 @@ def root_counts(project_dir: Path) -> dict[str, int]:
                 conn.execute("SELECT count(DISTINCT hypothesis_id) FROM materializations WHERE hypothesis_id<>'000000'").fetchone()[0]
             ),
             "evaluated": int(
-                conn.execute("SELECT count(DISTINCT hypothesis_id) FROM nodes WHERE status='complete' AND hypothesis_id<>'000000'").fetchone()[0]
+                conn.execute(
+                    "SELECT count(DISTINCT hypothesis_id) FROM nodes WHERE kind='root' AND status='complete' AND hypothesis_id<>'000000'"
+                ).fetchone()[0]
             ),
             "incomplete": int(
-                conn.execute("SELECT count(*) FROM nodes WHERE status NOT IN ('complete','failed') AND hypothesis_id<>'000000'").fetchone()[0]
+                conn.execute(
+                    "SELECT count(*) FROM nodes WHERE kind='root' AND status NOT IN ('complete','failed') AND hypothesis_id<>'000000'"
+                ).fetchone()[0]
             ),
         }
 
@@ -511,7 +653,7 @@ def root_counts(project_dir: Path) -> dict[str, int]:
 def best_score(project_dir: Path) -> float | None:
     db_path = ensure_project_db(project_dir)
     with connect(db_path) as conn:
-        row = conn.execute("SELECT max(metric) AS best FROM evaluations WHERE metric IS NOT NULL").fetchone()
+        row = conn.execute("SELECT max(metric) AS best FROM evaluations WHERE kind='root' AND metric IS NOT NULL").fetchone()
     value = row["best"] if row else None
     return float(value) if value is not None else None
 
@@ -651,6 +793,45 @@ def root_run_rows(
     return [dict(row) for row in rows]
 
 
+def branch_rows(project_dir: Path, *, mode: str, profile_id: str, branch_id: str | None = None) -> list[dict[str, Any]]:
+    db_path = ensure_project_db(project_dir)
+    sql = """
+        SELECT
+          b.branch_id, b.parent_ref, b.source_ref, b.mode, b.status AS branch_status,
+          b.created_at, b.materialization_file, b.code_hash, b.composition_hash, b.summary,
+          n.node_id, n.status AS node_status, n.run_seconds,
+          e.metric
+        FROM branches b
+        LEFT JOIN evaluations e ON e.kind='branch'
+          AND e.branch_id=b.branch_id AND e.mode=b.mode AND e.profile_id=? AND e.code_hash=b.code_hash
+        LEFT JOIN nodes n ON n.node_id=e.node_id
+        WHERE b.mode=?
+    """
+    params: list[Any] = [profile_id, mode]
+    if branch_id:
+        sql += " AND b.branch_id=?"
+        params.append(_normalize_branch_id(branch_id))
+    sql += " ORDER BY b.branch_id"
+    with connect(db_path) as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(row) for row in rows]
+
+
+def branch_component_rows(project_dir: Path, branch_id: str) -> list[dict[str, Any]]:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM branch_components
+            WHERE branch_id=?
+            ORDER BY role, source_type, source_id, file
+            """,
+            (_normalize_branch_id(branch_id),),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def _run_summary(request_path: Path, response_path: Path) -> dict[str, Any]:
     if not request_path.exists() or not response_path.exists():
         return {}
@@ -739,3 +920,13 @@ def _upsert_artifact_rows(conn, node_dir: Path, relative_paths: list[str]) -> No
 
 def _project_path(project_dir: Path, path: Path) -> str:
     return path.relative_to(project_dir).as_posix()
+
+
+def _normalize_branch_id(value: str) -> str:
+    text = str(value).strip()
+    if not text:
+        return text
+    if text.upper().startswith("B"):
+        suffix = text[1:]
+        return f"B{int(suffix):06d}" if suffix.isdigit() else text.upper()
+    return f"B{int(text):06d}" if text.isdigit() else text

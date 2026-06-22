@@ -52,11 +52,50 @@ CREATE TABLE IF NOT EXISTS runs (
   path TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS branches (
+  branch_id TEXT PRIMARY KEY,
+  parent_ref TEXT NOT NULL,
+  source_ref TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT,
+  path TEXT NOT NULL,
+  materialization_file TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  composition_hash TEXT NOT NULL,
+  summary TEXT
+);
+
+CREATE TABLE IF NOT EXISTS branch_components (
+  branch_id TEXT NOT NULL,
+  role TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  file TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  path TEXT NOT NULL,
+  PRIMARY KEY (branch_id, role, source_type, source_id, mode, file)
+);
+
+CREATE TABLE IF NOT EXISTS branch_edges (
+  branch_id TEXT NOT NULL,
+  parent_kind TEXT NOT NULL,
+  parent_id TEXT NOT NULL,
+  child_kind TEXT NOT NULL,
+  child_id TEXT NOT NULL,
+  edge_kind TEXT NOT NULL,
+  created_at TEXT,
+  PRIMARY KEY (branch_id, parent_kind, parent_id, child_kind, child_id, edge_kind)
+);
+
 CREATE TABLE IF NOT EXISTS nodes (
   node_id TEXT PRIMARY KEY,
   run_id TEXT NOT NULL,
   step INTEGER,
+  kind TEXT NOT NULL DEFAULT 'root',
   hypothesis_id TEXT,
+  branch_id TEXT,
   mode TEXT,
   profile_id TEXT,
   status TEXT NOT NULL,
@@ -68,7 +107,9 @@ CREATE TABLE IF NOT EXISTS nodes (
 
 CREATE TABLE IF NOT EXISTS evaluations (
   node_id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL DEFAULT 'root',
   hypothesis_id TEXT,
+  branch_id TEXT,
   mode TEXT,
   profile_id TEXT,
   code_hash TEXT,

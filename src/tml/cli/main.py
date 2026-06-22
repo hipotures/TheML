@@ -18,6 +18,8 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
+from tml.branches.compose import CreatedBranch, add_branch
+from tml.branches.run import BranchRunPlan, branch_run_plan, run_missing_branches
 from tml.cli.prompt_output import print_prompt_choices, print_prompt_probe_summary, print_prompt_render_summary
 from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.errors import TmlError
@@ -28,6 +30,7 @@ from tml.core.project import default_download_data, default_project_kind, init_p
 from tml.db.reindex import reindex_project
 from tml.db.state import (
     best_score,
+    branch_rows,
     materialization_rows,
     mark_submission_submitted,
     root_counts,
@@ -57,6 +60,7 @@ app = typer.Typer(no_args_is_help=True)
 init_app = typer.Typer(no_args_is_help=True)
 project_app = typer.Typer(no_args_is_help=True)
 root_app = typer.Typer(no_args_is_help=True)
+branch_app = typer.Typer(no_args_is_help=True)
 prompt_app = typer.Typer(no_args_is_help=True)
 kaggle_app = typer.Typer(no_args_is_help=True)
 
@@ -73,6 +77,7 @@ ROOT_HYPOTHESIS_COLUMNS = [
 app.add_typer(init_app, name="init")
 app.add_typer(project_app, name="project")
 app.add_typer(root_app, name="root")
+app.add_typer(branch_app, name="branch")
 app.add_typer(prompt_app, name="prompt")
 app.add_typer(kaggle_app, name="kaggle")
 
@@ -586,6 +591,87 @@ def root_autocommit_cmd(ctx: typer.Context) -> None:
             return
         _git_commit_path(workspace_root(), hypotheses_path, message)
         console.print(f"Committed {len(staged)} ROOT hypothesis files for {ref.slug}.")
+    except Exception as exc:
+        _abort(exc)
+
+
+@branch_app.command("add", context_settings=EXTRA)
+def branch_add_cmd(ctx: typer.Context) -> None:
+    try:
+        ref = active_project_ref()
+        _reject_positional(ctx.args, "tml branch add")
+        config = load_project_config(ref.path)
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"parent", "source", "mode"}, "tml branch add")
+        parent = str(overrides.get("parent") or "")
+        source = str(overrides.get("source") or "")
+        if not parent:
+            raise TmlError("Missing required parameter: parent=<hypothesis|branch|node>.")
+        if not source:
+            raise TmlError("Missing required parameter: source=<hypothesis|branch|node>.")
+        mode = str(overrides.get("mode") or active_mode(config))
+        created = add_branch(ref.path, parent_ref=parent, source_ref=source, mode=mode)
+        _print_branch_add_summary(ref.slug, created)
+        _print_branch_status(ref.path, mode=mode, branch_id=created.branch_id, executed_ids=set(), executed_count=None)
+    except Exception as exc:
+        _abort(exc)
+
+
+@branch_app.command("status", context_settings=EXTRA)
+def branch_status_cmd(ctx: typer.Context) -> None:
+    try:
+        ref = active_project_ref()
+        _reject_positional(ctx.args, "tml branch status")
+        config = load_project_config(ref.path)
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"mode", "branch", "id"}, "tml branch status")
+        mode = str(overrides.get("mode") or active_mode(config))
+        branch_id = _optional_text(overrides.get("branch") or overrides.get("id"))
+        _print_branch_status(ref.path, mode=mode, branch_id=branch_id, executed_ids=set(), executed_count=None)
+    except Exception as exc:
+        _abort(exc)
+
+
+@branch_app.command("run", context_settings=EXTRA)
+def branch_run_cmd(ctx: typer.Context) -> None:
+    try:
+        ref = active_project_ref()
+        status_only = _command_status_requested(ctx.args, "tml branch run")
+        overrides = _overrides(ctx.args)
+        mode = str(overrides["mode"]) if "mode" in overrides else None
+        config = load_project_config(ref.path)
+        active_run_mode = mode or active_mode(config)
+        allowed = {"mode", "branch", "id", "yes"} | _profile_override_keys(ref.path, active_run_mode)
+        _validate_override_keys(overrides, allowed, "tml branch run")
+        branch_id = _optional_text(overrides.get("branch") or overrides.get("id"))
+        if status_only:
+            _print_branch_status(ref.path, mode=active_run_mode, branch_id=branch_id, executed_ids=set(), executed_count=None)
+            return
+        assume_yes = _bool(overrides.get("yes", False))
+        run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "branch", "id", "yes"}}
+        plan = branch_run_plan(ref.path, mode=mode, branch_id=branch_id, profile_overrides=run_overrides)
+        _print_branch_run_plan(ref.slug, plan, branch_id=branch_id)
+        if plan.iteration_count == 0:
+            console.print("No BRANCH runs to execute.")
+            _print_branch_status(ref.path, mode=active_run_mode, branch_id=branch_id, executed_ids=set(), executed_count=0)
+            return
+        if not assume_yes and not Confirm.ask("Start BRANCH run?", default=False, console=console):
+            console.print("BRANCH run cancelled.")
+            return
+        executed_ids = run_missing_branches(
+            ref.path,
+            mode=mode,
+            branch_id=branch_id,
+            profile_overrides=run_overrides,
+            progress=console.print,
+        )
+        _print_branch_status(
+            ref.path,
+            mode=active_run_mode,
+            branch_id=branch_id,
+            executed_ids=set(executed_ids),
+            executed_count=len(executed_ids),
+        )
     except Exception as exc:
         _abort(exc)
 
@@ -1112,6 +1198,45 @@ def _print_root_run_plan(project_slug: str, plan: RootRunPlan, *, hypothesis_id:
     console.print(table)
 
 
+def _print_branch_add_summary(project_slug: str, created: CreatedBranch) -> None:
+    table = Table(title="BRANCH materialized", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Branch", created.branch_id)
+    table.add_row("Parent", f"{created.parent.source_type}:{created.parent.source_id}")
+    table.add_row("Source", f"{created.source.source_type}:{created.source.source_id}")
+    table.add_row("Mode", created.parent.mode)
+    table.add_row("File", _repo_relative(created.branch_path.parent.parent, created.materialization_path))
+    table.add_row("Composition hash", created.composition_hash[:12])
+    console.print(table)
+
+
+def _print_branch_run_plan(project_slug: str, plan: BranchRunPlan, *, branch_id: str | None) -> None:
+    ids = plan.branch_ids
+    if len(ids) > 8:
+        id_text = f"{ids[0]}..{ids[-1]}"
+    else:
+        id_text = ", ".join(ids) if ids else "none"
+    table = Table(title="BRANCH run plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Mode", plan.mode)
+    table.add_row("Active profile", plan.profile_id)
+    table.add_row("Profile hash", plan.profile_hash)
+    table.add_row("Execution timeout seconds", str(plan.execution_timeout_seconds))
+    table.add_row("Run", plan.run_id or "new")
+    table.add_row("Run path", plan.run_path)
+    table.add_row("Next node step", str(plan.next_node_step))
+    table.add_row("Branch filter", _normalize_branch_display(branch_id) if branch_id else "all")
+    table.add_row("Candidate materializations", str(plan.candidate_count))
+    table.add_row("Already evaluated", str(plan.already_evaluated_count))
+    table.add_row("Iterations to run", str(plan.iteration_count))
+    table.add_row("Branch IDs", id_text)
+    console.print(table)
+
+
 def _print_generated_hypotheses(project_dir: Path, created: list[GeneratedHypothesis]) -> None:
     created_ids = {item.hypothesis_id for item in created}
     _print_existing_root_hypotheses(project_dir, created_ids=created_ids)
@@ -1267,6 +1392,69 @@ def _print_root_run_summary(
         table.add_row(*row, style=_zebra_style(displayed_index, extra="bold"))
         displayed_index += 1
     console.print(table)
+
+
+def _print_branch_status(
+    project_dir: Path,
+    *,
+    mode: str,
+    branch_id: str | None,
+    executed_ids: set[str],
+    executed_count: int | None,
+) -> None:
+    config = load_project_config(project_dir)
+    profile_id = active_profile_id(config, mode)
+    count = len(executed_ids) if executed_count is None and executed_ids else executed_count
+    title = "BRANCH status" if count is None else f"BRANCH run (executed: {count})"
+    table = Table(title=title, box=box.SIMPLE_HEAVY)
+    table.add_column("ID", style="bold", no_wrap=True)
+    table.add_column("S", justify="center", no_wrap=True)
+    table.add_column("Parent", no_wrap=True)
+    table.add_column("Source", no_wrap=True)
+    table.add_column("File", no_wrap=True)
+    table.add_column("Run", justify="right", no_wrap=True)
+    table.add_column("Score", justify="right", no_wrap=True)
+    table.add_column("Node", no_wrap=True)
+    table.add_column("Summary", overflow="fold", min_width=36, ratio=1)
+    summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
+    rows = branch_rows(project_dir, mode=mode, profile_id=profile_id, branch_id=branch_id)
+    displayed_index = 0
+    for db_row in rows:
+        bid = str(db_row.get("branch_id") or "")
+        extra = "bold" if bid in executed_ids else None
+        table.add_row(*_branch_status_row(db_row, summary_limit=summary_limit), style=_zebra_style(displayed_index, extra=extra))
+        displayed_index += 1
+    console.print(table)
+
+
+def _branch_status_row(db_row: dict[str, object], *, summary_limit: int) -> list[object]:
+    node_status = str(db_row.get("node_status") or "")
+    if node_status:
+        status = _run_status_text(node_status)
+        score = _format_score(db_row.get("metric"))
+        node = str(db_row.get("node_id") or "")
+        run_duration = _seconds_text(db_row.get("run_seconds"))
+    elif str(db_row.get("branch_status") or "") == "materialized":
+        status = Text("⌘", style="cyan")
+        score = ""
+        node = ""
+        run_duration = ""
+    else:
+        status = Text("◇", style="dim")
+        score = ""
+        node = ""
+        run_duration = ""
+    return [
+        str(db_row.get("branch_id") or ""),
+        status,
+        str(db_row.get("parent_ref") or ""),
+        str(db_row.get("source_ref") or ""),
+        str(db_row.get("materialization_file") or ""),
+        run_duration,
+        score,
+        node,
+        _short_text(str(db_row.get("summary") or ""), summary_limit),
+    ]
 
 
 def _print_root_run_request_status(project_dir: Path, *, mode: str, hypothesis_id: str | None) -> None:
@@ -1503,6 +1691,15 @@ def _format_score(value: object) -> str:
     if isinstance(value, int | float):
         return f"{float(value):.5f}"
     return ""
+
+
+def _normalize_branch_display(value: object) -> str:
+    text = str(value or "").strip()
+    if text.upper().startswith("B") and text[1:].isdigit():
+        return f"B{int(text[1:]):06d}"
+    if text.isdigit():
+        return f"B{int(text):06d}"
+    return text
 
 
 def _token_summary(row: dict[str, object]) -> str:
