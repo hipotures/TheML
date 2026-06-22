@@ -98,6 +98,7 @@ class CodexAiClient:
         )
         summary = _codex_summary_for_model(model, provider_config)
         timeout_seconds = int(provider_config.get("timeout_seconds") or 120)
+        usage_wait_seconds = float(provider_config.get("usage_wait_seconds") or 10)
         isolated_home = _as_bool(provider_config.get("isolated_home"), default=True)
         log_event_deltas = _as_bool(provider_config.get("log_event_deltas"), default=False)
         log_raw_jsonl = _as_bool(provider_config.get("log_raw_jsonl"), default=False)
@@ -210,11 +211,13 @@ class CodexAiClient:
                                 final_chunks.append(delta)
                         elif method == "thread/tokenUsage/updated":
                             usage = params
-                            if final_answer_completed:
+                            if final_answer_completed or turn_completed is not None:
                                 break
                         elif method == "turn/completed":
                             turn_completed = params
-                            break
+                            if usage is not None:
+                                break
+                            post_final_deadline = perf_counter() + usage_wait_seconds
                         elif method == "item/completed":
                             item = params.get("item") if isinstance(params, dict) else {}
                             if (
@@ -228,7 +231,7 @@ class CodexAiClient:
                                 final_answer_completed = True
                                 if usage is not None:
                                     break
-                                post_final_deadline = perf_counter() + 2
+                                post_final_deadline = perf_counter() + usage_wait_seconds
                         elif method == "thread/status/changed":
                             status = params.get("status") if isinstance(params, dict) else {}
                             status_type = status.get("type") if isinstance(status, dict) else None
