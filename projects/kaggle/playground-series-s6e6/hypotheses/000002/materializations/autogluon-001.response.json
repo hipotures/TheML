@@ -1,0 +1,32 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "high",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\ndef add_redshift_regime_catalog_consistency(raw, deps, aux):\n    redshift = raw[\"redshift\"]\n\n    abs_redshift = redshift.abs()\n    signed_log_redshift = np.sign(redshift) * np.log1p(abs_redshift)\n    negative_redshift_flag = (redshift < 0).astype(\"uint8\")\n\n    redshift_regime = pd.Series(\n        pd.Categorical(\n            np.select(\n                [\n                    abs_redshift < 0.003,      # near_zero\n                    abs_redshift < 0.08,       # low (includes 0.003 exactly)\n                    abs_redshift < 0.8,        # mid (includes 0.08 exactly)\n                    abs_redshift >= 0.8,       # high (includes 0.8 exactly)\n                ],\n                [\n                    \"near_zero\",\n                    \"low\",\n                    \"mid\",\n                    \"high\",\n                ],\n                default=\"high\",\n            ),\n            categories=[\"near_zero\", \"low\", \"mid\", \"high\"],\n            ordered=False,\n        ),\n        index=raw.index,\n    )\n\n    spectral_cross = raw[\"spectral_type\"].astype(\"string\") + \" x \" + redshift_regime.astype(\"string\")\n    population_cross = raw[\"galaxy_population\"].astype(\"string\") + \" x \" + redshift_regime.astype(\"string\")\n\n    new_features = pd.DataFrame(\n        {\n            \"abs_redshift\": abs_redshift,\n            \"signed_log_redshift\": signed_log_redshift,\n            \"negative_redshift_flag\": negative_redshift_flag,\n            \"redshift_regime\": redshift_regime,\n            \"spectral_type_x_redshift_regime\": pd.Categorical(spectral_cross),\n            \"galaxy_population_x_redshift_regime\": pd.Categorical(population_cross),\n        },\n        index=raw.index,\n    )\n    return new_features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"redshift_regime_catalog_consistency\",\n        \"fn\": add_redshift_regime_catalog_consistency,\n        \"depends_on\": [],\n        \"description\": \"Build redshift regime bins and cross them with spectral_type and galaxy_population.\",\n    }\n]",
+  "usage": {
+    "threadId": "019eecac-d718-7bb2-a2ab-050a918fd44b",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 0,
+        "inputTokens": 7092,
+        "outputTokens": 3204,
+        "reasoningOutputTokens": 2737,
+        "totalTokens": 10296
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 0,
+        "inputTokens": 7092,
+        "outputTokens": 3204,
+        "reasoningOutputTokens": 2737,
+        "totalTokens": 10296
+      }
+    },
+    "turnId": "019eecac-d722-7511-af81-4c01ab520d5c"
+  },
+  "wall_ms": 5307
+}

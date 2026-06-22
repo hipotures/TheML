@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: 0bb0b83d682f8c8bccd21bb347290ffc33da0b401549b8af508403e9dbc405ec
+    created_at: '2026-06-22T14:04:52'
+feature_group:
+  logical_name: photoz_color_consistency
+  version_id: photoz_color_consistency@000014
+  source_hypothesis_id: '000014'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py

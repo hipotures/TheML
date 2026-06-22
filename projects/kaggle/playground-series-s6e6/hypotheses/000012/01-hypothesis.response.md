@@ -1,0 +1,10 @@
+{
+  "title": "Faint Blue Galaxy Wedge Margins",
+  "group_name": "faint_blue_galaxy_wedge_margins",
+  "family": "blue_galaxy_selection",
+  "summary": "Represent each object by how deeply it falls inside or outside a deterministic SDSS-style faint blue galaxy photometric selection region, capturing galaxy-like color-magnitude geometry that is distinct from stellar and quasar loci.",
+  "depends_on": [],
+  "strategy": "Compute ug=u-g, gr=g-r, ri=r-i, iz=i-z, then form signed margins for the faint-blue galaxy wedge: gr-(0.40+0.6*ug), (1.7-0.1*ug)-gr, ug+0.5, 3.0-ug, gr-0.0, 1.8-gr, ri+0.5, 1.5-ri, iz+1.0, 1.5-iz, u-18.0, 24.0-u, g-18.0, 21.5-g, r-17.8, 19.5-r, i-16.5, 20.5-i, z-16.0, and 20.0-z; derive one overall inside score as the minimum of all margins, separate minimum color-only and magnitude-only margins, a violation count over margins below zero, and the SDSS sampling-intensity proxy exp(0.1411*(gr-(0.40+0.6*ug))) clipped to a finite upper bound such as 10; all inputs are finite in the provided data, but any nonfinite intermediate should be replaced with 0 after margin construction.",
+  "expected_signal": "Objects satisfying this blue-galaxy color-magnitude wedge should be more likely to be GALAXY even when their colors overlap UV-excess quasars or hot stars, improving class balance by adding a targeted galaxy-specific contrast not supplied by generic broadband colors alone.",
+  "risk": "The wedge comes from a survey targeting rule rather than this exact dataset, so it may be redundant with raw magnitudes, colors, and galaxy_population, and hard boundaries could be unstable for objects near the cuts."
+}

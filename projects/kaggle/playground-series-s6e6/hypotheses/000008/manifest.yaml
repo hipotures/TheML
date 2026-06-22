@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-002.py
+    sha256: 8fa2cccad35c685dbf1c6ab4d34bc5bc65ab258882105653727f265d32b46a12
+    created_at: '2026-06-22T16:07:37'
+feature_group:
+  logical_name: survey_manifold_rarity
+  version_id: survey_manifold_rarity@000008
+  source_hypothesis_id: 000008
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-002.py

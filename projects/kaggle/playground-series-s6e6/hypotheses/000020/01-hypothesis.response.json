@@ -1,0 +1,14 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "high",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Survey Depth Limit Margins\",\n  \"group_name\": \"survey_depth_limit_margins\",\n  \"family\": \"selection_depth_geometry\",\n  \"summary\": \"Encode each object's apparent brightness as signed proximity to known SDSS galaxy and quasar spectroscopic depth regimes, so the classifier can recognize whether the source lies in bright galaxy-like, classical quasar-like, faint BOSS-like, or edge-of-survey magnitude territory.\",\n  \"depends_on\": [],\n  \"strategy\": \"Using only the observed ugriz magnitudes, create deterministic signed margin features to published SDSS-style depth thresholds: r - 17.77 for the main galaxy bright limit; i - 15.0, i - 19.1, i - 20.2, i - 20.4, i - 21.3, and i - 22.45 for classical, high-redshift, extended, catalog, and faint quasar regimes; g - 22.0 and r - 21.85 for BOSS-like faint quasar targeting depth; and r - 19.0 and r - 19.5 for deeper low-redshift galaxy extensions. Add interval-membership indicators and signed interval margins for [15.0,19.1], [15.0,20.2], [17.75,22.45] in i, [17.77,19.0] and [19.0,19.5] in r, plus a compact faintness profile consisting of the minimum signed distance to any quasar depth boundary, the minimum signed distance to any galaxy depth boundary, and the difference between those two minima. All magnitudes are finite in the supplied data; if a future value is non-finite, set its derived margins to 0 and add the corresponding interval indicators as 0.\",\n  \"expected_signal\": \"The labels are likely shaped partly by SDSS selection regimes: nearby main galaxies concentrate around bright r limits, quasars are often selected in deeper i/g/r regimes, and stars can overlap quasar colors but differ in how they populate bright and faint survey-depth boundaries, which can improve balanced accuracy especially around QSO versus STAR and bright GALAXY boundaries.\",\n  \"risk\": \"These thresholds are survey-procedure proxies rather than intrinsic astrophysical quantities, so they may be redundant with raw magnitudes or brittle if the train/test generation only loosely follows SDSS targeting rules; approximate use of a generic r magnitude for Petrosian-style galaxy limits can also add noisy boundary signals.\"\n}",
+  "usage": null,
+  "wall_ms": 62657,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

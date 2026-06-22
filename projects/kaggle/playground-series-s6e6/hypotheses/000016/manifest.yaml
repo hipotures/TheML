@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: 1d4155b73b019be8b2aa0fbfa280da686b0336f58a10bc28bb318cf98c89fd3a
+    created_at: '2026-06-22T14:54:28'
+feature_group:
+  logical_name: sky_frame_position_geometry
+  version_id: sky_frame_position_geometry@000016
+  source_hypothesis_id: '000016'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "high",
+  "status": "completed",
+  "text": "import pandas as pd\nimport numpy as np\n\n_LRG_MARGIN_CLIP_BOUNDS = (-20.0, 20.0)\n\n\ndef add_lrg_target_cut_margins(raw, deps, aux):\n    g_minus_r = raw[\"g\"] - raw[\"r\"]\n    r_minus_i = raw[\"r\"] - raw[\"i\"]\n\n    c_perp = r_minus_i - (g_minus_r / 4.0) - 0.177\n    c_parallel = 0.7 * g_minus_r + 1.2 * (r_minus_i - 0.177)\n\n    cut_i_cperp_margin = c_perp.abs() - 0.2\n    cut_i_r_mag_margin = raw[\"r\"] - 19.2\n    cut_i_r_cpar_margin = raw[\"r\"] - (13.116 + c_parallel / 0.3)\n\n    cut_ii_cperp_margin = (0.449 - g_minus_r / 6.0) - c_perp\n    cut_ii_gmri_margin = (1.296 + 0.25 * r_minus_i) - g_minus_r\n    cut_ii_r_mag_margin = raw[\"r\"] - 19.5\n\n    cut_i_score = np.maximum.reduce(\n        [\n            cut_i_cperp_margin.to_numpy(),\n            cut_i_r_mag_margin.to_numpy(),\n            cut_i_r_cpar_margin.to_numpy(),\n        ]\n    )\n    cut_ii_score = np.maximum.reduce(\n        [\n            cut_ii_cperp_margin.to_numpy(),\n            cut_ii_gmri_margin.to_numpy(),\n            cut_ii_r_mag_margin.to_numpy(),\n        ]\n    )\n\n    new_features = pd.DataFrame(\n        {\n            \"lrg_g_minus_r\": g_minus_r,\n            \"lrg_r_minus_i\": r_minus_i,\n            \"lrg_c_perp\": c_perp,\n            \"lrg_c_parallel\": c_parallel,\n            \"lrg_cut_i_margin_c_perp\": cut_i_cperp_margin,\n            \"lrg_cut_i_margin_r_mag\": cut_i_r_mag_margin,\n            \"lrg_cut_i_margin_r_parallel_surface\": cut_i_r_cpar_margin,\n            \"lrg_cut_i_max_signed_violation\": pd.Series(\n                cut_i_score, index=raw.index, dtype=\"float64\"\n            ),\n            \"lrg_cut_ii_margin_c_perp\": cut_ii_cperp_margin,\n            \"lrg_cut_ii_margin_color\": cut_ii_gmri_margin,\n            \"lrg_cut_ii_margin_r_mag\": cut_ii_r_mag_margin,\n            \"lrg_cut_ii_max_signed_violation\": pd.Series(\n                cut_ii_score, index=raw.index, dtype=\"float64\"\n            ),\n        },\n        index=raw.index,\n    )\n\n    lower, upper = _LRG_MARGIN_CLIP_BOUNDS\n    for col in (\n        \"lrg_cut_i_margin_c_perp\",\n        \"lrg_cut_i_margin_r_mag\",\n        \"lrg_cut_i_margin_r_parallel_surface\",\n        \"lrg_cut_i_max_signed_violation\",\n        \"lrg_cut_ii_margin_c_perp\",\n        \"lrg_cut_ii_margin_color\",\n        \"lrg_cut_ii_margin_r_mag\",\n        \"lrg_cut_ii_max_signed_violation\",\n    ):\n        new_features[col] = new_features[col].clip(lower=lower, upper=upper)\n\n    return new_features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"lrg_target_cut_margins\",\n        \"fn\": add_lrg_target_cut_margins,\n        \"depends_on\": [],\n        \"description\": \"Computes SDSS DR2/LRG Cut I and Cut II g-r/r-i rotated-color margins and compact max-violation scores for each photometric target selection family.\",\n    }\n]",
+  "usage": {
+    "threadId": "019eef37-5dc6-7243-b484-324fba9c8a1b",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8832,
+        "inputTokens": 10091,
+        "outputTokens": 3902,
+        "reasoningOutputTokens": 3091,
+        "totalTokens": 13993
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 8832,
+        "inputTokens": 10091,
+        "outputTokens": 3902,
+        "reasoningOutputTokens": 3091,
+        "totalTokens": 13993
+      }
+    },
+    "turnId": "019eef37-5dd4-7f01-9fe8-f77cc795f097"
+  },
+  "wall_ms": 4994,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "high",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\nSPECTRAL_TAG_SCALE = ((\"O/B\", 0.00), (\"A/F\", 0.33), (\"G/K\", 0.67), (\"M\", 1.00))\nGALAXY_TAG_SCALE = ((\"Blue_Cloud\", 0.00), (\"Red_Sequence\", 1.00))\nLOW_REDNESS_BOUND = 0.33\nHIGH_REDNESS_BOUND = 0.67\nUNEXPECTED_TAG_EXPECTATION = 0.5\n\n\ndef add_catalog_tag_color_concordance(raw, deps, aux):\n    spectral_type = raw[\"spectral_type\"]\n    galaxy_population = raw[\"galaxy_population\"]\n\n    spectral_map = dict(SPECTRAL_TAG_SCALE)\n    galaxy_map = dict(GALAXY_TAG_SCALE)\n\n    ug = (raw[\"u\"].astype(float) - raw[\"g\"].astype(float) + 0.5) / 3.5\n    gr = (raw[\"g\"].astype(float) - raw[\"r\"].astype(float) + 0.5) / 2.0\n    ri = (raw[\"r\"].astype(float) - raw[\"i\"].astype(float) + 0.5) / 1.5\n    iz = (raw[\"i\"].astype(float) - raw[\"z\"].astype(float) + 0.5) / 1.5\n\n    ug_clip = pd.Series(np.clip(ug, 0.0, 1.0), index=raw.index)\n    gr_clip = pd.Series(np.clip(gr, 0.0, 1.0), index=raw.index)\n    ri_clip = pd.Series(np.clip(ri, 0.0, 1.0), index=raw.index)\n    iz_clip = pd.Series(np.clip(iz, 0.0, 1.0), index=raw.index)\n\n    observed_redness = (ug_clip + gr_clip + ri_clip + iz_clip) / 4.0\n\n    spectral_expectation = spectral_type.map(spectral_map).fillna(UNEXPECTED_TAG_EXPECTATION).astype(float)\n    galaxy_expectation = galaxy_population.map(galaxy_map).fillna(UNEXPECTED_TAG_EXPECTATION).astype(float)\n\n    diff_spectral = observed_redness - spectral_expectation\n    diff_galaxy = observed_redness - galaxy_expectation\n    diff_tag = spectral_expectation - galaxy_expectation\n\n    coarse_redness_bin = pd.Series(\n        np.where(observed_redness < LOW_REDNESS_BOUND, 0, np.where(observed_redness < HIGH_REDNESS_BOUND, 1, 2)),\n        index=raw.index,\n        dtype=\"int8\",\n    )\n\n    is_hot_tag_red_color = (spectral_type == \"O/B\") | (spectral_type == \"A/F\")\n    is_cool_tag_blue_color = (spectral_type == \"M\")\n    is_red_sequence_blue_color = galaxy_population == \"Red_Sequence\"\n    is_blue_cloud_red_color = galaxy_population == \"Blue_Cloud\"\n\n    hot_tag_red_contradiction = (observed_redness >= HIGH_REDNESS_BOUND) & is_hot_tag_red_color\n    cool_tag_blue_contradiction = (observed_redness <= LOW_REDNESS_BOUND) & is_cool_tag_blue_color\n    red_sequence_blue_contradiction = (observed_redness <= LOW_REDNESS_BOUND) & is_red_sequence_blue_color\n    blue_cloud_red_contradiction = (observed_redness >= HIGH_REDNESS_BOUND) & is_blue_cloud_red_color\n\n    return pd.DataFrame(\n        {\n            \"tag_color_ug_norm\": ug_clip,\n            \"tag_color_gr_norm\": gr_clip,\n            \"tag_color_ri_norm\": ri_clip,\n            \"tag_color_iz_norm\": iz_clip,\n            \"tag_color_observed_redness\": observed_redness,\n            \"tag_color_spectral_expectation\": spectral_expectation,\n            \"tag_color_galaxy_expectation\": galaxy_expectation,\n            \"tag_color_spectral_diff\": diff_spectral,\n            \"tag_color_spectral_abs_diff\": diff_spectral.abs(),\n            \"tag_color_galaxy_diff\": diff_galaxy,\n            \"tag_color_galaxy_abs_diff\": diff_galaxy.abs(),\n            \"tag_color_tag_expectation_diff\": diff_tag,\n            \"tag_color_tag_expectation_abs_diff\": diff_tag.abs(),\n            \"tag_color_redness_bin\": coarse_redness_bin,\n            \"tag_color_hot_tag_red_contradiction\": hot_tag_red_contradiction,\n            \"tag_color_cool_tag_blue_contradiction\": cool_tag_blue_contradiction,\n            \"tag_color_red_sequence_blue_contradiction\": red_sequence_blue_contradiction,\n            \"tag_color_blue_cloud_red_contradiction\": blue_cloud_red_contradiction,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"catalog_tag_color_concordance\",\n        \"fn\": add_catalog_tag_color_concordance,\n        \"depends_on\": [],\n        \"description\": \"Compares clipped SDSS color redness against mapped spectral and galaxy tags to capture tag-color agreement and contradiction geometry.\",\n    },\n]",
+  "usage": {
+    "threadId": "019eef65-ae84-7843-9d22-ddaa63eb06b1",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2944,
+        "inputTokens": 10153,
+        "outputTokens": 5972,
+        "reasoningOutputTokens": 4890,
+        "totalTokens": 16125
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 2944,
+        "inputTokens": 10153,
+        "outputTokens": 5972,
+        "reasoningOutputTokens": 4890,
+        "totalTokens": 16125
+      }
+    },
+    "turnId": "019eef65-ae91-7d21-ad4d-1b7d356b49b6"
+  },
+  "wall_ms": 6370,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

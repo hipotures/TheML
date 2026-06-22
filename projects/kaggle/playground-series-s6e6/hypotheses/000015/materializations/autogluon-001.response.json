@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "high",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\ndef add_redshift_template_domain_margins(raw, deps, aux):\n    redshift = pd.to_numeric(raw[\"redshift\"], errors=\"coerce\")\n    index = redshift.index\n    z = redshift.to_numpy(dtype=float)\n    finite = np.isfinite(z)\n\n    velocity_width = 1200.0 / 299792.458\n    galaxy_low, galaxy_high = -0.01, 1.0\n    qso_low, qso_high = 0.0333, 7.0\n    regime_boundaries = (0.0, 0.0333, 1.0, 2.2, 3.0, 3.5, 4.5, 5.0)\n    regime_names = (\"0_0\", \"0_0333\", \"1_0\", \"2_2\", \"3_0\", \"3_5\", \"4_5\", \"5_0\")\n\n    features = pd.DataFrame(index=index)\n\n    abs_z = np.abs(z)\n    features[\"redshift_abs\"] = abs_z\n    features[\"redshift_sign\"] = np.sign(z)\n\n    stellar_margin = np.where(\n        finite,\n        np.where(abs_z > velocity_width, abs_z - velocity_width, 0.0),\n        np.nan,\n    )\n    features[\"redshift_stellar_velocity_margin\"] = stellar_margin\n\n    features[\"redshift_stellar_velocity_signed_margin\"] = np.where(\n        finite,\n        np.where(\n            abs_z > velocity_width,\n            (abs_z - velocity_width) * np.sign(z),\n            0.0,\n        ),\n        np.nan,\n    )\n    features[\"redshift_in_stellar_velocity_domain\"] = pd.Series(\n        np.where(finite, abs_z <= velocity_width, pd.NA),\n        index=index,\n        dtype=\"boolean\",\n    )\n\n    galaxy_lower_margin = np.where(finite, z - galaxy_low, np.nan)\n    galaxy_upper_margin = np.where(finite, z - galaxy_high, np.nan)\n    galaxy_in_domain = finite & (z >= galaxy_low) & (z <= galaxy_high)\n    galaxy_distance = np.where(\n        finite,\n        np.where(\n            galaxy_in_domain,\n            0.0,\n            np.where(\n                z < galaxy_low,\n                galaxy_low - z,\n                z - galaxy_high,\n            ),\n        ),\n        np.nan,\n    )\n    features[\"redshift_galaxy_lower_margin\"] = galaxy_lower_margin\n    features[\"redshift_galaxy_upper_margin\"] = galaxy_upper_margin\n    features[\"redshift_in_galaxy_domain\"] = pd.Series(\n        np.where(galaxy_in_domain, True, pd.NA),\n        index=index,\n        dtype=\"boolean\",\n    )\n    features[\"redshift_galaxy_distance_to_domain\"] = galaxy_distance\n\n    qso_lower_margin = np.where(finite, z - qso_low, np.nan)\n    qso_upper_margin = np.where(finite, z - qso_high, np.nan)\n    qso_in_domain = finite & (z >= qso_low) & (z <= qso_high)\n    qso_distance = np.where(\n        finite,\n        np.where(\n            qso_in_domain,\n            0.0,\n            np.where(\n                z < qso_low,\n                qso_low - z,\n                z - qso_high,\n            ),\n        ),\n        np.nan,\n    )\n    features[\"redshift_qso_lower_margin\"] = qso_lower_margin\n    features[\"redshift_qso_upper_margin\"] = qso_upper_margin\n    features[\"redshift_in_qso_domain\"] = pd.Series(\n        np.where(qso_in_domain, True, pd.NA),\n        index=index,\n        dtype=\"boolean\",\n    )\n    features[\"redshift_qso_distance_to_domain\"] = qso_distance\n\n    regime_bin = np.full(z.shape[0], -1, dtype=np.int16)\n    finite_vals = z[finite]\n    if finite_vals.size > 0:\n        regime_bin[finite] = np.searchsorted(\n            np.array(regime_boundaries, dtype=float),\n            finite_vals,\n            side=\"right\",\n        )\n    features[\"redshift_regime_bin\"] = regime_bin\n\n    for boundary, name in zip(regime_boundaries, regime_names):\n        safe_label = name.replace(\".\", \"p\")\n        features[f\"redshift_minus_bnd_{safe_label}\"] = np.where(finite, z - boundary, np.nan)\n        features[f\"redshift_ge_bnd_{safe_label}\"] = pd.Series(\n            np.where(finite, z >= boundary, pd.NA),\n            index=index,\n            dtype=\"boolean\",\n        )\n\n    return features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"redshift_template_domain_margins\",\n        \"fn\": add_redshift_template_domain_margins,\n        \"depends_on\": [],\n        \"description\": \"Builds redshift-domain geometry features for stellar, galaxy, and quasar template feasibility with signed margins, in-domain flags, and ordered boundary regime indicators.\",\n    },\n]",
+  "usage": {
+    "threadId": "019eef38-1f16-7493-8e7a-fddffc8b78f2",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2944,
+        "inputTokens": 10000,
+        "outputTokens": 10827,
+        "reasoningOutputTokens": 9749,
+        "totalTokens": 20827
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 2944,
+        "inputTokens": 10000,
+        "outputTokens": 10827,
+        "reasoningOutputTokens": 9749,
+        "totalTokens": 20827
+      }
+    },
+    "turnId": "019eef38-1f23-7573-aa5b-58b096b32646"
+  },
+  "wall_ms": 10187,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

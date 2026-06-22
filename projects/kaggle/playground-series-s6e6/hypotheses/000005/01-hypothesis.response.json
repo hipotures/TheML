@@ -1,0 +1,32 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.4",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "high",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Catalog Template Photometry Residuals\",\n  \"group_name\": \"catalog_template_residuals\",\n  \"family\": \"template_mismatch\",\n  \"summary\": \"Quantify how far each object's observed ugriz photometric pattern departs from the typical broadband locus implied by its own catalog tags, so that agreement or disagreement with the stated object template becomes a direct class signal.\",\n  \"depends_on\": [],\n  \"strategy\": \"Work in adjacent-color space rather than raw magnitudes: define c1=u-g, c2=g-r, c3=r-i, and c4=i-z. For each joint tag cell (spectral_type, galaxy_population), compute the training-set median and MAD for each of c1..c4; if a cell has fewer than 1000 rows, back off to spectral_type-only statistics, and if that is still too small, back off to global statistics. For every object, standardize each color against its matched template with rk=(ck-median_k)/max(MAD_k, 0.02), clipping rk to [-10, 10] to limit extreme leverage. From this residual vector create one coherent set of mismatch descriptors: the signed residuals r1..r4, the mean absolute residual across bands, the maximum absolute residual, the residual sum of squares, and a count of how many |rk| exceed 2.0. If an unseen category combination appears at inference, use the same backoff order; if any MAD is zero, replace it with 0.02 before division.\",\n  \"expected_signal\": \"Balanced accuracy may improve because these features capture whether an object behaves like a clean member of its stated stellar-population template or is an outlier to that template, which can especially help separate STAR from QSO and edge-case GALAXY examples when raw colors alone look ambiguous.\",\n  \"risk\": \"This group can be partly redundant with existing broadband color features, and if the catalog tags themselves are noisy or train/test template distributions drift, the learned mismatch thresholds may overfit stable tag-conditioned color centroids rather than true astrophysical boundaries.\"\n}",
+  "usage": {
+    "threadId": "019eeeee-6ba9-7da1-b9c3-e4c974a9edc1",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 0,
+        "inputTokens": 7477,
+        "outputTokens": 1729,
+        "reasoningOutputTokens": 1229,
+        "totalTokens": 9206
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 0,
+        "inputTokens": 7477,
+        "outputTokens": 1729,
+        "reasoningOutputTokens": 1229,
+        "totalTokens": 9206
+      }
+    },
+    "turnId": "019eeeee-6bba-7e40-b87b-0d011e892c01"
+  },
+  "wall_ms": 34141
+}

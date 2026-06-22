@@ -1,0 +1,10 @@
+{
+  "title": "Rest-frame filter landmark alignment",
+  "group_name": "rest_frame_filter_landmarks",
+  "family": "spectral_redshift_geometry",
+  "summary": "Map each object's fixed ugriz filter measurements into rest-frame wavelength space and summarize how the available bands align with major astrophysical spectral landmarks rather than treating the bands as the same physical wavelengths for every redshift.",
+  "depends_on": [],
+  "strategy": "Use fixed SDSS effective wavelengths in Angstroms for u,g,r,i,z as 3543, 4770, 6231, 7625, and 9134, compute rest wavelengths as lambda_rest=lambda_obs/(1+z_safe) where z_safe=max(redshift,0), and derive one coherent set of deterministic landmark-alignment features: counts of bands with rest wavelengths below 1216, 2500, 4000, between 4000 and 7000, and above 7000; signed log-distance from each rest wavelength to 1216, 2500, and 4000; the nearest observed band index to each landmark; the magnitude at that nearest band; adjacent color contrast around that landmark when both neighboring bands exist; and binary flags for whether each landmark lies inside the observed rest-frame wavelength span. For negative redshift values, use z_safe=0 for wavelength mapping and add a negative-redshift flag; when a landmark falls outside the ugriz span, set nearest-band summaries to the closest endpoint and set the inside-span flag to 0.",
+  "expected_signal": "The same observed color pattern can correspond to different physical continuum regions at different redshifts, so landmark alignment may help separate near-zero-redshift stars from galaxies with 4000 Angstrom break structure and QSOs whose ultraviolet or Lyman-region behavior shifts through the optical bands, improving minority-class balanced accuracy.",
+  "risk": "This may partially overlap with existing redshift-regime and spectral-break ideas, and hardcoded wavelength landmarks can be brittle for noisy or synthetic photometry if the catalog redshift is unreliable or if the labels were generated from simpler rules."
+}

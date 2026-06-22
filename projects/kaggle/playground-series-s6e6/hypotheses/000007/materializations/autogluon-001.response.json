@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "high",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\ndef _fill_zero_signs(sign_paths: np.ndarray) -> np.ndarray:\n    filled = sign_paths.copy()\n    for i in range(filled.shape[0]):\n        row = filled[i]\n        nonzero_idx = np.flatnonzero(row)\n        if nonzero_idx.size == 0:\n            continue\n        for j in range(row.size):\n            if row[j] == 0:\n                nearest = nonzero_idx[np.argmin(np.abs(nonzero_idx - j))]\n                row[j] = row[nearest]\n        filled[i] = row\n    return filled\n\n\ndef add_band_order_topology(raw, deps, aux):\n    bands = [\"u\", \"g\", \"r\", \"i\", \"z\"]\n    mags = raw[bands].astype(float)\n\n    ranks_df = mags.rank(axis=1, method=\"first\", ascending=True).astype(np.int8)\n    ranks = ranks_df.to_numpy(dtype=np.int8)\n\n    band_to_idx = {\"u\": 0, \"g\": 1, \"r\": 2, \"i\": 3, \"z\": 4}\n    brightest_idx = ranks_df.idxmin(axis=1).map(band_to_idx).astype(np.int8)\n    faintest_idx = ranks_df.idxmax(axis=1).map(band_to_idx).astype(np.int8)\n\n    upper_mask = np.triu(np.ones((5, 5), dtype=bool), k=1)\n    inv_total = (ranks[:, :, None] > ranks[:, None, :])[:, upper_mask].sum(axis=1).astype(np.int8)\n    inv_vs_increasing = inv_total.copy()\n    inv_vs_decreasing = (10 - inv_total).astype(np.int8)\n\n    eps = 0.02\n    d1 = mags[\"g\"].to_numpy() - mags[\"u\"].to_numpy()\n    d2 = mags[\"r\"].to_numpy() - mags[\"g\"].to_numpy()\n    d3 = mags[\"i\"].to_numpy() - mags[\"r\"].to_numpy()\n    d4 = mags[\"z\"].to_numpy() - mags[\"i\"].to_numpy()\n    diffs = np.column_stack((d1, d2, d3, d4))\n\n    signs = np.zeros_like(diffs, dtype=np.int8)\n    signs[diffs > eps] = 1\n    signs[diffs < -eps] = -1\n    signs = _fill_zero_signs(signs)\n\n    sign_changes_mask = signs[:, :-1] != signs[:, 1:]\n    sign_change_count = sign_changes_mask.sum(axis=1).astype(np.int8)\n    sign_monotone = (sign_change_count == 0).astype(np.int8)\n    sign_one_change = (sign_change_count == 1).astype(np.int8)\n    sign_first_change_pos = np.where(\n        sign_changes_mask.any(axis=1),\n        sign_changes_mask.argmax(axis=1).astype(np.int8) + 1,\n        0,\n    ).astype(np.int8)\n\n    flat = (mags.max(axis=1) - mags.min(axis=1)) <= eps\n    flat_np = flat.to_numpy()\n\n    inv_total = np.where(flat_np, 0, inv_total)\n    inv_vs_increasing = np.where(flat_np, 0, inv_vs_increasing)\n    inv_vs_decreasing = np.where(flat_np, 0, inv_vs_decreasing)\n    sign_change_count = np.where(flat_np, 0, sign_change_count)\n    sign_monotone = np.where(flat_np, 1, sign_monotone)\n    sign_one_change = np.where(flat_np, 0, sign_one_change)\n    sign_first_change_pos = np.where(flat_np, 0, sign_first_change_pos)\n\n    sign_monotone = sign_monotone.astype(np.int8)\n    sign_one_change = sign_one_change.astype(np.int8)\n    sign_change_count = sign_change_count.astype(np.int8)\n    sign_first_change_pos = sign_first_change_pos.astype(np.int8)\n    inv_total = inv_total.astype(np.int8)\n    inv_vs_increasing = inv_vs_increasing.astype(np.int8)\n    inv_vs_decreasing = inv_vs_decreasing.astype(np.int8)\n\n    flat_topology = flat.astype(np.int8)\n    bright_interior = brightest_idx.isin([1, 2, 3]).astype(np.int8)\n    bright_edge = brightest_idx.isin([0, 4]).astype(np.int8)\n    faint_interior = faintest_idx.isin([1, 2, 3]).astype(np.int8)\n    faint_edge = faintest_idx.isin([0, 4]).astype(np.int8)\n\n    return pd.DataFrame(\n        {\n            \"rank_u\": ranks_df[\"u\"],\n            \"rank_g\": ranks_df[\"g\"],\n            \"rank_r\": ranks_df[\"r\"],\n            \"rank_i\": ranks_df[\"i\"],\n            \"rank_z\": ranks_df[\"z\"],\n            \"brightest_band_wl_idx\": brightest_idx,\n            \"faintest_band_wl_idx\": faintest_idx,\n            \"flat_topology\": flat_topology,\n            \"inversion_count\": inv_total,\n            \"inversion_count_vs_increasing\": inv_vs_increasing,\n            \"inversion_count_vs_decreasing\": inv_vs_decreasing,\n            \"sign_d1\": pd.Series(signs[:, 0], index=raw.index, dtype=np.int8),\n            \"sign_d2\": pd.Series(signs[:, 1], index=raw.index, dtype=np.int8),\n            \"sign_d3\": pd.Series(signs[:, 2], index=raw.index, dtype=np.int8),\n            \"sign_d4\": pd.Series(signs[:, 3], index=raw.index, dtype=np.int8),\n            \"sign_monotone\": sign_monotone,\n            \"sign_change_count\": sign_change_count,\n            \"sign_exactly_one_change\": sign_one_change,\n            \"sign_first_change_pos\": sign_first_change_pos,\n            \"brightest_band_interior\": bright_interior,\n            \"brightest_band_edge\": bright_edge,\n            \"faintest_band_interior\": faint_interior,\n            \"faintest_band_edge\": faint_edge,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"band_order_topology\",\n        \"fn\": add_band_order_topology,\n        \"depends_on\": [],\n        \"description\": \"Encodes ugriz brightness-order topology via per-row band ranks, inversion statistics, monotone sign-path transitions, and edge/interior bright/faint band positions.\",\n    }\n]",
+  "usage": {
+    "threadId": "019eef31-1007-7c41-8673-4e63a45c33f4",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8832,
+        "inputTokens": 9968,
+        "outputTokens": 11690,
+        "reasoningOutputTokens": 10296,
+        "totalTokens": 21658
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 8832,
+        "inputTokens": 9968,
+        "outputTokens": 11690,
+        "reasoningOutputTokens": 10296,
+        "totalTokens": 21658
+      }
+    },
+    "turnId": "019eef31-1015-71e1-a062-eb2588712aee"
+  },
+  "wall_ms": 16728,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "high",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\ndef add_galactic_sightline_context(raw, deps, aux):\n    alpha_rad = np.deg2rad((pd.to_numeric(raw[\"alpha\"], errors=\"coerce\") % 360.0).to_numpy(dtype=float))\n    delta_rad = np.deg2rad(pd.to_numeric(raw[\"delta\"], errors=\"coerce\").to_numpy(dtype=float))\n\n    # Equatorial unit-sphere coordinates (wrap-safe via alpha modulo 360)\n    cos_delta = np.cos(delta_rad)\n    x_eq = cos_delta * np.cos(alpha_rad)\n    y_eq = cos_delta * np.sin(alpha_rad)\n    z_eq = np.sin(delta_rad)\n\n    # J2000 equatorial -> Galactic rotation matrix\n    x_gal = (\n        -0.0548755604 * x_eq\n        + -0.8734370902 * y_eq\n        + -0.4838350155 * z_eq\n    )\n    y_gal = (\n        0.4941094279 * x_eq\n        + -0.4448296300 * y_eq\n        + 0.7469822445 * z_eq\n    )\n    z_gal = (\n        -0.8676661490 * x_eq\n        + -0.1980763734 * y_eq\n        + 0.4559837762 * z_eq\n    )\n\n    z_clip = np.clip(z_gal, -1.0, 1.0)\n    b_rad = np.arcsin(z_clip)\n    b_deg = np.degrees(b_rad)\n    abs_b_deg = np.abs(b_deg)\n\n    l_rad = np.arctan2(y_gal, x_gal)\n    l_deg = np.degrees(l_rad) % 360.0\n    l_rad = np.deg2rad(l_deg)\n\n    sin_l = np.sin(l_rad)\n    cos_l = np.cos(l_rad)\n    sin_b = np.sin(b_rad)\n    cos_b = np.cos(b_rad)\n\n    dist_to_galactic_center = np.degrees(np.arccos(np.clip(x_gal, -1.0, 1.0)))\n    dist_to_galactic_anticenter = np.degrees(np.arccos(np.clip(-x_gal, -1.0, 1.0)))\n    dist_to_north_galactic_pole = np.degrees(np.arccos(np.clip(z_gal, -1.0, 1.0)))\n    dist_to_south_galactic_pole = np.degrees(np.arccos(np.clip(-z_gal, -1.0, 1.0)))\n\n    b_band_edges = (0.0, 10.0, 20.0, 35.0, 50.0, 70.0, 90.0000001)\n    b_band_labels = (\"0-10\", \"10-20\", \"20-35\", \"35-50\", \"50-70\", \"70-90\")\n    b_band = pd.cut(\n        abs_b_deg,\n        bins=b_band_edges,\n        labels=b_band_labels,\n        right=False,\n        include_lowest=True,\n    )\n\n    l_sector_edges = tuple(np.arange(0.0, 390.0, 30.0))\n    l_sector_labels = tuple(f\"{int(start):03d}-{int(start + 30):03d}\" for start in l_sector_edges[:-1])\n    l_sector = pd.cut(\n        l_deg,\n        bins=l_sector_edges,\n        labels=l_sector_labels,\n        right=False,\n        include_lowest=True,\n    )\n\n    b_band_str = b_band.astype(str)\n    l_sector_str = l_sector.astype(str)\n    crossed_regime = b_band_str + \"|\" + l_sector_str\n\n    return pd.DataFrame(\n        {\n            \"eq_x\": x_eq,\n            \"eq_y\": y_eq,\n            \"eq_z\": z_eq,\n            \"gal_l_deg\": l_deg,\n            \"gal_b_deg\": b_deg,\n            \"gal_abs_b_deg\": abs_b_deg,\n            \"gal_sin_l\": sin_l,\n            \"gal_cos_l\": cos_l,\n            \"gal_sin_b\": sin_b,\n            \"gal_cos_b\": cos_b,\n            \"gal_plane_angular_distance_deg\": abs_b_deg,\n            \"gal_dist_to_galactic_center_deg\": dist_to_galactic_center,\n            \"gal_dist_to_galactic_anticenter_deg\": dist_to_galactic_anticenter,\n            \"gal_dist_to_north_pole_deg\": dist_to_north_galactic_pole,\n            \"gal_dist_to_south_pole_deg\": dist_to_south_galactic_pole,\n            \"gal_b_band\": b_band_str,\n            \"gal_l_sector\": l_sector_str,\n            \"gal_b_band_l_sector\": crossed_regime,\n        },\n        index=raw.index,\n    )\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"galactic_sightline_context\",\n        \"fn\": add_galactic_sightline_context,\n        \"depends_on\": [],\n        \"description\": \"Create Galactic coordinate-derived spatial features including smooth angular encodings, center/pole distances, and coarse latitude-longitude regime bins.\",\n    }\n]",
+  "usage": {
+    "threadId": "019eef99-77f3-7c11-90d2-164e75d9edd6",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 3328,
+        "inputTokens": 11607,
+        "outputTokens": 3657,
+        "reasoningOutputTokens": 2547,
+        "totalTokens": 15264
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 3328,
+        "inputTokens": 11607,
+        "outputTokens": 3657,
+        "reasoningOutputTokens": 2547,
+        "totalTokens": 15264
+      }
+    },
+    "turnId": "019eef99-7801-7a61-bc16-3f2bac4c4ed6"
+  },
+  "wall_ms": 13496,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

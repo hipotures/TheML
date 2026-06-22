@@ -1,0 +1,32 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "high",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\ndef add_distance_corrected_luminosity_signature(raw, deps, aux):\n    band_cols = (\"u\", \"g\", \"r\", \"i\", \"z\")\n\n    redshift = raw[\"redshift\"].to_numpy(dtype=float)\n    z_pos = np.maximum(redshift, 0.0)\n\n    c = 299792.458\n    H0 = 70.0\n    q0 = -0.55\n\n    d_mpc = (c / H0) * z_pos * (1.0 + 0.5 * (1.0 - q0) * z_pos)\n    d_mpc = np.maximum(d_mpc, 1e-4)\n\n    distance_term = 5.0 * np.log10(d_mpc) + 25.0\n\n    pseudo_abs = np.column_stack(\n        [\n            raw[band].to_numpy(dtype=float) - distance_term\n            for band in band_cols\n        ]\n    )\n\n    pseudo_abs_median = np.median(pseudo_abs, axis=1)\n    pseudo_abs_min = np.min(pseudo_abs, axis=1)\n    pseudo_abs_max = np.max(pseudo_abs, axis=1)\n    pseudo_abs_range = pseudo_abs_max - pseudo_abs_min\n\n    features = {\n        \"lum_abs_median_5band\": pseudo_abs_median,\n        \"lum_abs_min_5band\": pseudo_abs_min,\n        \"lum_abs_max_5band\": pseudo_abs_max,\n        \"lum_abs_range_5band\": pseudo_abs_range,\n        \"lum_abs_regime_le_m24\": pseudo_abs_median <= -24,\n        \"lum_abs_regime_m24_to_m20\": (pseudo_abs_median > -24) & (pseudo_abs_median <= -20),\n        \"lum_abs_regime_m20_to_m16\": (pseudo_abs_median > -20) & (pseudo_abs_median <= -16),\n        \"lum_abs_regime_m16_to_m8\": (pseudo_abs_median > -16) & (pseudo_abs_median <= -8),\n        \"lum_abs_regime_gt_m8\": pseudo_abs_median > -8,\n    }\n\n    return pd.DataFrame(features, index=raw.index)\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"distance_corrected_luminosity_signature\",\n        \"fn\": add_distance_corrected_luminosity_signature,\n        \"depends_on\": [],\n        \"description\": \"Compute redshift-adjusted pseudo-absolute magnitudes and compact summaries that encode intrinsic luminosity regimes for broadband features.\",\n    }\n]",
+  "usage": {
+    "threadId": "019eed3e-f929-7010-a248-3f05e6f0891b",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 6016,
+        "inputTokens": 7187,
+        "outputTokens": 4418,
+        "reasoningOutputTokens": 3868,
+        "totalTokens": 11605
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 6016,
+        "inputTokens": 7187,
+        "outputTokens": 4418,
+        "reasoningOutputTokens": 3868,
+        "totalTokens": 11605
+      }
+    },
+    "turnId": "019eed3e-f937-76c0-8e4c-d9980a8c6e93"
+  },
+  "wall_ms": 5259
+}

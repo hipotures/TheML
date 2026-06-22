@@ -1,0 +1,10 @@
+{
+  "title": "Observed Continuum Shape Moments",
+  "group_name": "observed_sed_continuum_moments",
+  "family": "spectral_shape",
+  "summary": "Represent each object's observed ugriz photometry as a low-order broadband continuum shape so the model can separate smooth stellar spectra, galaxy break-like curvature, and quasar power-law or line-disturbed continua.",
+  "depends_on": [],
+  "strategy": "Use fixed SDSS effective wavelengths for u,g,r,i,z, for example 3543, 4770, 6231, 7625, and 9134 Angstrom, convert each magnitude to relative log-flux as -0.4*magnitude, subtract the object's five-band mean log-flux to remove absolute brightness, and fit an equal-weight quadratic curve against centered log-wavelength. Emit the fitted linear slope, quadratic curvature, residual RMS, maximum absolute residual, blue-side slope from u-g-r, red-side slope from r-i-z, red-minus-blue slope break, and signed residuals at the central and edge bands after the quadratic fit. Since the supplied data have no missing values, only guard non-finite intermediate values by replacing them with zero after deterministic clipping of input magnitudes to a broad physical range such as [-1, 35].",
+  "expected_signal": "SDSS class separation is strongly expressed in multi-band color space: stars tend to occupy smooth nearly one-dimensional continua, galaxies often show stronger broad curvature from population breaks, and QSOs can look closer to power laws with localized broadband excesses, so compact continuum-shape moments may improve balanced accuracy without copying a full locus model.",
+  "risk": "The group is partially redundant with raw magnitudes and simple colors, and the polynomial residual terms may learn survey-specific calibration artifacts or rare magnitude pathologies if extreme photometric values are not clipped consistently."
+}

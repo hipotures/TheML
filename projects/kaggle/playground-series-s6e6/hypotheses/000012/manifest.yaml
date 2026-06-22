@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-002.py
+    sha256: 6fa481552876179145bb50c42da544de55ac9244ca102afb09b2c25ac0c1eccd
+    created_at: '2026-06-22T16:07:41'
+feature_group:
+  logical_name: faint_blue_galaxy_wedge_margins
+  version_id: faint_blue_galaxy_wedge_margins@000012
+  source_hypothesis_id: '000012'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-002.py
