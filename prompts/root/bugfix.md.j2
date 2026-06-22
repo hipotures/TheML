@@ -1,8 +1,12 @@
-Fix one failed ROOT materialization.
+Fix one failed hypothesis materialization.
 
 Return a corrected version of the same feature-group module. Do not invent a
 new hypothesis or change the feature family. Keep the fix narrow: address the
 observed failure while preserving the intended preprocessing behavior.
+
+You are repairing Python preprocessing code for one stored hypothesis. The
+existing file is a feature-group module imported by a fixed runtime wrapper.
+Generate only the corrected module.
 
 {% include "blocks/materialization-context.md.j2" %}
 
