@@ -651,10 +651,20 @@ def branch_status_cmd(ctx: typer.Context) -> None:
         _reject_positional(ctx.args, "tml branch status")
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"mode", "branch", "id"}, "tml branch status")
+        _validate_override_keys(overrides, {"mode", "branch", "id", "sort", "order"}, "tml branch status")
         mode = str(overrides.get("mode") or active_mode(config))
         branch_id = _optional_text(overrides.get("branch") or overrides.get("id"))
-        _print_branch_status(ref.path, mode=mode, branch_id=branch_id, executed_ids=set(), executed_count=None)
+        sort_by = str(overrides.get("sort") or "score")
+        sort_order = _optional_text(overrides.get("order"))
+        _print_branch_status(
+            ref.path,
+            mode=mode,
+            branch_id=branch_id,
+            executed_ids=set(),
+            executed_count=None,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
     except Exception as exc:
         _abort(exc)
 
@@ -1475,6 +1485,8 @@ def _print_branch_status(
     branch_id: str | None,
     executed_ids: set[str],
     executed_count: int | None,
+    sort_by: str = "score",
+    sort_order: str | None = None,
 ) -> None:
     config = load_project_config(project_dir)
     profile_id = active_profile_id(config, mode)
@@ -1491,7 +1503,14 @@ def _print_branch_status(
     table.add_column("Node", no_wrap=True)
     table.add_column("Summary", overflow="fold", min_width=36, ratio=1)
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
-    rows = branch_rows(project_dir, mode=mode, profile_id=profile_id, branch_id=branch_id)
+    rows = branch_rows(
+        project_dir,
+        mode=mode,
+        profile_id=profile_id,
+        branch_id=branch_id,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
     displayed_index = 0
     for db_row in rows:
         bid = str(db_row.get("branch_id") or "")

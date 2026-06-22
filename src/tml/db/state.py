@@ -865,7 +865,15 @@ def root_run_rows(
     return [dict(row) for row in rows]
 
 
-def branch_rows(project_dir: Path, *, mode: str, profile_id: str, branch_id: str | None = None) -> list[dict[str, Any]]:
+def branch_rows(
+    project_dir: Path,
+    *,
+    mode: str,
+    profile_id: str,
+    branch_id: str | None = None,
+    sort_by: str = "score",
+    sort_order: str | None = None,
+) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
     sql = """
         SELECT
@@ -883,10 +891,39 @@ def branch_rows(project_dir: Path, *, mode: str, profile_id: str, branch_id: str
     if branch_id:
         sql += " AND b.branch_id=?"
         params.append(_normalize_branch_id(branch_id))
-    sql += " ORDER BY b.branch_id"
+    sql += _branch_order_clause(sort_by, sort_order)
     with connect(db_path) as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
+
+
+def _branch_order_clause(sort_by: str, sort_order: str | None) -> str:
+    sort_key = str(sort_by or "score").strip().lower()
+    order_key = str(sort_order or ("desc" if sort_key == "score" else "asc")).strip().lower()
+    if order_key not in {"asc", "desc"}:
+        raise ValueError(f"Invalid branch status order: {sort_order}. Use asc or desc.")
+    direction = order_key.upper()
+    sort_columns = {
+        "id": "b.branch_id",
+        "branch": "b.branch_id",
+        "branch_id": "b.branch_id",
+        "score": "e.metric",
+        "created": "b.created_at",
+        "created_at": "b.created_at",
+        "parent": "b.parent_ref",
+        "source": "b.source_ref",
+        "file": "b.materialization_file",
+        "status": "b.status",
+    }
+    column = sort_columns.get(sort_key)
+    if column is None:
+        allowed = ", ".join(sorted(sort_columns))
+        raise ValueError(f"Invalid branch status sort: {sort_by}. Use one of: {allowed}.")
+    if sort_key == "score":
+        return f" ORDER BY CASE WHEN e.metric IS NULL THEN 1 ELSE 0 END, e.metric {direction}, b.branch_id"
+    if column == "b.branch_id":
+        return f" ORDER BY {column} {direction}"
+    return f" ORDER BY CASE WHEN {column} IS NULL THEN 1 ELSE 0 END, {column} {direction}, b.branch_id"
 
 
 def solution_tree_root_rows(project_dir: Path, *, mode: str, profile_id: str) -> list[dict[str, Any]]:
