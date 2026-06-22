@@ -66,9 +66,6 @@ def run_missing(
                 profile_overrides=profile_overrides,
             ),
         )
-        request_md = materialization.with_name(materialization.name.replace(".py", ".request.md"))
-        if request_md.exists():
-            shutil.copy2(request_md, node_dir / "02-code.request.md")
         attempt_dir = node_dir / "03-execute" / "attempt-001"
         attempt_dir.mkdir(parents=True, exist_ok=True)
         write_yaml(attempt_dir / "started.yaml", {"created_at": datetime.now().isoformat(timespec="seconds")})
