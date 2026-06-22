@@ -1,18 +1,32 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
+
+from tml.core.config import repo_root_for_project
 
 
-def build_wrapped_materialization_source(mode: str, group_code: str, project_dir: Path) -> str:
+def build_wrapped_materialization_source(
+    mode: str,
+    group_code: str,
+    project_dir: Path,
+    profile_overrides: dict[str, object] | None = None,
+) -> str:
     if mode == "legacy":
-        return _legacy_wrapper_source(group_code, project_dir)
+        return _legacy_wrapper_source(group_code, project_dir, profile_overrides=profile_overrides)
     if mode == "autogluon":
-        return _autogluon_wrapper_source(group_code, project_dir)
+        return _autogluon_wrapper_source(group_code, project_dir, profile_overrides=profile_overrides)
     raise ValueError(f"Unsupported materialization mode: {mode}")
 
 
-def _autogluon_wrapper_source(group_code: str, project_dir: Path) -> str:
-    project_literal = repr(str(project_dir.resolve()))
+def _autogluon_wrapper_source(
+    group_code: str,
+    project_dir: Path,
+    *,
+    profile_overrides: dict[str, object] | None,
+) -> str:
+    project_literal = repr(_project_relative_path(project_dir))
+    overrides_literal = repr(_normalized_profile_overrides(profile_overrides or {}))
     return f'''# Generated AutoGluon materialization.
 # Feature-group code is followed by the fixed executable AutoGluon wrapper.
 
@@ -35,7 +49,28 @@ def main():
     from tml.core.profiles import load_profile
     from tml.features.groups import run_feature_groups
 
-    project_dir = Path({project_literal})
+    def _resolve_project_dir(relative_path):
+        for parent in [Path(__file__).resolve().parent, *Path(__file__).resolve().parents]:
+            if (parent / "project.yaml").exists():
+                return parent
+            candidate = parent / relative_path
+            if (candidate / "project.yaml").exists():
+                return candidate
+        for parent in [Path.cwd().resolve(), *Path.cwd().resolve().parents]:
+            candidate = parent / relative_path
+            if (candidate / "project.yaml").exists():
+                return candidate
+        import tml
+
+        package_root = Path(tml.__file__).resolve().parents[2]
+        candidate = package_root / relative_path
+        if (candidate / "project.yaml").exists():
+            return candidate
+        raise FileNotFoundError(f"Cannot resolve project directory for {{relative_path}}")
+
+    project_relative_path = Path({project_literal})
+    project_dir = _resolve_project_dir(project_relative_path)
+    profile_overrides = {overrides_literal}
     data_dir = project_dir / "data"
     work_dir = Path.cwd()
     artifacts_dir = work_dir.parent / "artifacts"
@@ -91,6 +126,7 @@ def main():
                 metric = str(target.get("autogluon_metric") or target.get("metric") or "balanced_accuracy")
                 profile_id = active_profile_id(config, "autogluon")
                 profile = load_profile(project_dir, "autogluon", profile_id)
+                profile.update(profile_overrides)
 
                 train = pd.read_csv(_data_file("train"))
                 test = pd.read_csv(_data_file("test"))
@@ -168,8 +204,14 @@ main()
 '''
 
 
-def _legacy_wrapper_source(group_code: str, project_dir: Path) -> str:
-    project_literal = repr(str(project_dir.resolve()))
+def _legacy_wrapper_source(
+    group_code: str,
+    project_dir: Path,
+    *,
+    profile_overrides: dict[str, object] | None,
+) -> str:
+    _ = profile_overrides
+    project_literal = repr(_project_relative_path(project_dir))
     return f'''# Generated legacy materialization.
 # Feature-group code is followed by the fixed executable legacy wrapper.
 
@@ -183,7 +225,8 @@ def main():
 
     from tml.execution.executor import run_legacy_group_materialization
 
-    project_dir = Path({project_literal})
+    project_relative_path = Path({project_literal})
+    project_dir = _resolve_project_dir(project_relative_path)
     work_dir = Path.cwd()
     result = run_legacy_group_materialization(
         code_path=Path(__file__),
@@ -194,5 +237,48 @@ def main():
     raise SystemExit(result.returncode)
 
 
+def _resolve_project_dir(relative_path):
+    for parent in [Path(__file__).resolve().parent, *Path(__file__).resolve().parents]:
+        if (parent / "project.yaml").exists():
+            return parent
+        candidate = parent / relative_path
+        if (candidate / "project.yaml").exists():
+            return candidate
+    for parent in [Path.cwd().resolve(), *Path.cwd().resolve().parents]:
+        candidate = parent / relative_path
+        if (candidate / "project.yaml").exists():
+            return candidate
+    import tml
+
+    package_root = Path(tml.__file__).resolve().parents[2]
+    candidate = package_root / relative_path
+    if (candidate / "project.yaml").exists():
+        return candidate
+    raise FileNotFoundError(f"Cannot resolve project directory for {{relative_path}}")
+
+
 main()
 '''
+
+
+def _project_relative_path(project_dir: Path) -> str:
+    resolved = project_dir.resolve()
+    root = repo_root_for_project(resolved).resolve()
+    try:
+        return resolved.relative_to(root).as_posix()
+    except ValueError:
+        return resolved.name
+
+
+def _normalized_profile_overrides(overrides: dict[str, object]) -> dict[str, Any]:
+    normalized: dict[str, Any] = {}
+    for key, value in overrides.items():
+        if key in {"mode", "id", "hypothesis"}:
+            continue
+        if key == "preset":
+            normalized["presets"] = value
+        elif key == "time":
+            normalized["time_limit"] = value
+        else:
+            normalized[key] = value
+    return normalized

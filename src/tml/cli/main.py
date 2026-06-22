@@ -226,7 +226,8 @@ def root_run_cmd(ctx: typer.Context) -> None:
         ref = active_project_ref()
         overrides = _overrides(ctx.args)
         mode = str(overrides["mode"]) if "mode" in overrides else None
-        ran = run_missing(ref.path, mode=mode)
+        run_overrides = {key: value for key, value in overrides.items() if key != "mode"}
+        ran = run_missing(ref.path, mode=mode, profile_overrides=run_overrides)
         console.print(f"ROOT nodes executed: {ran}")
     except Exception as exc:
         _abort(exc)
@@ -242,7 +243,8 @@ def root_ensure_cmd(ctx: typer.Context) -> None:
         mode = str(overrides.get("mode") or active_mode(config))
         generated = generate_missing_root_hypotheses(ref.path, count=count)
         materialized = materialize_missing(ref.path, mode=mode)
-        ran = run_missing(ref.path, mode=mode)
+        run_overrides = {key: value for key, value in overrides.items() if key not in {"count", "mode"}}
+        ran = run_missing(ref.path, mode=mode, profile_overrides=run_overrides)
         reindex_project(ref.path, ref.db_path)
         console.print(f"Generated: {len(generated)}; materialized: {materialized}; executed: {ran}")
     except Exception as exc:
@@ -326,6 +328,7 @@ def prompt_probe_cmd(ctx: typer.Context) -> None:
             return
         tmp = _bool(overrides.get("tmp", True))
         model = str(overrides["model"]) if "model" in overrides else None
+        profile_overrides = {key: value for key, value in overrides.items() if key not in {"tmp", "model"}}
         target, stage = _prompt_target_stage(positional)
         path = _probe_with_progress(
             ref.path,
@@ -333,6 +336,7 @@ def prompt_probe_cmd(ctx: typer.Context) -> None:
             target=target,
             stage=stage,
             model_override=model,
+            profile_overrides=profile_overrides,
         )
         print_prompt_probe_summary(console, path)
     except Exception as exc:
@@ -346,6 +350,7 @@ def _probe_with_progress(
     target: str | None,
     stage: str | None,
     model_override: str | None,
+    profile_overrides: dict[str, object] | None,
 ) -> Path:
     state: dict[str, object] = {
         "message": "Preparing prompt probe...",
@@ -370,6 +375,7 @@ def _probe_with_progress(
                 target=target,
                 stage=stage,
                 model_override=model_override,
+                profile_overrides=profile_overrides,
                 tmp_root=_tmp_root(),
                 progress=report,
             )

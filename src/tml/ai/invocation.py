@@ -128,7 +128,7 @@ def _write_request_artifacts(
         "template_hash": invocation.template_hash,
         "rendered_prompt_hash": invocation.rendered_prompt_hash,
         "project_dir": invocation.project_dir,
-        "cwd": str(invocation.cwd) if invocation.cwd else None,
+        "cwd": _artifact_path(invocation.cwd) if invocation.cwd else None,
         "sandbox": invocation.sandbox,
         "output_schema": invocation.output_schema,
         "metadata": invocation.metadata,
@@ -174,6 +174,14 @@ def _pretty_response_text(text: str) -> str:
     if not isinstance(parsed, (dict, list)):
         return text
     return json.dumps(parsed, indent=2, sort_keys=False, ensure_ascii=False) + "\n"
+
+
+def _artifact_path(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(Path.cwd().resolve()).as_posix() or "."
+    except ValueError:
+        return path.name
 
 
 def _jsonable(value: Any) -> Any:

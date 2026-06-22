@@ -16,7 +16,6 @@ from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml, write_yaml
 
 from .model import hypothesis_dirs
-from .wrapper_source import build_wrapped_materialization_source
 
 
 def materialize_missing(
@@ -37,11 +36,10 @@ def materialize_missing(
         mat_dir.mkdir(parents=True, exist_ok=True)
         target = mat_dir / f"{mode}-001.py"
         if target.exists():
-            if _is_wrapped_materialization(target, mode):
-                continue
-            if _repair_existing_materialization(project_dir, hdir, mat_dir, mode, target):
-                created += 1
-                continue
+            if _is_runtime_wrapper(target):
+                hypothesis = read_yaml(hdir / "hypothesis.yaml")
+                if _rewrite_group_only_from_response(hdir, mat_dir, mode, target, hypothesis):
+                    created += 1
             continue
         timeout_seconds = int(role_options.get("timeout_seconds") or 900)
         if progress is not None:
@@ -75,35 +73,34 @@ def materialize_missing(
         )
         group_code = _parse_code(response.text)
         validate_group_code_source(group_code)
-        atomic_write_text(mat_dir / f"{mode}-001.group.py", group_code)
-        atomic_write_text(target, build_wrapped_materialization_source(mode, group_code, project_dir))
+        atomic_write_text(target, group_code)
         _update_manifest(hdir, mode, target, hypothesis)
         created += 1
     return created
 
 
-def _is_wrapped_materialization(path: Path, mode: str) -> bool:
+def _is_runtime_wrapper(path: Path) -> bool:
     try:
         source = path.read_text(encoding="utf-8")
     except OSError:
         return False
-    if mode == "autogluon":
-        return "# Generated AutoGluon materialization." in source and "def main():" in source
-    if mode == "legacy":
-        return "# Generated legacy materialization." in source and "def main():" in source
-    return False
+    return "# Generated AutoGluon materialization." in source or "# Generated legacy materialization." in source
 
 
-def _repair_existing_materialization(project_dir: Path, hdir: Path, mat_dir: Path, mode: str, target: Path) -> bool:
+def _rewrite_group_only_from_response(
+    hdir: Path,
+    mat_dir: Path,
+    mode: str,
+    target: Path,
+    hypothesis: dict[str, object],
+) -> bool:
     response_path = mat_dir / f"{mode}-001.response.md"
     if not response_path.exists():
         return False
-    response_text = response_path.read_text(encoding="utf-8")
-    group_code = _parse_code(response_text)
+    group_code = _parse_code(response_path.read_text(encoding="utf-8"))
     validate_group_code_source(group_code)
-    atomic_write_text(mat_dir / f"{mode}-001.group.py", group_code)
-    atomic_write_text(target, build_wrapped_materialization_source(mode, group_code, project_dir))
-    _update_manifest(hdir, mode, target, read_yaml(hdir / "hypothesis.yaml"))
+    atomic_write_text(target, group_code)
+    _update_manifest(hdir, mode, target, hypothesis)
     return True
 
 

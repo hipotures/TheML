@@ -1,7 +1,7 @@
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: 560f81ebcf2f3e44029fb93368036a13c289e7c2d12fac1572324e4436e47307
+    sha256: f3ed5048490b8f38456e574896cc35c7eca012937fba5401a5863a53cd5e9306
     created_at: '2026-06-22T02:10:18'
 feature_group:
   logical_name: broadband_color_shape

@@ -41,6 +41,7 @@ def probe_prompt(
     target: str | None = None,
     stage: str | None = None,
     model_override: str | None = None,
+    profile_overrides: dict[str, object] | None = None,
     tmp_root: Path | None = None,
     progress: Callable[[str, int | None], None] | None = None,
 ) -> Path:
@@ -89,8 +90,16 @@ def probe_prompt(
         mode = active_mode(load_project_config(project_dir))
         code = _parse_code(response.text)
         validate_group_code_source(code)
-        atomic_write_text(out_dir / f"{mode}-001.group.py", code)
-        atomic_write_text(out_dir / f"{mode}-001.py", build_wrapped_materialization_source(mode, code, project_dir))
+        atomic_write_text(out_dir / f"{mode}-001.py", code)
+        atomic_write_text(
+            out_dir / f"{mode}-001-runtime.py",
+            build_wrapped_materialization_source(
+                mode,
+                code,
+                project_dir,
+                profile_overrides=profile_overrides,
+            ),
+        )
     return out_dir
 
 
@@ -112,7 +121,7 @@ def _render_for_target(project_dir: Path, *, target: str | None, stage: str | No
             project_prompt_context(project_dir, hypothesis=hypothesis),
         )
         rendered["hypothesis_id"] = str(hypothesis.get("hypothesis_id") or target)
-        rendered["hypothesis_path"] = str(hypothesis_path) if hypothesis_path else ""
+        rendered["hypothesis_path"] = _relative_path(project_dir, hypothesis_path) if hypothesis_path else ""
         return rendered
     raise TmlError(_unknown_prompt_target_message(target, stage))
 
@@ -176,3 +185,10 @@ def _tmp_dir(project_dir: Path, tmp_root: Path | None) -> Path:
     root = tmp_root or Path("/tmp")
     return root / "tml" / project_dir.name / run_id()
 
+
+def _relative_path(project_dir: Path, path: Path) -> str:
+    root = repo_root_for_project(project_dir)
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return path.name

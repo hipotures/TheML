@@ -7,13 +7,21 @@ from pathlib import Path
 from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.ids import node_id, run_id
 from tml.execution.executor import run_python_script, write_attempt_result
+from tml.features.validation import validate_group_code_source
+from tml.hypotheses.wrapper_source import build_wrapped_materialization_source
+from tml.utils.atomic import atomic_write_text
 from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml, write_yaml
 
 from .model import hypothesis_dirs
 
 
-def run_missing(project_dir: Path, mode: str | None = None) -> int:
+def run_missing(
+    project_dir: Path,
+    mode: str | None = None,
+    *,
+    profile_overrides: dict[str, object] | None = None,
+) -> int:
     config = load_project_config(project_dir)
     mode = mode or active_mode(config)
     profile_id = active_profile_id(config, mode)
@@ -46,7 +54,18 @@ def run_missing(project_dir: Path, mode: str | None = None) -> int:
             },
         )
         shutil.copy2(hdir / "hypothesis.yaml", node_dir / "01-hypothesis.yaml")
-        shutil.copy2(materialization, node_dir / "02-code.py")
+        group_code = materialization.read_text(encoding="utf-8")
+        validate_group_code_source(group_code)
+        shutil.copy2(materialization, node_dir / "02-features.py")
+        atomic_write_text(
+            node_dir / "02-code.py",
+            build_wrapped_materialization_source(
+                mode,
+                group_code,
+                project_dir,
+                profile_overrides=profile_overrides,
+            ),
+        )
         request_md = materialization.with_name(materialization.name.replace(".py", ".request.md"))
         if request_md.exists():
             shutil.copy2(request_md, node_dir / "02-code.request.md")
@@ -143,6 +162,7 @@ def _write_success_markers(
         "files": {
             "hypothesis": "01-hypothesis.yaml",
             "code": "02-code.py",
+            "features": "02-features.py",
         },
         "created_at": datetime.now().isoformat(timespec="seconds"),
     }
