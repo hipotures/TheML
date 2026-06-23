@@ -695,36 +695,29 @@ def root_ensure_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@root_app.command(
+@app.command(
     "autocommit",
     context_settings=EXTRA,
     help=(
         "Commit the active project's ROOT hypothesis artifacts.\n\n"
         "Accepted key=value parameters:\n"
-        "  branches=false    Exclude active project's branch artifacts.\n"
         "  message=<text>     Commit message; defaults to the project slug.\n"
         "  yes=true           Skip the confirmation prompt."
     ),
 )
-def root_autocommit_cmd(ctx: typer.Context) -> None:
+def autocommit_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
         ensure_root_baseline(ref.path)
-        _reject_positional(ctx.args, "tml root autocommit")
+        _reject_positional(ctx.args, "tml autocommit")
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"branches", "message", "yes"}, "tml root autocommit")
+        _validate_override_keys(overrides, {"message", "yes"}, "tml autocommit")
         message = str(overrides.get("message") or f"Commit ROOT hypotheses for {ref.slug}")
         assume_yes = _bool(overrides.get("yes", False))
-        include_branches = _bool(overrides.get("branches", True))
         hypotheses_path = ref.path / "hypotheses"
         if not hypotheses_path.exists():
             raise TmlError(f"Hypotheses directory does not exist: {hypotheses_path}")
         commit_paths = [hypotheses_path]
-        branches_path = ref.path / "branches"
-        if include_branches:
-            if not branches_path.exists():
-                raise TmlError(f"Branches directory does not exist: {branches_path}")
-            commit_paths.append(branches_path)
         changed_before = _git_changed_paths(workspace_root(), commit_paths)
         if not changed_before:
             console.print(f"No ROOT artifact changes to commit for {ref.slug}.")
