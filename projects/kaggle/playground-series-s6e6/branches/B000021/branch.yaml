@@ -1,0 +1,63 @@
+schema_version: 1
+branch_id: B000021
+operation: add_existing_groups
+parent_ref: B000007
+source_ref: 000018
+parent:
+  ref: B000007
+  source_type: branch
+  source_id: B000007
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: 2d477d96e52b340c777167823561e2d9e8afd743efe97238cdb4fe2e461af95d
+  path: branches/B000007/materializations/autogluon-001.py
+source:
+  ref: 000018
+  source_type: hypothesis
+  source_id: 000018
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: 9d514a9a113f8d41ce4826649ca8e815491d329c581ade6a0c158f9b467f3013
+  path: hypotheses/000018/materializations/autogluon-001.py
+parent_edge:
+  kind: branch
+  id: B000007
+mode: autogluon
+status: materialized
+materialization_file: autogluon-001.py
+code_hash: 4100a5aaad0eab4c3d8ee1f0071bbb58f59d5538d5639f0d00f8e747cb058ca8
+composition_hash: 864dc1017afc4b92ba7a2687630c45d378ef05701071fee4ece29d1eb4580a92
+summary: Add 000018 groups to parent B000007.
+created_at: '2026-06-22T19:53:44'
+components:
+- branch_id: B000007
+  role: parent
+  source_type: hypothesis
+  source_id: '000002'
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: baa8c98aa692d16fa5e4decc980b7acf1600289dedf6f5e1162ec157d5393bc1
+  path: hypotheses/000002/materializations/autogluon-001.py
+- branch_id: B000007
+  role: parent
+  source_type: hypothesis
+  source_id: '000003'
+  mode: autogluon
+  file: autogluon-002.py
+  code_hash: 1de6ff1be77d135c2f8fbcd11cf2846535cdf74b8efad21d39291c167b467104
+  path: hypotheses/000003/materializations/autogluon-002.py
+- branch_id: B000007
+  role: parent
+  source_type: hypothesis
+  source_id: '000015'
+  mode: autogluon
+  file: autogluon-002.py
+  code_hash: 8b5ead10f82b9c951c5b3566bd15af85fc4167d199d84b0829f1cbc964d5c90b
+  path: hypotheses/000015/materializations/autogluon-002.py
+- role: source
+  source_type: hypothesis
+  source_id: 000018
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: 9d514a9a113f8d41ce4826649ca8e815491d329c581ade6a0c158f9b467f3013
+  path: hypotheses/000018/materializations/autogluon-001.py
