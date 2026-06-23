@@ -1,0 +1,35 @@
+title: Relative-flux likelihood margins for class discrimination
+group_name: xdqso_inspired_flux_density_scores
+family: probabilistic_flux_density_scoring
+summary: Create a compact probabilistic representation of each object by modeling
+  its i-band-normalized flux shape in redshift-aware, magnitude-binned flux space
+  and encoding class membership strength through class-marginal likelihood margins.
+depends_on: []
+strategy: 'Convert magnitudes to linear fluxes with f_b = 10^{-0.4 m_b}. Build the
+  4D relative-flux vector r = (f_u/f_i, f_g/f_i, f_r/f_i, f_z/f_i) (use f_i as reference;
+  this avoids ratio blowups from u-band nonlinearity). Bin objects into overlapping
+  i-band bins of width 0.2 mag with 0.1 mag step across [17.7, 22.5], and coarse redshift
+  slabs e.g. z<0.8, 0.8<=z<2.5, 2.5<=z<4.0, z>=4.0. For each class c in {GALAXY, QSO,
+  STAR} and each (i-bin, z-slab), fit a 4D Gaussian mixture on r from train only (for
+  instance 20 components, matching the classical XDQSO setup) using class-labeled
+  points. During scoring, evaluate class-conditional densities L_c(r | i,z) = prior_c(i,z)*sum_k
+  pi_ck N(r; mu_ck, Sigma_ck + Sigma_proxy), where Sigma_proxy is a small data-driven
+  positive-definite proxy error covariance (for example, robust diagonal variance
+  of each ratio within the same i-bin; add a floor to avoid singularity). Smoothly
+  handle empty/low-count bins by backing off to adjacent i-bins and then to global
+  class models. Convert to pseudo-posteriors p_c = L_c / (L_GALAXY + L_QSO + L_STAR
+  + eps) and emit: p_GALAXY, p_STAR, p_QSO, pairwise log-odds features (log p_QSO
+  - log p_STAR, log p_QSO - log p_GALAXY, log p_STAR - log p_GALAXY), top-class confidence,
+  and posterior entropy.'
+expected_signal: This directly captures class overlap structure in a noise-aware generative
+  manifold rather than relying on handcrafted color cuts, which is especially valuable
+  where quasar and stellar loci intersect at medium redshift, so it should improve
+  recall balance for the minority and ambiguous classes under balanced accuracy.
+risk: Density fitting is compute-heavy and sensitive to sparse bins (especially for
+  rare high-redshift objects), and synthetic uncertainty proxies may bias likelihood
+  calibration if noise is misestimated, requiring aggressive regularization and binning
+  fallback to control instability.
+schema_version: 1
+hypothesis_id: '000041'
+enabled: true
+created_at: '2026-06-23T14:24:09'

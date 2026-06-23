@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Adaptive local manifold codimension and extrapolation signatures\",\n  \"group_name\": \"local_manifold_codimension\",\n  \"family\": \"manifold_geometry\",\n  \"summary\": \"Model the neighborhood geometry of each source in joint photometric-color-plus-redshift space to express whether it sits on a thin, well-supported manifold branch or in an unsupported transition region where class-specific physical interpretation is more likely to differ from nearby stellar-like populations.\",\n  \"depends_on\": [],\n  \"strategy\": \"For every row, build four colors C = [u-g, g-r, r-i, i-z], then form a standardized feature vector x = [C, redshift] with robust scaling (MAD or IQR). For each row, find k nearest neighbors in x (k=64, k' = min(k, available-1) near sparse edges). Compute neighbor centroid m_i, covariance \u03a3_i, and ordered eigenvalues \u03bb1\u2265\u03bb2\u2265...\u2265\u03bb4 from the 4D color+redshift neighborhood. Derive: (1) local codimension ratio r2 = (\u03bb1+\u03bb2)/(\u03bb1+...+\u03bb4), (2) manifold residual e2 = (x_i-m_i)^T(I\u2212V2V2^T)(x_i-m_i)/(\u03bb3+\u03bb4+1e-12), where V2 are top-2 eigenvectors of \u03a3_i, (3) local anisotropy and complexity scores from (\u03bb1/\u03bb2), (\u03bb2/\u03bb3), and (\u03bb4/\u03bbsum), (4) local support metrics d_k, median radius r_med, and density proxy 1/(d_k+1e-12), plus in-box support = fraction of coordinates of x_i that lie within the [5th,95th] percentile envelope of its neighbors per dimension. Repeat once on colors alone (4D, without redshift) and once on raw magnitudes [u,g,r,i,z] with MAD scaling, then concatenate corresponding features; if a neighborhood covariance is near-singular, replace unstable ratios with global fallback stats and set a binary fallback flag.\",\n  \"expected_signal\": \"Quasars and many galaxies deviate from the thin local structure and support of the dominant stellar photometric manifold, especially near class boundary regions, while true stars remain in locally low-complexity, high-support neighborhoods, so these local linearity/extrapolation features provide a direct geometric separator that complements global color cuts and helps balanced accuracy on ambiguous regions.\",\n  \"risk\": \"Nearest-neighbor graph construction is computationally heavy at this dataset size and requires controlled approximations to stay practical; neighborhood features can be sensitive to scaling choices and nearest-neighbor anisotropy, and using transductive neighborhood estimates over unlabeled test points may introduce subtle distribution-aware behavior that must be kept explicit and stable.\"\n}",
+  "usage": {
+    "threadId": "019ef472-72b4-7f63-bb05-58bc78ee7833",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 11264,
+        "inputTokens": 45491,
+        "outputTokens": 14877,
+        "reasoningOutputTokens": 14077,
+        "totalTokens": 60368
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 11264,
+        "inputTokens": 45491,
+        "outputTokens": 14877,
+        "reasoningOutputTokens": 14077,
+        "totalTokens": 60368
+      }
+    },
+    "turnId": "019ef472-72c0-7ce0-a67d-6da46776895b"
+  },
+  "wall_ms": 83225,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

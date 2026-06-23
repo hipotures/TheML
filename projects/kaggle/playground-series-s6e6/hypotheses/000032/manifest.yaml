@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: e8eadfb2689ea66f8835a7db628bd6848c7fbbc5e5c854082471ddbef8c6229b
+    created_at: '2026-06-23T14:23:55'
+feature_group:
+  logical_name: redshifted_4000a_break_curvature
+  version_id: redshifted_4000a_break_curvature@000032
+  source_hypothesis_id: '000032'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py

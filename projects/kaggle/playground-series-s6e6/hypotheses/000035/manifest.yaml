@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: 71de4adfe2f85230382efcb33b8d3bb6bdc92f1ba03289ac33e2600f4d4514e5
+    created_at: '2026-06-23T14:24:41'
+feature_group:
+  logical_name: eboss_ptf_c1_c3_geometry
+  version_id: eboss_ptf_c1_c3_geometry@000035
+  source_hypothesis_id: '000035'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py

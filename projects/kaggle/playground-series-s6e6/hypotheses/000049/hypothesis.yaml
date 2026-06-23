@@ -1,0 +1,35 @@
+title: Asinh-band censoring and dropout regime geometry
+group_name: asinh_censoring_regime_geometry
+family: detection_regime_geometry
+summary: Represent each object by whether each ugriz measurement is in a reliable
+  detection regime or in the SDSS low-signal asinh regime, and encode the resulting
+  band-visibility and dropout geometry so class-separating patterns tied to faint-band
+  suppression are made explicit.
+depends_on: []
+strategy: 'For each band b in {u,g,r,i,z}, invert the SDSS asinh magnitude m_b using
+  the published relation m = -2.5/ln(10) * [asinh((f/f0)/(2 b_b)) + ln b_b], where
+  b_u=1.4e-10, b_g=0.9e-10, b_r=1.2e-10, b_i=1.8e-10, b_z=7.4e-10, then compute f_b/f0
+  = 2 b_b sinh(-(m_b * ln(10)/2.5) - ln b_b) and q_b = (f_b/f0)/(2 b_b). Create per-band
+  regime features: detect_10b_b = 1[f_b/f0 > 10 b_b] (equiv m_b < m10b_b), neg_b =
+  1[f_b/f0 < 0], and delta_b = clip((m_b - m10b_b)/(m0_b - m10b_b), 0, 1), with m10b_b={22.12,22.60,22.29,21.85,20.32}
+  and m0_b={24.63,25.11,24.80,24.36,22.83} for u,g,r,i,z respectively. Add joint descriptors:
+  count of detected bands, count of non-detected redder-than-blue bands, longest contiguous
+  missing-band run in wavelength order, blue-dropout pattern flags (e.g., u-drop,
+  g-drop, u+g-drop while r/i/z detected), detected-band-only color slopes and curvatures
+  from f_b/f0, and mass-center entropy of abs(f_b/f0) after zeroing not-detected bands;
+  clip f_b/f0 and delta_b to training quantile tails to avoid single-object blow-up
+  and keep edge handling stable when very bright or extreme values appear.'
+expected_signal: Because asinh magnitudes compress faint flux, raw magnitude differences
+  can hide true non-detections; regime-aware features expose low-SNR structure and
+  dropout signatures (especially blue-band suppression at specific redshifts and low-confidence
+  detections) that are known to be relevant for distinguishing stars from galaxies
+  and quasars, which should improve class separation in the ambiguous boundary regions
+  measured by balanced accuracy.
+risk: Reliance on published softening constants and threshold magnitudes creates calibration
+  sensitivity if the competition data were reduced with different photometric conventions,
+  and regime flags are intrinsically noisy near boundaries, so they can inject instability
+  or duplicate existing flux-asinh or depth-based features unless regularized.
+schema_version: 1
+hypothesis_id: 000049
+enabled: true
+created_at: '2026-06-23T14:30:47'

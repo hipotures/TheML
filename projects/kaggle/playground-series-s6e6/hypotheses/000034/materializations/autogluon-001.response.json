@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n_BB_BANDS = (\"u\", \"g\", \"r\", \"i\", \"z\")\n_BB_WAVELENGTHS = (3551.0, 4686.0, 6165.0, 7481.0, 8931.0)\n_BB_TEMPERATURE_MIN = 1500.0\n_BB_TEMPERATURE_MAX = 50000.0\n_BB_TEMPERATURE_STEPS = 140\n_BB_PLANCK_CONSTANT = 14387.7\n_BB_EPS = 1e-12\n_BB_BLOCK_SIZE = 8192\n\n\ndef add_blackbody_continuum_distance(raw, deps, aux):\n    _ = deps\n    _ = aux\n\n    required_cols = (\"redshift\",) + _BB_BANDS\n    missing_cols = [col for col in required_cols if col not in raw.columns]\n    if missing_cols:\n        raise KeyError(f\"Missing required columns for blackbody_continuum_distance: {missing_cols}\")\n\n    n_rows = len(raw)\n    index = raw.index\n\n    wavelengths = np.asarray(_BB_WAVELENGTHS, dtype=np.float64)\n    temps = np.logspace(\n        np.log10(_BB_TEMPERATURE_MIN),\n        np.log10(_BB_TEMPERATURE_MAX),\n        _BB_TEMPERATURE_STEPS,\n        dtype=np.float64,\n    )\n    n_t = temps.size\n    if n_t < 2:\n        raise ValueError(\"Temperature grid must contain at least two points.\")\n\n    band_flux = np.empty((n_rows, len(_BB_BANDS)), dtype=np.float64)\n    for i, band in enumerate(_BB_BANDS):\n        values = pd.to_numeric(raw[band], errors=\"coerce\").to_numpy(dtype=np.float64)\n        finite = np.isfinite(values)\n        if not finite.all():\n            if finite.any():\n                fill = float(np.nanmedian(values[finite]))\n            else:\n                fill = 0.0\n            values = values.copy()\n            values[~finite] = fill\n        band_flux[:, i] = np.clip(np.power(10.0, -0.4 * values), _BB_EPS, None)\n\n    row_sum = band_flux.sum(axis=1, keepdims=True)\n    row_sum = np.where(row_sum > _BB_EPS, row_sum, _BB_EPS)\n    p = band_flux / row_sum\n\n    row_norm2 = np.einsum(\"mb,mb->m\", p, p)\n\n    z = pd.to_numeric(raw[\"redshift\"], errors=\"coerce\").to_numpy(dtype=np.float64)\n    z = np.where(np.isfinite(z), z, 0.0)\n    z = np.maximum(z, 0.0)\n\n    bb_logT = np.empty(n_rows, dtype=np.float64)\n    bb_ssr = np.empty(n_rows, dtype=np.float64)\n    bb_gap = np.empty(n_rows, dtype=np.float64)\n    bb_second_margin = np.empty(n_rows, dtype=np.float64)\n    bb_resid_u = np.empty(n_rows, dtype=np.float64)\n    bb_resid_g = np.empty(n_rows, dtype=np.float64)\n    bb_resid_r = np.empty(n_rows, dtype=np.float64)\n    bb_resid_i = np.empty(n_rows, dtype=np.float64)\n    bb_resid_z = np.empty(n_rows, dtype=np.float64)\n\n    for start in range(0, n_rows, _BB_BLOCK_SIZE):\n        stop = min(start + _BB_BLOCK_SIZE, n_rows)\n        block_slice = slice(start, stop)\n\n        p_block = p[block_slice]\n        z_block = z[block_slice]\n        m = stop - start\n\n        lambda_rest = wavelengths[None, :] / (1.0 + z_block[:, None])\n        lambda_rest = np.maximum(lambda_rest, _BB_EPS)\n        inv_lam5 = np.power(lambda_rest, -5.0)\n\n        denom_exp = np.expm1(_BB_PLANCK_CONSTANT / (lambda_rest[:, None, :] * temps[None, :, None]))\n        denom_exp = np.where(denom_exp <= _BB_EPS, _BB_EPS, denom_exp)\n        templates = inv_lam5[:, None, :] / denom_exp\n\n        num = np.einsum(\"mb,mtb->mt\", p_block, templates)\n        den = np.einsum(\"mtb,mtb->mt\", templates, templates)\n        den = np.where(den <= _BB_EPS, _BB_EPS, den)\n\n        scale = num / den\n        ssr = row_norm2[block_slice][:, None] - 2.0 * scale * num + (scale * scale) * den\n\n        top2 = np.partition(ssr, 1, axis=1)\n        ssr_min = top2[:, 0]\n        ssr_second = top2[:, 1]\n\n        best_idx = np.argmin(ssr, axis=1)\n        best_t = temps[best_idx]\n        best_scale = scale[np.arange(m), best_idx]\n        best_template = templates[np.arange(m), best_idx, :]\n        residual = p_block - best_scale[:, None] * best_template\n\n        bb_logT[block_slice] = np.log10(best_t)\n        bb_ssr[block_slice] = ssr_min\n        bb_gap[block_slice] = np.sqrt(ssr_min)\n        bb_second_margin[block_slice] = np.log1p(np.maximum(ssr_second - ssr_min, 0.0))\n\n        bb_resid_u[block_slice] = residual[:, 0]\n        bb_resid_g[block_slice] = residual[:, 1]\n        bb_resid_r[block_slice] = residual[:, 2]\n        bb_resid_i[block_slice] = residual[:, 3]\n        bb_resid_z[block_slice] = residual[:, 4]\n\n    return pd.DataFrame(\n        {\n            \"bb_logT\": bb_logT,\n            \"bb_ssr\": bb_ssr,\n            \"bb_gap\": bb_gap,\n            \"bb_second_margin\": bb_second_margin,\n            \"bb_resid_u\": bb_resid_u,\n            \"bb_resid_g\": bb_resid_g,\n            \"bb_resid_r\": bb_resid_r,\n            \"bb_resid_i\": bb_resid_i,\n            \"bb_resid_z\": bb_resid_z,\n        },\n        index=index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"blackbody_continuum_distance\",\n        \"fn\": add_blackbody_continuum_distance,\n        \"depends_on\": [],\n        \"description\": \"Fits each source\u2019s ugriz shape to a redshift-adjusted blackbody template grid and emits best-fit temperature and mismatch-based shape residual features.\",\n    }\n]",
+  "usage": {
+    "threadId": "019ef470-2334-7c80-a0f5-cc3baf141e61",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8192,
+        "inputTokens": 10361,
+        "outputTokens": 13903,
+        "reasoningOutputTokens": 12460,
+        "totalTokens": 24264
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 8192,
+        "inputTokens": 10361,
+        "outputTokens": 13903,
+        "reasoningOutputTokens": 12460,
+        "totalTokens": 24264
+      }
+    },
+    "turnId": "019ef470-233f-7b02-80e2-ca3f94068c9c"
+  },
+  "wall_ms": 13994,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

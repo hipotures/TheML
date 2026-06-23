@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: 59bfe9dcc701c0601a7495677b16efa12cfa35c946ffdf9c8fdc10e6e023f12e
+    created_at: '2026-06-23T14:22:39'
+feature_group:
+  logical_name: redshifted_lyman_discontinuity
+  version_id: redshifted_lyman_discontinuity@000029
+  source_hypothesis_id: 000029
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py

@@ -1,0 +1,127 @@
+schema_version: 1
+branch_id: B000111
+operation: add_existing_groups
+parent_ref: B000101
+source_ref: 000008
+parent:
+  ref: B000101
+  source_type: branch
+  source_id: B000101
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: fafcc4cc6ef6434121b1b016d9703e49977ba1b74bff2d773a498e803534a901
+  path: branches/B000101/materializations/autogluon-001.py
+source:
+  ref: 000008
+  source_type: hypothesis
+  source_id: 000008
+  mode: autogluon
+  file: autogluon-002.py
+  code_hash: 8fa2cccad35c685dbf1c6ab4d34bc5bc65ab258882105653727f265d32b46a12
+  path: hypotheses/000008/materializations/autogluon-002.py
+parent_edge:
+  kind: branch
+  id: B000101
+mode: autogluon
+status: materialized
+materialization_file: autogluon-001.py
+code_hash: c637777be35a0f3c0683955b28c80d5104627efe29bf11da6eeee5c3cca4e771
+composition_hash: 338d56999ef8cc06b276c6e92f11ace459a0c89de9499e8bac413729054591b7
+summary: Add 000008 groups to parent B000101.
+created_at: '2026-06-23T13:06:08'
+components:
+- branch_id: B000101
+  role: parent
+  source_type: hypothesis
+  source_id: '000001'
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: f3ed5048490b8f38456e574896cc35c7eca012937fba5401a5863a53cd5e9306
+  path: hypotheses/000001/materializations/autogluon-001.py
+- branch_id: B000101
+  role: parent
+  source_type: hypothesis
+  source_id: '000003'
+  mode: autogluon
+  file: autogluon-002.py
+  code_hash: 1de6ff1be77d135c2f8fbcd11cf2846535cdf74b8efad21d39291c167b467104
+  path: hypotheses/000003/materializations/autogluon-002.py
+- role: source
+  source_type: hypothesis
+  source_id: 000008
+  mode: autogluon
+  file: autogluon-002.py
+  code_hash: 8fa2cccad35c685dbf1c6ab4d34bc5bc65ab258882105653727f265d32b46a12
+  path: hypotheses/000008/materializations/autogluon-002.py
+- branch_id: B000101
+  role: parent
+  source_type: hypothesis
+  source_id: '000017'
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: f265354a391faa5bc73c5e627642e91b39226b75a587d95e0cc7d0ccd786d8ec
+  path: hypotheses/000017/materializations/autogluon-001.py
+- branch_id: B000101
+  role: parent
+  source_type: hypothesis
+  source_id: '000021'
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: b516eb87023ab2d41976923b2a90019ef1933969c8905a23eaa06ad8de4c461d
+  path: hypotheses/000021/materializations/autogluon-001.py
+- branch_id: B000101
+  role: parent
+  source_type: hypothesis
+  source_id: '000021'
+  mode: autogluon
+  file: autogluon-002.py
+  code_hash: 497a961e4cfea3c74b717f8c463706d1660c3b5b4a8c23b48d957fa6ed467ca8
+  path: hypotheses/000021/materializations/autogluon-002.py
+- branch_id: B000101
+  role: parent
+  source_type: hypothesis
+  source_id: '000022'
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: 613518c2a7c71f83823fb18f6b8009965038e95c80a530ee0054d5ff152c5282
+  path: hypotheses/000022/materializations/autogluon-001.py
+- branch_id: B000101
+  role: parent
+  source_type: hypothesis
+  source_id: '000023'
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: 36182e7404485e02208a3c20d3e79c1d8a4ee4a170063d4237cbfd3e5e4a0e79
+  path: hypotheses/000023/materializations/autogluon-001.py
+- branch_id: B000101
+  role: parent
+  source_type: hypothesis
+  source_id: '000024'
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: baa2cca7daec5a1bc8b463a0c76e60f7fa17bf2afb803693b45e12a96c8646df
+  path: hypotheses/000024/materializations/autogluon-001.py
+- branch_id: B000101
+  role: parent
+  source_type: hypothesis
+  source_id: '000025'
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: 658e2f200f441753f33e8b0c182cd514dc02838155a9c62f2d375506459e3f7f
+  path: hypotheses/000025/materializations/autogluon-001.py
+- branch_id: B000101
+  role: parent
+  source_type: hypothesis
+  source_id: '000026'
+  mode: autogluon
+  file: autogluon-004.py
+  code_hash: 55fdd092020e56ad941d7ae932491f42cc03895ca724f15495806d2c3b2214dd
+  path: hypotheses/000026/materializations/autogluon-004.py
+- branch_id: B000101
+  role: parent
+  source_type: hypothesis
+  source_id: '000027'
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: b2f52f7a5ee1ea32e9de67de24c6039843904a9a27c25e28ecdaf76fd5fe880f
+  path: hypotheses/000027/materializations/autogluon-001.py

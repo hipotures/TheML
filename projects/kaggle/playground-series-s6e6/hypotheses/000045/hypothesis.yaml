@@ -1,0 +1,33 @@
+title: Full pairwise color lattice residuals
+group_name: pairwise_color_lattice_residuals
+family: pairwise_color_geometry
+summary: Model each object in the complete pairwise ugriz color lattice and its redshift-conditioned
+  orthogonal residual geometry so non-adjacent color relationships and subtle color
+  manifold departures that are missed by adjacent-color-only transforms become explicit
+  class signals.
+depends_on: []
+strategy: "For each row, compute the 10 pairwise color differences from the five magnitudes:\
+  \ u-g, u-r, u-i, u-z, g-r, g-i, g-z, r-i, r-z, i-z. Bin objects by redshift into\
+  \ fixed quantile bins (for example 32 bins), placing negative-redshift points into\
+  \ the lowest bin and merging neighboring bins if any bin has too few rows (fallback\
+  \ to global stats). For each bin, fit a robust center vector and scale vector (median\
+  \ and MAD) on all rows' 10-dimensional color vectors, then build a regularized covariance\
+  \ matrix (add 1e-6 to the diagonal if needed) and compute: (1) clipped standardized\
+  \ residuals per color (color minus median divided by MAD), (2) bin-conditional Mahalanobis\
+  \ distance of the 10-vector to the bin mean, and (3) the top 3 bin-conditional principal-residual\
+  \ scores from the whitened 10-vector (fixed deterministic eigenvector basis per\
+  \ bin). Output these as new numeric features only. If a bin is degenerate or ill-conditioned,\
+  \ use the nearest populated neighboring bin\u2019s statistics. Use same transforms\
+  \ for train and test using statistics learned from the combined feature pool."
+expected_signal: The 10-color lattice captures cross-band contrast patterns beyond
+  local slopes, and redshift-conditioned orthogonalized residuals should improve discrimination
+  where stars, galaxies and quasars overlap in adjacent-color projections, especially
+  in known degeneracy strips where one-dimensional color cuts are weak.
+risk: The representation is highly redundant and can overfit if too many correlated
+  residual coordinates are added; covariance estimates in sparse high-redshift bins
+  may become unstable, and fixed redshift-bin quantization can create boundary artifacts,
+  especially if the true class boundaries move smoothly with redshift.
+schema_version: 1
+hypothesis_id: '000045'
+enabled: true
+created_at: '2026-06-23T14:26:41'

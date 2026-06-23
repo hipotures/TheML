@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import pandas as pd\n\nLAMBDA_U = 3562.0\nLAMBDA_G = 4686.0\nLAMBDA_R = 6165.0\nLAMBDA_I = 7481.0\nLAMBDA_Z = 8931.0\nREDSHIFT_OUT_OF_BAND_MIN = 0.0\nREDSHIFT_OUT_OF_BAND_MAX = 1.23\n\n\ndef add_redshifted_4000a_break_curvature(raw, deps, aux):\n    idx = raw.index\n\n    redshift = pd.to_numeric(raw[\"redshift\"], errors=\"coerce\")\n    u = pd.to_numeric(raw[\"u\"], errors=\"coerce\")\n    g = pd.to_numeric(raw[\"g\"], errors=\"coerce\")\n    r = pd.to_numeric(raw[\"r\"], errors=\"coerce\")\n    i = pd.to_numeric(raw[\"i\"], errors=\"coerce\")\n    z = pd.to_numeric(raw[\"z\"], errors=\"coerce\")\n\n    lambda_break = 4000.0 * (1.0 + redshift)\n\n    regime_g = (lambda_break >= LAMBDA_U) & (lambda_break < LAMBDA_G)\n    regime_gr = (lambda_break >= LAMBDA_G) & (lambda_break < LAMBDA_R)\n    regime_ri = (lambda_break >= LAMBDA_R) & (lambda_break < LAMBDA_I)\n    regime_iz = (lambda_break >= LAMBDA_I) & (lambda_break < LAMBDA_Z)\n\n    out_of_band = (redshift < REDSHIFT_OUT_OF_BAND_MIN) | (redshift >= REDSHIFT_OUT_OF_BAND_MAX)\n    active_g = regime_g & (~out_of_band)\n    active_gr = regime_gr & (~out_of_band)\n    active_ri = regime_ri & (~out_of_band)\n    active_iz = regime_iz & (~out_of_band)\n\n    p_g = ((lambda_break - LAMBDA_U) / (LAMBDA_G - LAMBDA_U)).clip(0.0, 1.0)\n    p_gr = ((lambda_break - LAMBDA_G) / (LAMBDA_R - LAMBDA_G)).clip(0.0, 1.0)\n    p_ri = ((lambda_break - LAMBDA_R) / (LAMBDA_I - LAMBDA_R)).clip(0.0, 1.0)\n    p_iz = ((lambda_break - LAMBDA_I) / (LAMBDA_Z - LAMBDA_I)).clip(0.0, 1.0)\n\n    w_g = 4.0 * p_g * (1.0 - p_g)\n    w_gr = 4.0 * p_gr * (1.0 - p_gr)\n    w_ri = 4.0 * p_ri * (1.0 - p_ri)\n    w_iz = 4.0 * p_iz * (1.0 - p_iz)\n\n    p_g = p_g.where(active_g, 0.0)\n    p_gr = p_gr.where(active_gr, 0.0)\n    p_ri = p_ri.where(active_ri, 0.0)\n    p_iz = p_iz.where(active_iz, 0.0)\n\n    c1 = u - g\n    c2 = g - r\n    c3 = r - i\n    c4 = i - z\n\n    break_g = (c1) - 0.5 * (c2 + c1)\n    asym_g = (c1 - c2) - (c2 - c3)\n\n    break_gr = c2 - 0.5 * (c1 + c3)\n    asym_gr = (c2 - c1) - (c3 - c2)\n\n    break_ri = c3 - 0.5 * (c2 + c4)\n    asym_ri = (c3 - c2) - (c4 - c3)\n\n    break_iz = c4 - c3\n    asym_iz = c4 - c3\n\n    weighted_break_g = w_g * break_g * active_g.astype(\"float64\")\n    weighted_asym_g = w_g * asym_g * active_g.astype(\"float64\")\n\n    weighted_break_gr = w_gr * break_gr * active_gr.astype(\"float64\")\n    weighted_asym_gr = w_gr * asym_gr * active_gr.astype(\"float64\")\n\n    weighted_break_ri = w_ri * break_ri * active_ri.astype(\"float64\")\n    weighted_asym_ri = w_ri * asym_ri * active_ri.astype(\"float64\")\n\n    weighted_break_iz = w_iz * break_iz * active_iz.astype(\"float64\")\n    weighted_asym_iz = w_iz * asym_iz * active_iz.astype(\"float64\")\n\n    new_features = pd.DataFrame(\n        {\n            \"out_of_band\": out_of_band.astype(\"int8\"),\n            \"regime_g\": active_g.astype(\"int8\"),\n            \"regime_gr\": active_gr.astype(\"int8\"),\n            \"regime_ri\": active_ri.astype(\"int8\"),\n            \"regime_iz\": active_iz.astype(\"int8\"),\n            \"p_g\": p_g,\n            \"p_gr\": p_gr,\n            \"p_ri\": p_ri,\n            \"p_iz\": p_iz,\n            \"break_excess_g\": weighted_break_g,\n            \"break_asym_g\": weighted_asym_g,\n            \"break_excess_gr\": weighted_break_gr,\n            \"break_asym_gr\": weighted_asym_gr,\n            \"break_excess_ri\": weighted_break_ri,\n            \"break_asym_ri\": weighted_asym_ri,\n            \"break_excess_iz\": weighted_break_iz,\n            \"break_asym_iz\": weighted_asym_iz,\n        },\n        index=idx,\n    )\n    return new_features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"redshifted_4000a_break_curvature\",\n        \"fn\": add_redshifted_4000a_break_curvature,\n        \"depends_on\": [],\n        \"description\": \"Projects the 4000A break into ugriz bands by redshift and creates regime-gated, edge-weighted curvature and asymmetry features plus regime position/flags.\",\n    },\n]",
+  "usage": {
+    "threadId": "019ef46f-cea2-7800-935a-dd74797ecad2",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 3328,
+        "inputTokens": 10504,
+        "outputTokens": 6718,
+        "reasoningOutputTokens": 5361,
+        "totalTokens": 17222
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 3328,
+        "inputTokens": 10504,
+        "outputTokens": 6718,
+        "reasoningOutputTokens": 5361,
+        "totalTokens": 17222
+      }
+    },
+    "turnId": "019ef46f-ceae-7470-bf54-3c399bd3a60a"
+  },
+  "wall_ms": 7395,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

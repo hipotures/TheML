@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: 21367db940da820ef8e9d9b79a427c327dd2992f47f2c5cdb5bbacdc3afb15cf
+    created_at: '2026-06-23T14:36:44'
+feature_group:
+  logical_name: segue_stellar_atmospheric_indices
+  version_id: segue_stellar_atmospheric_indices@000036
+  source_hypothesis_id: '000036'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py

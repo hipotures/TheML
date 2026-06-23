@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: d7f1539b419df22e389a9f635f538d2b481b5fb96cb9752313f1176f4e781e42
+    created_at: '2026-06-23T14:23:28'
+feature_group:
+  logical_name: sdss_quasar_targeting_surface
+  version_id: sdss_quasar_targeting_surface@000030
+  source_hypothesis_id: '000030'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py

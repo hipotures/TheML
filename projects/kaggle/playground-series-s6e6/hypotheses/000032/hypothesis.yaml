@@ -1,0 +1,51 @@
+title: Redshift-anchored 4000A break curvature
+group_name: redshifted_4000a_break_curvature
+family: restframe_break_geometry
+summary: Project the known 4000 Angstrom continuum break into the observed ugriz frame
+  using redshift and encode how strongly each object bends at that physically expected
+  transition, which is especially diagnostic of galaxy stellar populations versus
+  quasar and star-like continua.
+depends_on: []
+strategy: 'Define SDSS effective band centers as lambda_u=3562, lambda_g=4686, lambda_r=6165,
+  lambda_i=7481, lambda_z=8931. Compute lambda_break = 4000*(1+redshift). Also compute
+  color triplets c1=u-g, c2=g-r, c3=r-i, c4=i-z. Assign each row to one active break
+  regime by lambda_break:
+
+  - G regime: 3562 <= lambda_break < 4686 (redshift < 0.17) or equivalently u-g region
+  for near-zero z,
+
+  - GR regime: 4686 <= lambda_break < 6165 (approx 0.17 <= z < 0.54),
+
+  - RI regime: 6165 <= lambda_break < 7481 (approx 0.54 <= z < 0.87),
+
+  - IZ regime: 7481 <= lambda_break < 8931 (approx 0.87 <= z < 1.23).
+
+  Use these as one-hot flags plus out_of_band = 1 when z < 0 or z >= 1.23, with break
+  outputs set to 0 there. For each active regime, compute position p = clip((lambda_break-lambda_left)/(lambda_right-lambda_left),0,1)
+  and a boundary confidence weight w = 4*p*(1-p) so estimates are suppressed near
+  filter edges.
+
+  - G regime: break_excess = (u-g) - 0.5*((g-r)+(u-g? if unavailable due edge, use
+  0)) equivalent to local jump relative to adjacent slope; also compute asym = ((u-g)-(g-r))
+  - ((g-r)-(r-i)).
+
+  - GR regime: break_excess = (g-r) - 0.5*((u-g)+(r-i)); asym = ((g-r)-(u-g)) - ((r-i)-(g-r)).
+
+  - RI regime: break_excess = (r-i) - 0.5*((g-r)+(i-z)); asym = ((r-i)-(g-r)) - ((i-z)-(r-i)).
+
+  - IZ regime: break_excess = (i-z) - (r-i); asym = (i-z)-(r-i).
+
+  Emit weighted outputs w*break_excess and w*asym, plus raw regime position p and
+  selected regime flags so a model can learn smooth, physically localized transitions.'
+expected_signal: Because the 4000A break shifts from g to r to i across 0.17<=z<1.23,
+  this captures a redshift-dependent shape cue that is tightly linked to stellar-population-dominated
+  galaxy continua but much less consistent for quasars and main-sequence stars, reducing
+  confusion in mixed-color redshift regions.
+risk: Signal weakens when redshift noise, dust effects, or emission features distort
+  broad-band colors, and for high-z objects where the break is beyond z-band the feature
+  provides little information; there is moderate redundancy with other spectral-break
+  shape groups and potential instability on very noisy faint photometry.
+schema_version: 1
+hypothesis_id: '000032'
+enabled: true
+created_at: '2026-06-23T14:09:35'
