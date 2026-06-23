@@ -286,6 +286,204 @@ def branch_by_id(project_dir: Path, branch_id: str) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+def branch_algorithm_candidate_pairs(
+    project_dir: Path,
+    *,
+    mode: str,
+    profile_id: str,
+    parent_kinds: list[str],
+    source_kinds: list[str],
+    max_children: int,
+    limit: int,
+) -> list[dict[str, Any]]:
+    parent_ref_kinds = [_branch_algorithm_db_kind(kind) for kind in parent_kinds]
+    source_ref_kinds = [_branch_algorithm_db_kind(kind) for kind in source_kinds]
+    if not parent_ref_kinds or not source_ref_kinds:
+        return []
+
+    parent_placeholders = ", ".join("?" for _ in parent_ref_kinds)
+    source_placeholders = ", ".join("?" for _ in source_ref_kinds)
+    parent_order = _branch_algorithm_kind_order_sql("p.ref_kind", parent_ref_kinds)
+    source_order = _branch_algorithm_kind_order_sql("s.ref_kind", source_ref_kinds)
+    db_path = ensure_project_db(project_dir)
+    params: list[Any] = [
+        mode,
+        profile_id,
+        profile_id,
+        mode,
+        mode,
+        mode,
+        mode,
+        *parent_ref_kinds,
+        max_children,
+        *source_ref_kinds,
+        limit,
+    ]
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            f"""
+            WITH ranked_nodes AS (
+                SELECT
+                    'hypothesis' AS ref_kind,
+                    h.hypothesis_id AS ref_id,
+                    h.hypothesis_id AS ref,
+                    e.metric AS score,
+                    e.node_id AS node_id,
+                    m.file AS file,
+                    m.code_hash AS code_hash
+                FROM hypotheses h
+                JOIN materializations m
+                  ON m.hypothesis_id = h.hypothesis_id
+                 AND m.mode = ?
+                 AND m.active = 1
+                JOIN evaluations e
+                  ON e.kind = 'root'
+                 AND e.hypothesis_id = h.hypothesis_id
+                 AND e.mode = m.mode
+                 AND e.profile_id = ?
+                 AND e.code_hash = m.code_hash
+                 AND e.status = 'complete'
+                WHERE h.hypothesis_id <> '000000'
+                  AND e.metric IS NOT NULL
+
+                UNION ALL
+
+                SELECT
+                    'branch' AS ref_kind,
+                    b.branch_id AS ref_id,
+                    b.branch_id AS ref,
+                    e.metric AS score,
+                    e.node_id AS node_id,
+                    b.materialization_file AS file,
+                    b.code_hash AS code_hash
+                FROM branches b
+                JOIN evaluations e
+                  ON e.kind = 'branch'
+                 AND e.branch_id = b.branch_id
+                 AND e.mode = b.mode
+                 AND e.profile_id = ?
+                 AND e.code_hash = b.code_hash
+                 AND e.status = 'complete'
+                WHERE b.mode = ?
+                  AND b.status = 'materialized'
+                  AND e.metric IS NOT NULL
+            ),
+            node_components AS (
+                SELECT
+                    'hypothesis' AS owner_kind,
+                    m.hypothesis_id AS owner_id,
+                    'hypothesis' AS source_type,
+                    m.hypothesis_id AS source_id,
+                    m.mode AS mode,
+                    m.file AS file,
+                    m.code_hash AS code_hash
+                FROM materializations m
+                WHERE m.mode = ?
+                  AND m.active = 1
+
+                UNION ALL
+
+                SELECT
+                    'branch' AS owner_kind,
+                    bc.branch_id AS owner_id,
+                    bc.source_type,
+                    bc.source_id,
+                    bc.mode,
+                    bc.file,
+                    bc.code_hash
+                FROM branch_components bc
+                WHERE bc.mode = ?
+            ),
+            parent_candidates AS (
+                SELECT
+                    p.*,
+                    (
+                        SELECT COUNT(*)
+                        FROM branch_edges be
+                        JOIN branches child
+                          ON child.branch_id = be.branch_id
+                         AND child.mode = ?
+                        WHERE be.parent_kind = p.ref_kind
+                          AND be.parent_id = p.ref_id
+                          AND be.edge_kind = 'add_existing_groups'
+                    ) AS child_count
+                FROM ranked_nodes p
+            )
+            SELECT
+                p.ref_kind AS parent_kind,
+                p.ref_id AS parent_id,
+                p.ref AS parent_ref,
+                s.ref_kind AS source_kind,
+                s.ref_id AS source_id,
+                s.ref AS source_ref,
+                p.score AS parent_score,
+                s.score AS source_score,
+                p.child_count AS parent_child_count
+            FROM parent_candidates p
+            JOIN ranked_nodes s
+              ON NOT (s.ref_kind = p.ref_kind AND s.ref_id = p.ref_id)
+            WHERE p.ref_kind IN ({parent_placeholders})
+              AND p.child_count < ?
+              AND s.ref_kind IN ({source_placeholders})
+              AND EXISTS (
+                  SELECT 1
+                  FROM node_components sc
+                  WHERE sc.owner_kind = s.ref_kind
+                    AND sc.owner_id = s.ref_id
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM node_components pc
+                        WHERE pc.owner_kind = p.ref_kind
+                          AND pc.owner_id = p.ref_id
+                          AND pc.source_type = sc.source_type
+                          AND pc.source_id = sc.source_id
+                          AND pc.mode = sc.mode
+                          AND pc.file = sc.file
+                          AND pc.code_hash = sc.code_hash
+                    )
+              )
+            ORDER BY
+                p.score DESC,
+                {parent_order},
+                p.ref_id ASC,
+                s.score DESC,
+                {source_order},
+                s.ref_id ASC
+            LIMIT ?
+            """,
+            params,
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def existing_branch_composition_hashes(project_dir: Path, *, mode: str) -> set[str]:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT composition_hash FROM branches WHERE mode=?",
+            (mode,),
+        ).fetchall()
+    return {str(row["composition_hash"]) for row in rows if row["composition_hash"]}
+
+
+def direct_branch_child_counts(project_dir: Path, *, mode: str) -> dict[tuple[str, str], int]:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT be.parent_kind, be.parent_id, COUNT(*) AS child_count
+            FROM branch_edges be
+            JOIN branches child
+              ON child.branch_id = be.branch_id
+             AND child.mode = ?
+            WHERE be.edge_kind = 'add_existing_groups'
+            GROUP BY be.parent_kind, be.parent_id
+            """,
+            (mode,),
+        ).fetchall()
+    return {(str(row["parent_kind"]), str(row["parent_id"])): int(row["child_count"]) for row in rows}
+
+
 def branch_node_count(project_dir: Path, branch_id: str) -> int:
     db_path = ensure_project_db(project_dir)
     with connect(db_path) as conn:
@@ -1425,3 +1623,17 @@ def _normalize_branch_id(value: str) -> str:
         suffix = text[1:]
         return f"B{int(suffix):06d}" if suffix.isdigit() else text.upper()
     return f"B{int(text):06d}" if text.isdigit() else text
+
+
+def _branch_algorithm_db_kind(kind: str) -> str:
+    text = str(kind).strip().lower()
+    if text == "root":
+        return "hypothesis"
+    if text in {"hypothesis", "branch"}:
+        return text
+    raise ValueError(f"Invalid branch algorithm node kind: {kind}")
+
+
+def _branch_algorithm_kind_order_sql(column: str, ordered_kinds: list[str]) -> str:
+    clauses = " ".join(f"WHEN '{kind}' THEN {index}" for index, kind in enumerate(ordered_kinds))
+    return f"CASE {column} {clauses} ELSE 99 END"

@@ -21,6 +21,7 @@ from rich.text import Text
 from rich.tree import Tree
 from typer.core import TyperGroup
 
+from tml.branches.algorithms import BranchAlgorithmResult, branch_add_algorithmic
 from tml.branches.compose import BranchDeletePlan, CreatedBranch, add_branch, branch_delete_plan, delete_branch
 from tml.branches.run import BranchRunPlan, branch_run_plan, run_missing_branches
 from tml.cli.prompt_output import print_prompt_choices, print_prompt_probe_summary, print_prompt_render_summary
@@ -743,15 +744,15 @@ def branch_add_cmd(
     ctx: typer.Context,
     parent: Annotated[
         str | None,
-        typer.Argument(help="Required key=value parameter: parent=<hypothesis|branch|node>.", metavar="[parent=<ref>]"),
+        typer.Argument(help="Manual mode: parent=<hypothesis|branch|node>. Algorithmic mode: steps=<N>.", metavar="[parent=<ref>|steps=<N>]"),
     ] = None,
     source: Annotated[
         str | None,
-        typer.Argument(help="Required key=value parameter: source=<hypothesis|branch|node>.", metavar="[source=<ref>]"),
+        typer.Argument(help="Manual mode: source=<hypothesis|branch|node>. Algorithmic mode: algo=<id>.", metavar="[source=<ref>|algo=<id>]"),
     ] = None,
     mode: Annotated[
         str | None,
-        typer.Argument(help="Optional key=value parameter: mode=<name>; defaults to the active mode.", metavar="[mode=<name>]"),
+        typer.Argument(help="Optional key=value parameter: mode=<name>; defaults to the active mode.", metavar="[mode=<name>|dry_run=true]"),
     ] = None,
 ) -> None:
     try:
@@ -760,15 +761,39 @@ def branch_add_cmd(
         _reject_positional(args, "tml branch add")
         config = load_project_config(ref.path)
         overrides = _overrides(args)
-        _validate_override_keys(overrides, {"parent", "source", "mode"}, "tml branch add")
-        parent = str(overrides.get("parent") or "")
-        source = str(overrides.get("source") or "")
-        if not parent:
-            raise TmlError("Missing required parameter: parent=<hypothesis|branch|node>.")
-        if not source:
-            raise TmlError("Missing required parameter: source=<hypothesis|branch|node>.")
+        _validate_override_keys(overrides, {"parent", "source", "mode", "steps", "algo", "dry-run", "dry_run"}, "tml branch add")
+        has_manual = "parent" in overrides or "source" in overrides
+        has_algorithm = "steps" in overrides or "algo" in overrides
+        if has_manual and has_algorithm:
+            raise TmlError("Do not mix parent/source with steps/algo in tml branch add.")
         mode = str(overrides.get("mode") or active_mode(config))
-        created = add_branch(ref.path, parent_ref=parent, source_ref=source, mode=mode)
+        if has_algorithm:
+            if "steps" not in overrides:
+                raise TmlError("Missing required parameter: steps=<N>.")
+            if "algo" not in overrides:
+                raise TmlError("Missing required parameter: algo=<id>.")
+            dry_run = _bool(overrides.get("dry-run", overrides.get("dry_run", False)))
+            try:
+                steps = int(overrides["steps"])
+            except (TypeError, ValueError) as exc:
+                raise TmlError("steps must be a positive integer.") from exc
+            result = branch_add_algorithmic(
+                ref.path,
+                steps=steps,
+                algo_id=str(overrides["algo"]),
+                mode=mode,
+                dry_run=dry_run,
+            )
+            _print_branch_algorithm_summary(ref.slug, ref.path, result)
+            return
+
+        parent_ref = str(overrides.get("parent") or "")
+        source_ref = str(overrides.get("source") or "")
+        if not parent_ref:
+            raise TmlError("Missing required parameter: parent=<hypothesis|branch|node>.")
+        if not source_ref:
+            raise TmlError("Missing required parameter: source=<hypothesis|branch|node>.")
+        created = add_branch(ref.path, parent_ref=parent_ref, source_ref=source_ref, mode=mode)
         _print_branch_add_summary(ref.slug, created)
         _print_branch_status(ref.path, mode=mode, branch_id=created.branch_id, executed_ids=set(), executed_count=None)
     except Exception as exc:
@@ -1488,6 +1513,52 @@ def _print_branch_add_summary(project_slug: str, created: CreatedBranch) -> None
     table.add_row("File", _repo_relative(created.branch_path.parent.parent, created.materialization_path))
     table.add_row("Composition hash", created.composition_hash[:12])
     console.print(table)
+
+
+def _print_branch_algorithm_summary(project_slug: str, project_dir: Path, result: BranchAlgorithmResult) -> None:
+    title = "BRANCH add algorithm dry-run" if result.dry_run else "BRANCH add algorithm"
+    table = Table(title=title, box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Mode", result.mode)
+    table.add_row("Active profile", result.profile_id)
+    table.add_row("Algorithm", result.algorithm_id)
+    table.add_row("Config", _repo_relative(workspace_root(), result.config_path))
+    table.add_row("Steps", str(result.requested_steps))
+    table.add_row("Planned" if result.dry_run else "Created", str(len(result.items)))
+    table.add_row("Skipped", str(result.skipped_count))
+    if result.skip_reasons:
+        reasons = ", ".join(f"{key}={value}" for key, value in sorted(result.skip_reasons.items()))
+        table.add_row("Skip reasons", reasons)
+    table.add_row("Stop reason", result.stop_reason)
+    console.print(table)
+
+    item_title = "Planned branches" if result.dry_run else "Created branches"
+    item_table = Table(title=item_title, box=box.SIMPLE_HEAVY, show_header=True, pad_edge=False)
+    item_table.add_column("Branch", no_wrap=True)
+    item_table.add_column("Parent", no_wrap=True)
+    item_table.add_column("Source", no_wrap=True)
+    item_table.add_column("Parent score", justify="right")
+    item_table.add_column("Source score", justify="right")
+    item_table.add_column("Children", justify="right")
+    item_table.add_column("Hash", no_wrap=True)
+    item_table.add_column("File", overflow="fold")
+    for item in result.items:
+        item_table.add_row(
+            item.branch_id,
+            item.parent_ref,
+            item.source_ref,
+            _format_score(item.parent_score),
+            _format_score(item.source_score),
+            str(item.parent_child_count),
+            item.composition_hash[:12],
+            "" if item.materialization_path is None else _repo_relative(project_dir, item.materialization_path),
+        )
+    if result.items:
+        console.print(item_table)
+    else:
+        console.print("No branch candidates were created.")
 
 
 def _print_branch_run_plan(project_slug: str, plan: BranchRunPlan, *, branch_id: str | None) -> None:

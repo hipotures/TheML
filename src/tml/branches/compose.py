@@ -50,6 +50,15 @@ class CreatedBranch:
 
 
 @dataclass(frozen=True)
+class BranchCompositionPlan:
+    parent: BranchSource
+    source: BranchSource
+    components: list[dict[str, Any]]
+    composition_hash: str
+    existing_branch: dict[str, Any] | None
+
+
+@dataclass(frozen=True)
 class BranchDeletePlan:
     branch_id: str
     path: Path
@@ -61,19 +70,15 @@ class BranchDeletePlan:
 
 
 def add_branch(project_dir: Path, *, parent_ref: str, source_ref: str, mode: str | None = None) -> CreatedBranch:
-    config = load_project_config(project_dir)
-    mode = mode or active_mode(config)
-    parent = resolve_branch_source(project_dir, parent_ref, mode=mode)
-    source = resolve_branch_source(project_dir, source_ref, mode=mode)
-    if parent.code_hash == source.code_hash:
-        raise TmlError("Branch add source resolves to the same code as parent.")
-
-    components = _component_records(project_dir, parent=parent, source=source)
-    composition_hash = _composition_hash(components)
-    existing = branch_by_composition(project_dir, mode=mode, composition_hash=composition_hash)
-    if existing is not None:
-        branch_id = str(existing["branch_id"])
-        materialization_path = project_dir / str(existing["path"]).rsplit("/", 1)[0] / "materializations" / str(existing["materialization_file"])
+    plan = plan_branch_composition(project_dir, parent_ref=parent_ref, source_ref=source_ref, mode=mode)
+    mode = plan.parent.mode
+    parent = plan.parent
+    source = plan.source
+    components = plan.components
+    composition_hash = plan.composition_hash
+    if plan.existing_branch is not None:
+        branch_id = str(plan.existing_branch["branch_id"])
+        materialization_path = project_dir / str(plan.existing_branch["path"]).rsplit("/", 1)[0] / "materializations" / str(plan.existing_branch["materialization_file"])
         return CreatedBranch(
             branch_id=branch_id,
             branch_path=materialization_path.parents[1],
@@ -138,6 +143,26 @@ def add_branch(project_dir: Path, *, parent_ref: str, source_ref: str, mode: str
         parent=parent,
         source=source,
         composition_hash=composition_hash,
+    )
+
+
+def plan_branch_composition(project_dir: Path, *, parent_ref: str, source_ref: str, mode: str | None = None) -> BranchCompositionPlan:
+    config = load_project_config(project_dir)
+    mode = mode or active_mode(config)
+    parent = resolve_branch_source(project_dir, parent_ref, mode=mode)
+    source = resolve_branch_source(project_dir, source_ref, mode=mode)
+    if parent.code_hash == source.code_hash:
+        raise TmlError("Branch add source resolves to the same code as parent.")
+
+    components = _component_records(project_dir, parent=parent, source=source)
+    composition_hash = _composition_hash(components)
+    existing = branch_by_composition(project_dir, mode=mode, composition_hash=composition_hash)
+    return BranchCompositionPlan(
+        parent=parent,
+        source=source,
+        components=components,
+        composition_hash=composition_hash,
+        existing_branch=existing,
     )
 
 
