@@ -23,6 +23,7 @@ from typer.core import TyperGroup
 
 from tml.branches.algorithms import BranchAlgorithmResult, branch_add_algorithmic
 from tml.branches.compose import BranchDeletePlan, CreatedBranch, add_branch, branch_delete_plan, delete_branch
+from tml.branches.runtime_state import read_branch_runtime_state
 from tml.branches.run import BranchRunPlan, branch_run_plan, run_missing_branches
 from tml.cli.prompt_output import print_prompt_choices, print_prompt_probe_summary, print_prompt_render_summary
 from tml.core.config import active_mode, active_profile_id, load_project_config
@@ -1895,6 +1896,9 @@ def _print_solution_tree(project_dir: Path, *, mode: str) -> None:
     profile_id = active_profile_id(config, mode)
     root_rows = solution_tree_root_rows(project_dir, mode=mode, profile_id=profile_id)
     branch_db_rows = solution_tree_branch_rows(project_dir, mode=mode, profile_id=profile_id)
+    runtime_state = read_branch_runtime_state(project_dir, mode=mode, profile_id=profile_id)
+    runtime_branch_id = _normalize_branch_display(runtime_state.branch_id) if runtime_state else ""
+    runtime_display_state = "running" if runtime_state and runtime_state.is_running else "stale" if runtime_state else ""
     best_metric = _best_tree_metric([*root_rows, *branch_db_rows])
     root_by_id = {str(row.get("hypothesis_id") or ""): row for row in root_rows}
     baseline = root_by_id.get("000000") or {"hypothesis_id": "000000"}
@@ -1914,6 +1918,8 @@ def _print_solution_tree(project_dir: Path, *, mode: str) -> None:
     branch_entries: list[dict[str, object]] = []
     for row in branch_db_rows:
         bid = _normalize_branch_display(row.get("branch_id"))
+        if runtime_display_state and bid == runtime_branch_id:
+            row = {**row, "_runtime_state": runtime_display_state}
         key = f"branch:{bid}"
         known_keys.add(key)
         children.setdefault(key, [])
@@ -1966,6 +1972,10 @@ def _solution_tree_sort_key(entry: dict[str, object]) -> tuple[int, int, str]:
 
 def _solution_tree_label(kind: str, row: dict[str, object], *, best_metric: float | None) -> Text:
     identifier = str(row.get("hypothesis_id") or "") if kind == "root" else _normalize_branch_display(row.get("branch_id"))
+    if kind == "branch":
+        runtime_state = str(row.get("_runtime_state") or "")
+        if runtime_state:
+            return _solution_tree_runtime_branch_label(identifier, runtime_state)
     node_status = str(row.get("node_status") or "")
     metric = _metric_value(row.get("metric"))
     runtime_suffix = _tree_runtime_suffix(row)
@@ -1992,6 +2002,17 @@ def _solution_tree_label(kind: str, row: dict[str, object], *, best_metric: floa
         style = "bold yellow" if materialization_status == "fixed" else "cyan"
         return Text(f"⌘ {identifier}", style=style)
     return Text(f"◇ {identifier}", style="dim")
+
+
+def _solution_tree_runtime_branch_label(identifier: str, runtime_state: str) -> Text:
+    line = Text()
+    if runtime_state == "stale":
+        line.append("⚠ ", style="bold red")
+        line.append(identifier, style="cyan")
+        return line
+    line.append("⌘ ", style="cyan")
+    line.append(identifier, style="reverse cyan")
+    return line
 
 
 def _tree_runtime_suffix(row: dict[str, object]) -> str:

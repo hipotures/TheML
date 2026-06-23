@@ -9,6 +9,7 @@ from pathlib import Path
 from tml.core.config import active_mode, active_profile_id, load_project_config, repo_root_for_project
 from tml.core.ids import node_id
 from tml.core.profiles import profile_hash
+from tml.branches.runtime_state import clear_branch_runtime_state, write_branch_runtime_state
 from tml.db.state import (
     active_or_create_run,
     branch_already_evaluated,
@@ -145,44 +146,55 @@ def run_missing_branches(
         write_yaml(node_dir / "started.yaml", {"created_at": datetime.now().isoformat(timespec="seconds")})
         if progress is not None:
             progress(f"BRANCH run {bid} {mode} ({pending_index}/{pending_total}): executing node {nid}")
-        result = run_python_script(
-            node_dir / "02-code.py",
-            node_dir / "work",
-            timeout_seconds=_execution_timeout_seconds(profile_overrides),
-            cwd=repo_root_for_project(project_dir) if mode == "autogluon" else None,
+        write_branch_runtime_state(
+            project_dir,
+            branch_id=bid,
+            node_id=nid,
+            run_id=run.name,
+            mode=mode,
+            profile_id=profile_id,
         )
-        write_attempt_result(node_dir, result)
-        finished_at = datetime.now().isoformat(timespec="seconds")
-        if result.status == "ok":
-            _write_success_markers(node_dir, nid, bid, mode, profile_id, code_hash, result)
-            upsert_node_result(project_dir, node_dir, status="complete", metric=result.metric, code_hash=code_hash, finished_at=finished_at)
-        else:
-            write_yaml(
-                node_dir / "failed.yaml",
-                {
-                    "schema_version": 1,
-                    "node_id": nid,
-                    "branch_id": bid,
-                    "mode": mode,
-                    "profile_id": profile_id,
-                    "code_hash": code_hash,
-                    "status": "failed",
-                    "error": result.error,
-                    "created_at": finished_at,
-                },
+        try:
+            result = run_python_script(
+                node_dir / "02-code.py",
+                node_dir / "work",
+                timeout_seconds=_execution_timeout_seconds(profile_overrides),
+                cwd=repo_root_for_project(project_dir) if mode == "autogluon" else None,
             )
-            upsert_node_result(
-                project_dir,
-                node_dir,
-                status="failed",
-                metric=result.metric,
-                code_hash=code_hash,
-                finished_at=finished_at,
-                error=result.error,
-            )
-        if progress is not None:
-            progress(f"BRANCH run {bid} {mode} ({pending_index}/{pending_total}): {result.status}")
-        ran.append(bid)
+            write_attempt_result(node_dir, result)
+            finished_at = datetime.now().isoformat(timespec="seconds")
+            if result.status == "ok":
+                _write_success_markers(node_dir, nid, bid, mode, profile_id, code_hash, result)
+                upsert_node_result(project_dir, node_dir, status="complete", metric=result.metric, code_hash=code_hash, finished_at=finished_at)
+            else:
+                write_yaml(
+                    node_dir / "failed.yaml",
+                    {
+                        "schema_version": 1,
+                        "node_id": nid,
+                        "branch_id": bid,
+                        "mode": mode,
+                        "profile_id": profile_id,
+                        "code_hash": code_hash,
+                        "status": "failed",
+                        "error": result.error,
+                        "created_at": finished_at,
+                    },
+                )
+                upsert_node_result(
+                    project_dir,
+                    node_dir,
+                    status="failed",
+                    metric=result.metric,
+                    code_hash=code_hash,
+                    finished_at=finished_at,
+                    error=result.error,
+                )
+            if progress is not None:
+                progress(f"BRANCH run {bid} {mode} ({pending_index}/{pending_total}): {result.status}")
+            ran.append(bid)
+        finally:
+            clear_branch_runtime_state()
     return ran
 
 

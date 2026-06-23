@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from tml.branches.runtime_state import clear_branch_runtime_state
 from tml.core.config import load_project_config, repo_root_for_project
 from tml.hypotheses.baseline import ensure_root_baseline
 from tml.utils.hashing import sha256_file
@@ -15,6 +16,7 @@ from .submissions import build_submission_row, upsert_submission
 
 
 def reindex_project(project_dir: Path, db_path: Path) -> dict[str, int]:
+    clear_branch_runtime_state()
     ensure_root_baseline(project_dir)
     migrate(db_path)
     config = load_project_config(project_dir)
