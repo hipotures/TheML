@@ -7,7 +7,13 @@ from pathlib import Path
 from tml.ai import ModelInvocation, run_model_invocation
 from tml.ai.models import resolve_model_spec, resolve_role_model
 from tml.core.config import repo_models_for_project, repo_providers_for_project, repo_root_for_project
-from tml.db.state import bugfix_candidates, upsert_failed_materialization, upsert_materialization, upsert_project
+from tml.db.state import (
+    bugfix_candidates,
+    materialization_rows,
+    upsert_failed_materialization,
+    upsert_materialization,
+    upsert_project,
+)
 from tml.features.validation import validate_group_code_source
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
@@ -56,7 +62,7 @@ def root_bugfix_plan(
         hdir = _candidate_hypothesis_dir(project_dir, record)
         source = hdir / "materializations" / str(record["file"])
         source_files.append(source.name)
-        target_files.append(_next_materialization_path(source.parent, mode).name)
+        target_files.append(_next_materialization_path(project_dir, source.parent, mode, hdir.name).name)
         hypothesis_ids.append(str(record["hypothesis_id"]))
     return RootBugfixPlan(
         mode=mode,
@@ -96,7 +102,7 @@ def bugfix_failed_materializations(
         hdir = _candidate_hypothesis_dir(project_dir, record)
         mat_dir = hdir / "materializations"
         source = mat_dir / str(record["file"])
-        target = _next_materialization_path(mat_dir, mode)
+        target = _next_materialization_path(project_dir, mat_dir, mode, hid)
         progress_prefix = f"ROOT bugfix {hid} {mode} ({index}/{total})"
         if progress is not None:
             progress(f"Fixing {progress_prefix} with {model}...", timeout_seconds)
@@ -110,7 +116,7 @@ def bugfix_failed_materializations(
             "hypothesis_id": hid,
             "source_file": source.name,
             "target_file": target.name,
-            "source_code": source.read_text(encoding="utf-8"),
+            "source_code": _source_materialization_code(mat_dir, source.name),
             "node_id": str(record.get("node_id") or ""),
             "run_id": str(record.get("run_id") or ""),
             "error_text": _failure_context(project_dir, record),
@@ -180,7 +186,7 @@ def _candidate_hypothesis_dir(project_dir: Path, record: dict[str, object]) -> P
     return project_dir / str(record["path"]).rsplit("/", 1)[0]
 
 
-def _next_materialization_path(mat_dir: Path, mode: str) -> Path:
+def _next_materialization_path(project_dir: Path, mat_dir: Path, mode: str, hypothesis_id: str) -> Path:
     highest = 0
     for path in mat_dir.glob(f"{mode}-*.py"):
         try:
@@ -188,13 +194,34 @@ def _next_materialization_path(mat_dir: Path, mode: str) -> Path:
         except ValueError:
             continue
         highest = max(highest, number)
+    for row in materialization_rows(project_dir, mode=mode, hypothesis_id=hypothesis_id):
+        try:
+            number = int(Path(str(row.get("file") or "")).stem.rsplit("-", 1)[-1])
+        except ValueError:
+            continue
+        highest = max(highest, number)
     return mat_dir / f"{mode}-{highest + 1:03d}.py"
+
+
+def _source_materialization_code(mat_dir: Path, file_name: str) -> str:
+    source = mat_dir / file_name
+    if source.exists():
+        return source.read_text(encoding="utf-8")
+    response = mat_dir / f"{Path(file_name).stem}.response.md"
+    if response.exists():
+        return _parse_code(response.read_text(encoding="utf-8"))
+    raise ValueError(f"Cannot find source materialization code or response text for {file_name}")
 
 
 def _failure_context(project_dir: Path, record: dict[str, object]) -> str:
     node_path = record.get("node_path")
     if not node_path:
-        return "No failed node artifact path was recorded."
+        hdir = _candidate_hypothesis_dir(project_dir, record)
+        stem = Path(str(record.get("file") or "")).stem
+        error_path = hdir / "materializations" / f"{stem}.error.txt"
+        if error_path.exists():
+            return error_path.read_text(encoding="utf-8", errors="replace").strip()
+        return "No failed node artifact path was recorded. The materialization failed during validation before execution."
     node_dir = project_dir / str(node_path)
     parts: list[str] = []
     failed = read_yaml(node_dir / "failed.yaml")

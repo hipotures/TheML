@@ -719,9 +719,33 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
         sql += " AND hypothesis_id=?"
         params.append(hypothesis_id.zfill(6))
     sql += " ORDER BY hypothesis_id"
+    validation_sql = """
+        SELECT
+          h.hypothesis_id,
+          h.path,
+          h.summary,
+          m.file,
+          m.code_hash,
+          m.status AS materialization_status,
+          NULL AS node_id,
+          NULL AS run_id,
+          NULL AS step,
+          NULL AS node_path,
+          NULL AS finished_at,
+          NULL AS run_seconds
+        FROM hypotheses h
+        JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
+        WHERE m.status='failed' AND m.active=0 AND h.hypothesis_id<>'000000'
+    """
+    validation_params: list[Any] = [mode]
+    if hypothesis_id:
+        validation_sql += " AND h.hypothesis_id=?"
+        validation_params.append(hypothesis_id.zfill(6))
+    validation_sql += " ORDER BY h.hypothesis_id, m.file"
     with connect(db_path) as conn:
-        rows = conn.execute(sql, params).fetchall()
-    return [dict(row) for row in rows]
+        rows = [dict(row) for row in conn.execute(sql, params).fetchall()]
+        rows.extend(dict(row) for row in conn.execute(validation_sql, validation_params).fetchall())
+    return sorted(rows, key=lambda row: (str(row["hypothesis_id"]), str(row["file"])))
 
 
 def run_request_status(project_dir: Path, mode: str, hypothesis_id: str | None) -> list[dict[str, Any]]:
