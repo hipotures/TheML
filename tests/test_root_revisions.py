@@ -12,6 +12,7 @@ from tml.hypotheses.materialize import materialize_missing
 from tml.hypotheses.revisions import migrate_root_revisions
 from tml.hypotheses.revise import revise_root_hypothesis
 from tml.hypotheses.run import run_missing
+from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml, write_yaml
 
 
@@ -165,15 +166,51 @@ def test_reindex_rebuilds_revision_tables(tmp_path: Path) -> None:
         ],
     }
     write_yaml(hdir / "manifest.yaml", manifest)
+    code_hash = sha256_file(hdir / "materializations" / "autogluon-001.py")
+    run_dir = project_dir / "runs" / "20260101T000000-test"
+    node_dir = run_dir / "artifacts" / "20260101T000001-node"
+    node_dir.mkdir(parents=True)
+    write_yaml(run_dir / "run.yaml", {"run_id": run_dir.name})
+    write_yaml(
+        node_dir / "node.start.yaml",
+        {
+            "run_id": run_dir.name,
+            "step": 1,
+            "kind": "root",
+            "hypothesis_id": "000001",
+            "mode": "autogluon",
+            "profile_id": "autogluon-root-start-v1",
+            "created_at": "2026-01-01T00:00:00",
+        },
+    )
+    write_yaml(node_dir / "node.done.yaml", {"created_at": "2026-01-01T00:00:10"})
+    write_yaml(
+        node_dir / "artifact-manifest.yaml",
+        {
+            "schema_version": 1,
+            "node_id": node_dir.name,
+            "hypothesis_id": "000001",
+            "mode": "autogluon",
+            "profile_id": "autogluon-root-start-v1",
+            "code_hash": code_hash,
+            "metric": 0.8,
+        },
+    )
 
     reindex_project(project_dir, project_dir / "tml.db")
 
     rows = materialization_rows(project_dir, mode="autogluon", hypothesis_id="000001")
     assert rows[0]["hypothesis_revision"] == 2
     with connect(project_dir / "tml.db") as conn:
+        evaluations = conn.execute(
+            "SELECT hypothesis_revision, materialization_file, metric FROM evaluations WHERE hypothesis_id='000001'"
+        ).fetchall()
         revisions = conn.execute(
             "SELECT hypothesis_id, revision, path FROM hypothesis_revisions ORDER BY revision"
         ).fetchall()
+    assert [(row["hypothesis_revision"], row["materialization_file"], row["metric"]) for row in evaluations] == [
+        (2, "autogluon-001.py", 0.8)
+    ]
     assert [(row["hypothesis_id"], row["revision"]) for row in revisions] == [("000000", 1), ("000001", 1), ("000001", 2)]
 
 

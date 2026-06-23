@@ -247,6 +247,7 @@ def _index_runs(conn, project_dir: Path) -> None:
             node_id = node_dir.name
             created_at = start.get("created_at")
             finished_at = done.get("created_at") or failed.get("created_at")
+            identity = _resolve_node_identity(conn, start=start, done=done, failed=failed, manifest=manifest)
             conn.execute(
                 """
                 INSERT INTO nodes(
@@ -260,13 +261,13 @@ def _index_runs(conn, project_dir: Path) -> None:
                     node_id,
                     run_id,
                     start.get("step"),
-                    start.get("kind") or "root",
-                    start.get("hypothesis_id") or done.get("hypothesis_id") or failed.get("hypothesis_id"),
-                    start.get("hypothesis_revision") or done.get("hypothesis_revision") or failed.get("hypothesis_revision") or manifest.get("hypothesis_revision"),
-                    start.get("materialization_file") or done.get("materialization_file") or failed.get("materialization_file") or manifest.get("materialization_file"),
-                    start.get("branch_id") or done.get("branch_id") or failed.get("branch_id"),
-                    start.get("mode") or done.get("mode"),
-                    start.get("profile_id") or done.get("profile_id"),
+                    identity["kind"],
+                    identity["hypothesis_id"],
+                    identity["hypothesis_revision"],
+                    identity["materialization_file"],
+                    identity["branch_id"],
+                    identity["mode"],
+                    identity["profile_id"],
                     status,
                     created_at,
                     finished_at,
@@ -285,13 +286,13 @@ def _index_runs(conn, project_dir: Path) -> None:
                     """,
                     (
                         node_id,
-                        start.get("kind") or manifest.get("kind") or "root",
-                        manifest.get("hypothesis_id") or start.get("hypothesis_id"),
-                        manifest.get("hypothesis_revision") or start.get("hypothesis_revision"),
-                        manifest.get("materialization_file") or start.get("materialization_file"),
-                        manifest.get("branch_id") or start.get("branch_id"),
-                        manifest.get("mode") or start.get("mode"),
-                        manifest.get("profile_id") or start.get("profile_id"),
+                        identity["kind"],
+                        identity["hypothesis_id"],
+                        identity["hypothesis_revision"],
+                        identity["materialization_file"],
+                        identity["branch_id"],
+                        identity["mode"],
+                        identity["profile_id"],
                         manifest.get("code_hash"),
                         manifest.get("metric"),
                         status,
@@ -308,7 +309,7 @@ def _index_runs(conn, project_dir: Path) -> None:
                 build_submission_row(
                     project_dir=project_dir,
                     node_dir=node_dir,
-                    start=start,
+                    start={**start, **identity},
                     manifest=manifest,
                     status=status,
                     metric=manifest.get("metric"),
@@ -317,6 +318,71 @@ def _index_runs(conn, project_dir: Path) -> None:
                     run_seconds=_elapsed_seconds(created_at, finished_at),
                 ),
             )
+
+
+def _resolve_node_identity(
+    conn,
+    *,
+    start: dict[str, Any],
+    done: dict[str, Any],
+    failed: dict[str, Any],
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    kind = start.get("kind") or manifest.get("kind") or "root"
+    hypothesis_id = start.get("hypothesis_id") or done.get("hypothesis_id") or failed.get("hypothesis_id") or manifest.get("hypothesis_id")
+    branch_id = start.get("branch_id") or done.get("branch_id") or failed.get("branch_id") or manifest.get("branch_id")
+    mode = start.get("mode") or done.get("mode") or failed.get("mode") or manifest.get("mode")
+    profile_id = start.get("profile_id") or done.get("profile_id") or failed.get("profile_id") or manifest.get("profile_id")
+    hypothesis_revision = (
+        start.get("hypothesis_revision")
+        or done.get("hypothesis_revision")
+        or failed.get("hypothesis_revision")
+        or manifest.get("hypothesis_revision")
+    )
+    materialization_file = (
+        start.get("materialization_file")
+        or done.get("materialization_file")
+        or failed.get("materialization_file")
+        or manifest.get("materialization_file")
+    )
+
+    code_hash = manifest.get("code_hash")
+    if code_hash and str(kind) == "root" and hypothesis_id and mode and (not materialization_file or not hypothesis_revision):
+        row = conn.execute(
+            """
+            SELECT file, hypothesis_revision
+            FROM materializations
+            WHERE hypothesis_id=? AND mode=? AND code_hash=?
+            ORDER BY active DESC, file DESC
+            LIMIT 1
+            """,
+            (str(hypothesis_id).zfill(6), str(mode), str(code_hash)),
+        ).fetchone()
+        if row:
+            materialization_file = materialization_file or row["file"]
+            hypothesis_revision = hypothesis_revision or row["hypothesis_revision"]
+    elif code_hash and str(kind) == "branch" and branch_id and not materialization_file:
+        row = conn.execute(
+            """
+            SELECT materialization_file
+            FROM branches
+            WHERE branch_id=? AND code_hash=?
+            LIMIT 1
+            """,
+            (str(branch_id), str(code_hash)),
+        ).fetchone()
+        if row:
+            materialization_file = row["materialization_file"]
+
+    return {
+        "kind": kind,
+        "hypothesis_id": str(hypothesis_id).zfill(6) if hypothesis_id else None,
+        "hypothesis_revision": hypothesis_revision,
+        "materialization_file": materialization_file,
+        "branch_id": branch_id,
+        "mode": mode,
+        "profile_id": profile_id,
+    }
 
 
 def classify_node(node_dir: Path) -> str:
