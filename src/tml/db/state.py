@@ -212,6 +212,28 @@ def upsert_failed_materialization(
         conn.commit()
 
 
+def materialization_status(
+    project_dir: Path,
+    *,
+    hypothesis_id: str,
+    mode: str,
+    file_name: str,
+) -> str | None:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT status
+            FROM materializations
+            WHERE hypothesis_id=? AND mode=? AND file=?
+            """,
+            (hypothesis_id.zfill(6), mode, file_name),
+        ).fetchone()
+    if row is None:
+        return None
+    return str(row["status"])
+
+
 def upsert_run(project_dir: Path, run_dir: Path) -> None:
     db_path = ensure_project_db(project_dir)
     with connect(db_path) as conn:

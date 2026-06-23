@@ -9,7 +9,14 @@ from pathlib import Path
 from tml.ai import ModelInvocation, run_model_invocation
 from tml.ai.models import resolve_model_spec, resolve_role_model
 from tml.core.config import repo_models_for_project, repo_providers_for_project, repo_root_for_project
-from tml.db.state import materialization_candidates, upsert_failed_materialization, upsert_materialization, upsert_project
+from tml.db.state import (
+    materialization_candidates,
+    materialization_rows,
+    materialization_status,
+    upsert_failed_materialization,
+    upsert_materialization,
+    upsert_project,
+)
 from tml.features.validation import validate_group_code_source
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
@@ -60,8 +67,8 @@ def root_materialization_plan(
         if str(record["hypothesis_id"]) == BASELINE_HYPOTHESIS_ID and mode != BASELINE_MODE:
             continue
         hdir = _candidate_hypothesis_dir(project_dir, record)
-        target = _materialization_target(hdir, mode, version=version)
-        if target.exists():
+        target = _materialization_target(project_dir, hdir, mode, version=version)
+        if target.exists() or _has_failed_materialization_attempt(project_dir, record, mode, target):
             existing_count += 1
             continue
         pending_ids.append(str(record["hypothesis_id"]))
@@ -103,7 +110,7 @@ def materialize_missing(
         1
         for record in candidates
         if str(record["hypothesis_id"]) != BASELINE_HYPOTHESIS_ID
-        and not _materialization_target(_candidate_hypothesis_dir(project_dir, record), mode, version=version).exists()
+        and _needs_materialization(project_dir, record, mode, version=version)
     )
     pending_index = 0
     for record in candidates:
@@ -112,7 +119,9 @@ def materialize_missing(
         hdir = _candidate_hypothesis_dir(project_dir, record)
         mat_dir = hdir / "materializations"
         mat_dir.mkdir(parents=True, exist_ok=True)
-        target = _materialization_target(hdir, mode, version=version)
+        target = _materialization_target(project_dir, hdir, mode, version=version)
+        if not target.exists() and _has_failed_materialization_attempt(project_dir, record, mode, target):
+            continue
         if target.exists():
             active_file = _manifest_active_file(hdir, mode)
             is_active_target = active_file is None or active_file == target.name
@@ -186,11 +195,40 @@ def _candidate_hypothesis_dir(project_dir: Path, record: dict[str, object]) -> P
     return project_dir / str(record["path"]).rsplit("/", 1)[0]
 
 
-def _materialization_target(hdir: Path, mode: str, *, version: str | None = None) -> Path:
+def _has_failed_materialization_attempt(
+    project_dir: Path,
+    record: dict[str, object],
+    mode: str,
+    target: Path,
+) -> bool:
+    return (
+        materialization_status(
+            project_dir,
+            hypothesis_id=str(record["hypothesis_id"]),
+            mode=mode,
+            file_name=target.name,
+        )
+        == "failed"
+    )
+
+
+def _needs_materialization(
+    project_dir: Path,
+    record: dict[str, object],
+    mode: str,
+    *,
+    version: str | None = None,
+) -> bool:
+    hdir = _candidate_hypothesis_dir(project_dir, record)
+    target = _materialization_target(project_dir, hdir, mode, version=version)
+    return not target.exists() and not _has_failed_materialization_attempt(project_dir, record, mode, target)
+
+
+def _materialization_target(project_dir: Path, hdir: Path, mode: str, *, version: str | None = None) -> Path:
     if version is not None:
         text = str(version).strip()
         if text == "new":
-            return _new_materialization_target(hdir, mode)
+            return _new_materialization_target(project_dir, hdir, mode)
         if text.endswith(".py"):
             return hdir / "materializations" / text
         if text.isdigit():
@@ -201,11 +239,16 @@ def _materialization_target(hdir: Path, mode: str, *, version: str | None = None
     return hdir / "materializations" / f"{mode}-001.py"
 
 
-def _new_materialization_target(hdir: Path, mode: str) -> Path:
+def _new_materialization_target(project_dir: Path, hdir: Path, mode: str) -> Path:
     mat_dir = hdir / "materializations"
     max_index = 0
     for path in mat_dir.glob(f"{mode}-*.py"):
         suffix = path.stem.removeprefix(f"{mode}-")
+        if suffix.isdigit():
+            max_index = max(max_index, int(suffix))
+    for row in materialization_rows(project_dir, mode=mode, hypothesis_id=hdir.name):
+        file_name = str(row.get("file") or "")
+        suffix = Path(file_name).stem.removeprefix(f"{mode}-")
         if suffix.isdigit():
             max_index = max(max_index, int(suffix))
     return mat_dir / f"{mode}-{max_index + 1:03d}.py"

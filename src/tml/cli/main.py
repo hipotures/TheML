@@ -1622,7 +1622,8 @@ def _print_root_materializations(
     table.add_column("Gen", justify="right", no_wrap=True)
     group_index = -1
     previous_hypothesis_id: str | None = None
-    for db_row in materialization_rows(project_dir, mode=mode, hypothesis_id=target_id):
+    rows = materialization_rows(project_dir, mode=mode, hypothesis_id=target_id)
+    for db_row in rows:
         current_hypothesis_id = str(db_row.get("hypothesis_id") or "")
         if current_hypothesis_id != previous_hypothesis_id:
             group_index += 1
@@ -1630,6 +1631,8 @@ def _print_root_materializations(
         row_style = _zebra_style(group_index)
         table.add_row(*_root_materialization_row(db_row), style=row_style)
     console.print(table)
+    if created_count is not None:
+        _print_failed_materialization_summary(rows)
 
 
 def _root_materialization_row(db_row: dict[str, object]) -> list[object]:
@@ -1643,6 +1646,15 @@ def _root_materialization_row(db_row: dict[str, object]) -> list[object]:
         _token_summary(db_row),
         _seconds_text(db_row.get("generation_seconds")),
     ]
+
+
+def _print_failed_materialization_summary(rows: list[dict[str, object]]) -> None:
+    failed = [row for row in rows if str(row.get("status") or "") == "failed"]
+    if not failed:
+        return
+    shown = [f"{row.get('hypothesis_id')}/{row.get('file')}" for row in failed[:8]]
+    suffix = "" if len(failed) <= len(shown) else f", +{len(failed) - len(shown)} more"
+    console.print(f"Failed validation materializations: {len(failed)} ({', '.join(shown)}{suffix})", style="bold red")
 
 
 def _materialization_status_icon(status: str, *, active: bool) -> Text:
