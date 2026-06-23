@@ -27,13 +27,13 @@ models:
     timeout_seconds: 30
   hypothesis:
     provider: codex
-    model: gpt-5.5
-    effort: high
+    model: gpt-5.3-codex-spark
+    effort: xhigh
     timeout_seconds: 600
   materializations:
     provider: codex
     model: gpt-5.3-codex-spark
-    effort: high
+    effort: xhigh
     timeout_seconds: 900
   review: mock
   bugfix: mock
