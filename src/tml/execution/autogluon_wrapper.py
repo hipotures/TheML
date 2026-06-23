@@ -53,6 +53,7 @@ def run_autogluon_materialization(
     code_path: Path,
     project_dir: Path,
     work_dir: Path,
+    profile_id: str | None = None,
 ) -> ExecutionResult:
     data_dir = project_dir / "data"
     required = [
@@ -92,7 +93,7 @@ def run_autogluon_materialization(
     if "FEATURE_GROUPS" in source:
         validate_group_code_source(source)
     try:
-        metric = _run_tabular(code_path=code_path, project_dir=project_dir, work_dir=work_dir)
+        metric = _run_tabular(code_path=code_path, project_dir=project_dir, work_dir=work_dir, profile_id=profile_id)
     except Exception as exc:
         atomic_write_text(work_dir / "autogluon-error.txt", traceback.format_exc())
         return ExecutionResult(
@@ -112,7 +113,7 @@ def run_autogluon_materialization(
     )
 
 
-def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float | None:
+def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path, profile_id: str | None = None) -> float | None:
     import importlib.util
 
     import pandas as pd
@@ -123,8 +124,8 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
     target_col = str(target.get("target_column") or "target")
     id_col = str(target.get("id_column") or "id")
     metric = str(target.get("autogluon_metric") or target.get("metric") or "balanced_accuracy")
-    profile_id = active_profile_id(config, "autogluon")
-    profile = _load_profile(project_dir, profile_id)
+    resolved_profile_id = profile_id or active_profile_id(config, "autogluon")
+    profile = _load_profile(project_dir, resolved_profile_id)
 
     data_dir = project_dir / "data"
     train = pd.read_csv(_data_file(data_dir, "train.csv"))

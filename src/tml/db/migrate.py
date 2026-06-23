@@ -44,10 +44,21 @@ def migrate(db_path: Path) -> None:
         _ensure_column(conn, "submissions", "remote_date", "TEXT")
         _ensure_column(conn, "submissions", "remote_url", "TEXT")
         _ensure_column(conn, "submissions", "private_score", "REAL")
+        _ensure_column(conn, "submissions", "source_submission_sha256", "TEXT")
+        _ensure_column(conn, "submissions", "source_run_id", "TEXT")
+        _ensure_column(conn, "submissions", "source_node_id", "TEXT")
+        _ensure_column(conn, "submissions", "source_step", "INTEGER")
+        _ensure_column(conn, "submissions", "source_profile_id", "TEXT")
         conn.execute(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS idx_branches_mode_composition
             ON branches(mode, composition_hash)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_submissions_source_sha256
+            ON submissions(source_submission_sha256)
             """
         )
 

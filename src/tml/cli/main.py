@@ -57,6 +57,7 @@ from tml.hypotheses.materialize import RootMaterializationPlan, materialize_miss
 from tml.hypotheses.run import RootRunPlan, root_run_plan, run_missing
 from tml.prompts.diff import diff_prompt
 from tml.prompts.probe import probe_prompt, render_prompt
+from tml.rerun import RerunPlan, rerun_plan, rerun_submission
 from tml.utils.yaml_io import read_yaml
 
 
@@ -887,6 +888,29 @@ def submissions_cmd() -> None:
         _abort(exc)
 
 
+@app.command("rerun", context_settings=EXTRA)
+def rerun_cmd(ctx: typer.Context) -> None:
+    try:
+        _reject_positional(ctx.args, "tml rerun")
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"sha", "sha256", "yes"}, "tml rerun")
+        sha = str(overrides.get("sha") or overrides.get("sha256") or "")
+        if not sha:
+            raise TmlError("Missing required parameter: sha=<submission_sha_prefix>.")
+        assume_yes = _bool(overrides.get("yes", False))
+        ref = active_project_ref()
+        plan = rerun_plan(ref.path, sha_prefix=sha)
+        _print_rerun_plan(ref.slug, plan)
+        if not assume_yes and not Confirm.ask("Start RERUN?", default=False, console=console):
+            console.print("RERUN cancelled.")
+            return
+        node = rerun_submission(ref.path, sha_prefix=sha, progress=console.print)
+        console.print(f"RERUN created node {node}.")
+        _print_submissions(ref.path)
+    except Exception as exc:
+        _abort(exc)
+
+
 def _sync_kaggle_submissions(project_dir: Path) -> None:
     config = load_project_config(project_dir)
     competition = str(config.get("kaggle_slug") or project_dir.name)
@@ -1462,6 +1486,54 @@ def _print_branch_run_plan(project_slug: str, plan: BranchRunPlan, *, branch_id:
     console.print(table)
 
 
+def _print_rerun_plan(project_slug: str, plan: RerunPlan) -> None:
+    table = Table(title="RERUN plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Source", f"{plan.source_kind} {plan.source_id}")
+    table.add_row("Source sha", plan.source_submission_sha256[:10])
+    table.add_row("Source CV", _plan_rank_score_text(plan.source_cv_rank, plan.source_local_score))
+    table.add_row("Source public", _plan_rank_score_text(plan.source_public_rank, plan.source_public_score))
+    table.add_row("Source node", plan.source_node_id)
+    table.add_row("Source run", str(plan.source_run_id or ""))
+    table.add_row("Source step", "" if plan.source_step is None else str(plan.source_step))
+    table.add_row("Mode", plan.mode)
+    table.add_row("Rerun profile", plan.profile_id)
+    table.add_row("- time", _plan_seconds_text(plan.profile_time_limit_seconds))
+    table.add_row("- preset", str(plan.profile_preset or "n/a"))
+    table.add_row("- gpu", _plan_bool_text(plan.profile_use_gpu))
+    table.add_row("Profile hash", plan.profile_hash)
+    table.add_row("Execution timeout seconds", str(plan.execution_timeout_seconds))
+    table.add_row("Aux enabled", "true" if plan.aux_enabled else "false")
+    table.add_row("Run", plan.run_id or "new")
+    table.add_row("Run path", plan.run_path)
+    table.add_row("Next node step", str(plan.next_node_step))
+    table.add_row("Materialization", plan.materialization_path)
+    table.add_row("Code hash", plan.code_hash[:12])
+    console.print(table)
+
+
+def _plan_rank_score_text(rank: object, score: object) -> str:
+    if not isinstance(score, int | float):
+        return "n/a"
+    if isinstance(rank, int):
+        return f"({rank}) {float(score):.5f}"
+    return f"(-) {float(score):.5f}"
+
+
+def _plan_seconds_text(value: object) -> str:
+    if not isinstance(value, int):
+        return "n/a"
+    return f"{value}s"
+
+
+def _plan_bool_text(value: object) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    return "n/a"
+
+
 def _print_branch_delete_plan(project_slug: str, plan: BranchDeletePlan) -> None:
     table = Table(title="BRANCH delete plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
     table.add_column("Parameter", style="bold", no_wrap=True)
@@ -1841,7 +1913,7 @@ def _print_root_run_request_status(project_dir: Path, *, mode: str, hypothesis_i
 
 def _print_submissions(project_dir: Path) -> None:
     rows = submission_rows(project_dir)
-    table = Table(title="Submission candidates", box=box.SIMPLE_HEAVY, row_styles=["on grey23", "on grey11"])
+    table = Table(title="Submission candidates", box=box.SIMPLE_HEAVY)
     table.add_column("#", justify="right", no_wrap=True)
     table.add_column("ID", no_wrap=True)
     table.add_column("CV#", justify="right", no_wrap=True)
@@ -1862,11 +1934,12 @@ def _print_submissions(project_dir: Path) -> None:
 
     best_local = _best_numeric(row.get("local_score") for row in rows)
     best_public = _best_numeric(row.get("public_score") for row in rows)
-    for index, row in enumerate(rows, start=1):
+    display_rows = _submission_display_rows(rows)
+    for marker, row, is_child, group_index in display_rows:
         local_score = row.get("local_score")
         public_score = row.get("public_score")
         table.add_row(
-            str(index),
+            marker,
             str(row.get("source_id") or ""),
             _rank_text(row.get("cv_rank"), local_score),
             _rank_text(row.get("public_rank") or row.get("computed_public_rank"), public_score),
@@ -1880,9 +1953,49 @@ def _print_submissions(project_dir: Path) -> None:
             _step_text(row.get("step")),
             _date_yyyymmdd(row.get("created_at")),
             str(row.get("submission_sha256") or "")[:10],
+            style=_submission_row_style(group_index, is_child=is_child),
         )
     console.print(table)
     _print_submission_actions(rows)
+
+
+def _submission_display_rows(rows: list[dict[str, object]]) -> list[tuple[str, dict[str, object], bool, int]]:
+    children_by_source: dict[str, list[dict[str, object]]] = {}
+    for row in rows:
+        source_sha = str(row.get("source_submission_sha256") or "")
+        if source_sha:
+            children_by_source.setdefault(source_sha, []).append(row)
+
+    display: list[tuple[str, dict[str, object], bool, int]] = []
+    child_ids = {id(row) for children in children_by_source.values() for row in children}
+    seen_child_ids: set[int] = set()
+    parent_index = 0
+    for row in rows:
+        if id(row) in child_ids:
+            continue
+        parent_index += 1
+        display.append((str(parent_index), row, False, parent_index))
+        source_sha = str(row.get("submission_sha256") or "")
+        children = children_by_source.get(source_sha, [])
+        for child_index, child in enumerate(children, start=1):
+            marker = "└─" if child_index == len(children) else "├─"
+            display.append((marker, child, True, parent_index))
+            seen_child_ids.add(id(child))
+
+    for row in rows:
+        if id(row) in seen_child_ids:
+            continue
+        if not str(row.get("source_submission_sha256") or ""):
+            continue
+        parent_index += 1
+        display.append((str(parent_index), row, False, parent_index))
+    return display
+
+
+def _submission_row_style(group_index: int, *, is_child: bool) -> str:
+    if is_child:
+        return "on grey11"
+    return "on grey23" if group_index % 2 else "on grey11"
 
 
 def _print_submission_actions(rows: list[dict[str, object]]) -> None:
@@ -1905,7 +2018,7 @@ def _print_submission_actions(rows: list[dict[str, object]]) -> None:
         console.print("[bold]Ready rerun commands:[/bold]")
         for row in ready:
             sha = str(row.get("submission_sha256") or "")[:10]
-            console.print(f"# fake: uv run tml root rerun sha={sha} profile=best_boost_gpu_1h execute=true")
+            console.print(f"uv run tml rerun sha={sha}")
     synced_rows = sum(1 for row in rows if str(row.get("remote_status") or ""))
     if synced_rows:
         console.print(f"Remote Kaggle submissions synced local rows: {synced_rows}")

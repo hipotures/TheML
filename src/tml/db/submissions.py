@@ -67,6 +67,11 @@ def build_submission_row(
         "created_at": start.get("created_at"),
         "finished_at": finished_at,
         "artifact_dir": _project_path(project_dir, node_dir),
+        "source_submission_sha256": start.get("source_submission_sha256") or manifest.get("source_submission_sha256"),
+        "source_run_id": start.get("source_run_id") or manifest.get("source_run_id"),
+        "source_node_id": start.get("source_node_id") or manifest.get("source_node_id"),
+        "source_step": start.get("source_step") or manifest.get("source_step"),
+        "source_profile_id": start.get("source_profile_id") or manifest.get("source_profile_id"),
     }
 
 
@@ -79,13 +84,15 @@ def upsert_submission(conn, row: dict[str, Any] | None) -> None:
           node_id, submission_path, submission_sha256, submission_size, submission_mtime_ns,
           run_id, step, hypothesis_id, mode, profile_id, kind, status, submit_status,
           local_score, public_score, public_rank, metric, code_hash, run_seconds,
-          created_at, finished_at, artifact_dir
+          created_at, finished_at, artifact_dir, source_submission_sha256, source_run_id,
+          source_node_id, source_step, source_profile_id
         )
         VALUES (
           :node_id, :submission_path, :submission_sha256, :submission_size, :submission_mtime_ns,
           :run_id, :step, :hypothesis_id, :mode, :profile_id, :kind, :status, :submit_status,
           :local_score, :public_score, :public_rank, :metric, :code_hash, :run_seconds,
-          :created_at, :finished_at, :artifact_dir
+          :created_at, :finished_at, :artifact_dir, :source_submission_sha256, :source_run_id,
+          :source_node_id, :source_step, :source_profile_id
         )
         ON CONFLICT(node_id, submission_path) DO UPDATE SET
           submission_sha256=excluded.submission_sha256,
@@ -110,7 +117,12 @@ def upsert_submission(conn, row: dict[str, Any] | None) -> None:
           run_seconds=excluded.run_seconds,
           created_at=excluded.created_at,
           finished_at=excluded.finished_at,
-          artifact_dir=excluded.artifact_dir
+          artifact_dir=excluded.artifact_dir,
+          source_submission_sha256=excluded.source_submission_sha256,
+          source_run_id=excluded.source_run_id,
+          source_node_id=excluded.source_node_id,
+          source_step=excluded.source_step,
+          source_profile_id=excluded.source_profile_id
         """,
         row,
     )

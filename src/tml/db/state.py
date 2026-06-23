@@ -234,6 +234,40 @@ def branch_node_paths(project_dir: Path, branch_id: str) -> list[str]:
     return [str(row["path"]) for row in rows]
 
 
+def node_record(project_dir: Path, node_id: str) -> dict[str, Any]:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        row = conn.execute("SELECT * FROM nodes WHERE node_id=?", (node_id,)).fetchone()
+    if row is None:
+        raise ValueError(f"No node record found: {node_id}")
+    return dict(row)
+
+
+def root_materialization_by_code_hash(
+    project_dir: Path,
+    *,
+    hypothesis_id: str,
+    mode: str,
+    code_hash: str,
+) -> dict[str, Any]:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT h.hypothesis_id, h.path AS hypothesis_path, m.mode, m.file, m.code_hash
+            FROM hypotheses h
+            JOIN materializations m ON m.hypothesis_id=h.hypothesis_id
+            WHERE h.hypothesis_id=? AND m.mode=? AND m.code_hash=?
+            ORDER BY m.active DESC, m.file
+            LIMIT 1
+            """,
+            (hypothesis_id.zfill(6), mode, code_hash),
+        ).fetchone()
+    if row is None:
+        raise ValueError(f"No {mode} materialization for hypothesis {hypothesis_id} with code hash {code_hash[:12]}")
+    return dict(row)
+
+
 def delete_branch_records(project_dir: Path, branch_id: str, *, force: bool = False) -> None:
     normalized = _normalize_branch_id(branch_id)
     db_path = ensure_project_db(project_dir)

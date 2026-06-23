@@ -160,6 +160,11 @@ CREATE TABLE IF NOT EXISTS submissions (
   remote_date TEXT,
   remote_url TEXT,
   private_score REAL,
+  source_submission_sha256 TEXT,
+  source_run_id TEXT,
+  source_node_id TEXT,
+  source_step INTEGER,
+  source_profile_id TEXT,
   PRIMARY KEY (node_id, submission_path)
 );
 

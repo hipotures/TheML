@@ -28,6 +28,15 @@ def active_profile_id(config: dict[str, Any], mode: str | None = None) -> str:
     return str(profiles.get(mode) or global_profile or f"{mode}-root-start-v1")
 
 
+def rerun_profile_id(project_dir: Path, mode: str) -> str:
+    root_config = read_yaml(context_path(repo_root_for_project(project_dir)))
+    rerun = root_config.get("rerun") if isinstance(root_config.get("rerun"), dict) else {}
+    value = rerun.get(mode)
+    if not value:
+        raise ValueError(f"Missing rerun profile configuration: rerun.{mode} in tml.yaml")
+    return str(value)
+
+
 def _global_active_profile_id(config: dict[str, Any], mode: str) -> str | None:
     project_dir_value = config.get("_project_dir")
     if not isinstance(project_dir_value, str):

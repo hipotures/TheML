@@ -11,11 +11,12 @@ def build_wrapped_materialization_source(
     group_code: str,
     project_dir: Path,
     profile_overrides: dict[str, object] | None = None,
+    profile_id: str | None = None,
 ) -> str:
     if mode == "legacy":
         return _legacy_wrapper_source(group_code, project_dir, profile_overrides=profile_overrides)
     if mode == "autogluon":
-        return _autogluon_wrapper_source(group_code, project_dir, profile_overrides=profile_overrides)
+        return _autogluon_wrapper_source(group_code, project_dir, profile_overrides=profile_overrides, profile_id=profile_id)
     raise ValueError(f"Unsupported materialization mode: {mode}")
 
 
@@ -24,9 +25,11 @@ def _autogluon_wrapper_source(
     project_dir: Path,
     *,
     profile_overrides: dict[str, object] | None,
+    profile_id: str | None,
 ) -> str:
     project_literal = repr(_project_relative_path(project_dir))
     overrides_literal = repr(_normalized_profile_overrides(profile_overrides or {}))
+    profile_id_literal = repr(profile_id)
     return f'''# Generated AutoGluon materialization.
 # Feature-group code is followed by the fixed executable AutoGluon wrapper.
 
@@ -79,6 +82,7 @@ def main():
     project_relative_path = Path({project_literal})
     project_dir = _resolve_project_dir(project_relative_path)
     profile_overrides = {overrides_literal}
+    explicit_profile_id = {profile_id_literal}
     data_dir = project_dir / "data"
     runtime_dir = Path(__file__).resolve().parent
     work_dir = runtime_dir / "work"
@@ -490,7 +494,7 @@ def main():
                 target_col = str(target.get("target_column") or "target")
                 id_col = str(target.get("id_column") or "id")
                 metric = str(target.get("autogluon_metric") or target.get("metric") or "balanced_accuracy")
-                profile_id = active_profile_id(config, "autogluon")
+                profile_id = explicit_profile_id or active_profile_id(config, "autogluon")
                 profile = load_profile(project_dir, "autogluon", profile_id)
                 profile.update(profile_overrides)
                 _force_autogluon_cpu_resources(profile)

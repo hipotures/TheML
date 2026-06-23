@@ -1,0 +1,34 @@
+schema_version: 1
+profile_id: ag-s6e6-boost-gpu-best-ens-stack-1h-v1
+source_profile: tml.s6e6_boost_gpu_best_ens_stack_1h
+mode: autogluon
+included_model_types:
+- XGB
+- GBM
+- CAT
+presets: best_quality
+time_limit: 3600
+preprocess_timeout: 180
+validation_strategy: autogluon
+seed: 42
+class_balance: balanced
+use_gpu: true
+hyperparameters:
+  XGB:
+  - device: cuda
+    tree_method: hist
+    ag_args:
+      priority: 999
+    ag_args_fit:
+      num_gpus: 1
+  GBM:
+  - device: cuda
+    ag_args_fit:
+      num_gpus: 1
+  CAT:
+  - task_type: GPU
+    devices: '0'
+    gpu_ram_part: 0.8
+    ag_args_fit:
+      num_gpus: 1
+fit_args: {}
