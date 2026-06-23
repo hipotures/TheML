@@ -12,6 +12,10 @@ score:
   profile: active
   status: complete
   order: desc
+  # Absolute threshold:
+  # epsilon: 0.0001
+  # Relative threshold:
+  # epsilon: "0.1%"
   epsilon: 0.0
 
 selection:

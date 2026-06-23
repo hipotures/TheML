@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from tml.branches.algorithms import branch_add_algorithmic_one, load_branch_algorithm
+from tml.branches.algorithms import branch_add_algorithmic_one, branch_algorithm_top_parent, load_branch_algorithm, score_improves
 from tml.branches.run import next_pending_branch, run_one_branch
 from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.errors import TmlError
@@ -97,6 +97,10 @@ def branch_grow(
     )
     items: list[BranchGrowItem] = []
     stop_reason = ""
+    algorithm = load_branch_algorithm(project_dir, algo_id)
+    top_parent = branch_algorithm_top_parent(project_dir, algo_id=algo_id, mode=plan.mode)
+    accepted_parent_ref = top_parent.parent_ref if top_parent is not None else None
+    accepted_top_score = top_parent.parent_score if top_parent is not None else None
 
     for step_index in range(1, steps + 1):
         pending = next_pending_branch(project_dir, mode=plan.mode, profile_id=plan.profile_id)
@@ -129,12 +133,19 @@ def branch_grow(
                     run_seconds=run_item.run_seconds,
                 )
             )
+            if run_item.run_status == "complete" and run_item.metric is not None:
+                if accepted_top_score is None or score_improves(run_item.metric, accepted_top_score, algorithm.epsilon):
+                    accepted_parent_ref = run_item.branch_id
+                    accepted_top_score = run_item.metric
             continue
 
-        added = branch_add_algorithmic_one(project_dir, algo_id=algo_id, mode=plan.mode)
+        added = branch_add_algorithmic_one(project_dir, algo_id=algo_id, mode=plan.mode, preferred_parent_ref=accepted_parent_ref)
         if added is None:
             stop_reason = "No pending branch and no valid algorithmic candidate."
             break
+        if accepted_parent_ref is None and added.parent_score is not None:
+            accepted_parent_ref = added.parent_ref
+            accepted_top_score = added.parent_score
 
         _emit(progress, f"BRANCH grow {step_index}/{steps}: add {added.branch_id} parent={added.parent_ref} source={added.source_ref}")
         run_item = run_one_branch(
@@ -163,6 +174,10 @@ def branch_grow(
                 run_seconds=run_item.run_seconds,
             )
         )
+        if run_item.run_status == "complete" and run_item.metric is not None:
+            if accepted_top_score is None or score_improves(run_item.metric, accepted_top_score, algorithm.epsilon):
+                accepted_parent_ref = run_item.branch_id
+                accepted_top_score = run_item.metric
 
     if not stop_reason and len(items) >= steps:
         stop_reason = "Requested steps satisfied."

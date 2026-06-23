@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 from pathlib import Path
 from typing import Any
 
@@ -16,14 +17,27 @@ from tml.utils.yaml_io import read_yaml
 
 
 @dataclass(frozen=True)
+class ScoreEpsilon:
+    raw: object
+    kind: str
+    value: float
+
+
+@dataclass(frozen=True)
 class BranchAlgorithmConfig:
     algorithm_id: str
     path: Path
     parent_kinds: list[str]
     source_kinds: list[str]
     max_children: int
-    epsilon: float
+    epsilon: ScoreEpsilon
     candidate_limit: int = 500
+
+
+@dataclass(frozen=True)
+class BranchAlgorithmParent:
+    parent_ref: str
+    parent_score: float
 
 
 @dataclass(frozen=True)
@@ -112,6 +126,7 @@ def branch_add_algorithmic_one(
     *,
     algo_id: str,
     mode: str | None = None,
+    preferred_parent_ref: str | None = None,
 ) -> BranchAlgorithmItem | None:
     config = load_project_config(project_dir)
     active_run_mode = mode or active_mode(config)
@@ -126,8 +141,37 @@ def branch_add_algorithmic_one(
         child_counts=direct_branch_child_counts(project_dir, mode=active_run_mode),
         dry_run=False,
         item_index=1,
+        preferred_parent_ref=preferred_parent_ref,
     )
     return item
+
+
+def branch_algorithm_top_parent(
+    project_dir: Path,
+    *,
+    algo_id: str,
+    mode: str | None = None,
+) -> BranchAlgorithmParent | None:
+    config = load_project_config(project_dir)
+    active_run_mode = mode or active_mode(config)
+    profile_id = active_profile_id(config, active_run_mode)
+    algorithm = load_branch_algorithm(project_dir, algo_id)
+    candidates = branch_algorithm_candidate_pairs(
+        project_dir,
+        mode=active_run_mode,
+        profile_id=profile_id,
+        parent_kinds=algorithm.parent_kinds,
+        source_kinds=algorithm.source_kinds,
+        max_children=algorithm.max_children,
+        limit=1,
+    )
+    if not candidates:
+        return None
+    candidate = candidates[0]
+    parent_score = _optional_float(candidate.get("parent_score"))
+    if parent_score is None:
+        return None
+    return BranchAlgorithmParent(parent_ref=str(candidate["parent_ref"]), parent_score=parent_score)
 
 
 def load_branch_algorithm(project_dir: Path, algo_id: str) -> BranchAlgorithmConfig:
@@ -167,9 +211,7 @@ def _parse_branch_algorithm(path: Path, algo_id: str, payload: dict[str, Any]) -
     max_children = int(limits.get("max_children") or 10)
     if max_children <= 0:
         raise TmlError("Branch algorithm limits.max_children must be positive.")
-    epsilon = float(score.get("epsilon") or 0.0)
-    if epsilon != 0.0:
-        raise TmlError("Branch algorithm v1 supports score.epsilon: 0.0 only.")
+    epsilon = parse_score_epsilon(score.get("epsilon"))
 
     return BranchAlgorithmConfig(
         algorithm_id=configured_id,
@@ -191,6 +233,7 @@ def _branch_add_algorithmic_next(
     child_counts: dict[tuple[str, str], int],
     dry_run: bool,
     item_index: int,
+    preferred_parent_ref: str | None = None,
 ) -> tuple[BranchAlgorithmItem | None, dict[str, int], str]:
     skip_reasons: dict[str, int] = {}
     candidates = branch_algorithm_candidate_pairs(
@@ -205,7 +248,7 @@ def _branch_add_algorithmic_next(
     if not candidates:
         return None, skip_reasons, "No score-ranked candidate pairs found."
 
-    for candidate in candidates:
+    for candidate in _ordered_candidates(candidates, preferred_parent_ref=preferred_parent_ref):
         parent_key = (str(candidate["parent_kind"]), str(candidate["parent_id"]))
         parent_child_count = child_counts.get(parent_key, int(candidate["parent_child_count"] or 0))
         if parent_child_count >= algorithm.max_children:
@@ -260,6 +303,67 @@ def _branch_add_algorithmic_next(
         )
 
     return None, skip_reasons, f"No valid candidate pair found in the top {len(candidates)} candidate pairs."
+
+
+def parse_score_epsilon(value: object) -> ScoreEpsilon:
+    if value is None:
+        return ScoreEpsilon(raw=value, kind="absolute", value=0.0)
+    if isinstance(value, bool):
+        raise TmlError("Invalid score.epsilon: boolean values are not supported.")
+    if isinstance(value, int | float):
+        parsed = float(value)
+        _validate_epsilon_number(parsed, value)
+        return ScoreEpsilon(raw=value, kind="absolute", value=parsed)
+    if isinstance(value, str):
+        text = value.strip()
+        if text.endswith("%"):
+            raw_number = text[:-1].strip()
+            parsed = _parse_epsilon_float(raw_number, value)
+            _validate_epsilon_number(parsed, value)
+            return ScoreEpsilon(raw=value, kind="percent", value=parsed)
+        parsed = _parse_epsilon_float(text, value)
+        _validate_epsilon_number(parsed, value)
+        return ScoreEpsilon(raw=value, kind="absolute", value=parsed)
+    raise TmlError(f"Invalid score.epsilon: {value!r}")
+
+
+def epsilon_delta(reference_score: float, epsilon: ScoreEpsilon) -> float:
+    if epsilon.kind == "absolute":
+        return epsilon.value
+    if epsilon.kind == "percent":
+        return abs(reference_score) * (epsilon.value / 100.0)
+    raise TmlError(f"Invalid score epsilon kind: {epsilon.kind}")
+
+
+def score_improves(candidate_score: float, reference_score: float, epsilon: ScoreEpsilon, *, maximize: bool = True) -> bool:
+    delta = epsilon_delta(reference_score, epsilon)
+    if maximize:
+        return candidate_score >= reference_score + delta
+    return candidate_score <= reference_score - delta
+
+
+def _parse_epsilon_float(text: str, raw: object) -> float:
+    if not text:
+        raise TmlError(f"Invalid score.epsilon: {raw!r}")
+    try:
+        return float(text)
+    except ValueError as exc:
+        raise TmlError(f"Invalid score.epsilon: {raw!r}") from exc
+
+
+def _validate_epsilon_number(value: float, raw: object) -> None:
+    if not math.isfinite(value) or value < 0.0:
+        raise TmlError(f"Invalid score.epsilon: {raw!r}")
+
+
+def _ordered_candidates(candidates: list[dict[str, Any]], *, preferred_parent_ref: str | None) -> list[dict[str, Any]]:
+    if not preferred_parent_ref:
+        return candidates
+    preferred = [candidate for candidate in candidates if str(candidate.get("parent_ref") or "") == preferred_parent_ref]
+    if not preferred:
+        return candidates
+    rest = [candidate for candidate in candidates if str(candidate.get("parent_ref") or "") != preferred_parent_ref]
+    return preferred + rest
 
 
 def _node_kinds(value: object, *, default: list[str]) -> list[str]:
