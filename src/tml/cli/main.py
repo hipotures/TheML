@@ -190,17 +190,17 @@ METRIC_SHORT_SYMBOLS = {
     "mrr": "MRR",
 }
 
-app.add_typer(init_app, name="init")
-app.add_typer(project_app, name="project")
-app.add_typer(root_app, name="root")
-app.add_typer(branch_app, name="branch")
-app.add_typer(prompt_app, name="prompt")
-app.add_typer(kaggle_app, name="kaggle")
+app.add_typer(init_app, name="init", help="Initialize projects and workspace metadata.")
+app.add_typer(project_app, name="project", help="Select and inspect project-level settings.")
+app.add_typer(root_app, name="root", help="Generate, materialize, fix, and run ROOT hypotheses.")
+app.add_typer(branch_app, name="branch", help="Compose, run, inspect, and delete BRANCH artifacts.")
+app.add_typer(prompt_app, name="prompt", help="Render, probe, and compare model prompts.")
+app.add_typer(kaggle_app, name="kaggle", help="Download data, sync submissions, and submit to Kaggle.")
 
 EXTRA = {"allow_extra_args": True, "ignore_unknown_options": True}
 
 
-@init_app.command("project", context_settings=EXTRA)
+@init_app.command("project", context_settings=EXTRA, help="Create a new project scaffold.")
 def init_project_cmd(ctx: typer.Context, slug: str) -> None:
     try:
         overrides = _overrides(ctx.args)
@@ -224,7 +224,7 @@ def init_project_cmd(ctx: typer.Context, slug: str) -> None:
         _abort(exc)
 
 
-@project_app.command("use")
+@project_app.command("use", help="Set the active project by slug.")
 def use_project_cmd(slug: str) -> None:
     try:
         ref = use_project(workspace_root(), slug)
@@ -233,7 +233,7 @@ def use_project_cmd(slug: str) -> None:
         _abort(exc)
 
 
-@app.command("tree", context_settings=EXTRA)
+@app.command("tree", context_settings=EXTRA, help="Show the active project's solution tree.")
 def tree_cmd(ctx: typer.Context) -> None:
     try:
         _reject_positional(ctx.args, "tml tree")
@@ -248,7 +248,7 @@ def tree_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@root_app.command("status", context_settings=EXTRA)
+@root_app.command("status", context_settings=EXTRA, help="Show ROOT progress, counts, and hypothesis table.")
 def root_status_cmd(ctx: typer.Context) -> None:
     _ = ctx
     try:
@@ -663,7 +663,7 @@ def root_run_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@root_app.command("ensure", context_settings=EXTRA)
+@root_app.command("ensure", context_settings=EXTRA, help="Generate, materialize, and run missing ROOT work.")
 def root_ensure_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
@@ -737,7 +737,7 @@ def autocommit_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@branch_app.command("add", context_settings=EXTRA)
+@branch_app.command("add", context_settings=EXTRA, help="Compose a new BRANCH from selected sources.")
 def branch_add_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
@@ -759,7 +759,7 @@ def branch_add_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@branch_app.command("status", context_settings=EXTRA)
+@branch_app.command("status", context_settings=EXTRA, help="Show BRANCH materializations, runs, and scores.")
 def branch_status_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
@@ -784,7 +784,7 @@ def branch_status_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@branch_app.command("run", context_settings=EXTRA)
+@branch_app.command("run", context_settings=EXTRA, help="Run missing BRANCH materializations.")
 def branch_run_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
@@ -828,7 +828,7 @@ def branch_run_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@branch_app.command("delete", context_settings=EXTRA)
+@branch_app.command("delete", context_settings=EXTRA, help="Delete a BRANCH and optionally its run nodes.")
 def branch_delete_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
@@ -854,7 +854,7 @@ def branch_delete_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@app.command("reindex")
+@app.command("reindex", help="Rebuild the active project's local state database.")
 def reindex_cmd(scope: str | None = None, run_id: str | None = None) -> None:
     try:
         _ = (scope, run_id)
@@ -870,9 +870,9 @@ def reindex_cmd(scope: str | None = None, run_id: str | None = None) -> None:
         _abort(exc)
 
 
-@app.command("submissions")
-@app.command("sub")
-@app.command("subm")
+@app.command("submissions", help="List local and synced Kaggle submissions.")
+@app.command("sub", help="Alias for submissions.")
+@app.command("subm", help="Alias for submissions.")
 def submissions_cmd() -> None:
     try:
         ref = active_project_ref()
@@ -881,7 +881,7 @@ def submissions_cmd() -> None:
         _abort(exc)
 
 
-@app.command("rerun", context_settings=EXTRA)
+@app.command("rerun", context_settings=EXTRA, help="Re-run from an existing submission SHA prefix.")
 def rerun_cmd(ctx: typer.Context) -> None:
     try:
         _reject_positional(ctx.args, "tml rerun")
@@ -916,7 +916,7 @@ def _sync_kaggle_submissions(project_dir: Path) -> None:
     console.print(f"Remote Kaggle submissions visible: {len(remote_submissions)}; synced local rows: {changed}.")
 
 
-@kaggle_app.command("download")
+@kaggle_app.command("download", help="Download competition data for the active project.")
 def kaggle_download_cmd() -> None:
     try:
         ref = active_project_ref()
@@ -940,7 +940,7 @@ def kaggle_download_cmd() -> None:
         _abort(exc)
 
 
-@kaggle_app.command("sync")
+@kaggle_app.command("sync", help="Sync remote Kaggle submission metadata into local state.")
 def kaggle_sync_cmd() -> None:
     try:
         ref = active_project_ref()
@@ -949,7 +949,7 @@ def kaggle_sync_cmd() -> None:
         _abort(exc)
 
 
-@kaggle_app.command("submit", context_settings=EXTRA)
+@kaggle_app.command("submit", context_settings=EXTRA, help="Submit a local submission artifact to Kaggle.")
 def kaggle_submit_cmd(ctx: typer.Context) -> None:
     try:
         _reject_positional(ctx.args, "tml kaggle submit")
@@ -985,7 +985,7 @@ def kaggle_submit_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@prompt_app.command("render", context_settings=EXTRA)
+@prompt_app.command("render", context_settings=EXTRA, help="Render a prompt template for inspection.")
 def prompt_render_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
@@ -1013,7 +1013,7 @@ def prompt_render_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@prompt_app.command("probe", context_settings=EXTRA)
+@prompt_app.command("probe", context_settings=EXTRA, help="Render and send a prompt probe to a model.")
 def prompt_probe_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
@@ -1117,7 +1117,7 @@ def _probe_with_progress(
     return path
 
 
-@prompt_app.command("diff", context_settings=EXTRA)
+@prompt_app.command("diff", context_settings=EXTRA, help="Show the diff between prompt versions.")
 def prompt_diff_cmd(ctx: typer.Context, target: str | None = None, stage: str | None = None) -> None:
     try:
         ref = active_project_ref()
