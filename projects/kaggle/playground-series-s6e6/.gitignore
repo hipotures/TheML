@@ -2,6 +2,7 @@
 data/
 logs/
 submissions/
+runs/
 runs/**/artifacts/**/work/
 workspaces/
 tml.db

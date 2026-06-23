@@ -5,6 +5,8 @@ defaults:
   root_mode: autogluon
   prompt_output: tmp
   probe_output: tmp
+external:
+  enabled: true
 env:
   TML_WIDE_TERMINAL: 80
 active_project:
@@ -23,7 +25,7 @@ models:
     timeout_seconds: 30
   hypothesis:
     provider: codex
-    model: gpt-5.4
+    model: gpt-5.5
     effort: high
     timeout_seconds: 600
   materializations:

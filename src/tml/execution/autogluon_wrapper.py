@@ -8,11 +8,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from tml.core.config import active_profile_id, load_project_config
+from tml.core.config import active_profile_id, load_project_config, repo_root_for_project
+from tml.core.paths import context_path
 from tml.core.profiles import load_profile
 from tml.features.groups import has_feature_groups, run_feature_groups
 from tml.features.validation import validate_group_code_source
 from tml.utils.atomic import atomic_write_text
+from tml.utils.yaml_io import read_yaml
 
 from .result import ExecutionResult
 
@@ -33,6 +35,8 @@ RESERVED_PROFILE_KEYS = {
     "fit_args",
     "predictor_args",
     "ignored_columns",
+    "aux_file",
+    "auxiliary_file",
 }
 
 
@@ -126,6 +130,7 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
     train = pd.read_csv(_data_file(data_dir, "train.csv"))
     test = pd.read_csv(_data_file(data_dir, "test.csv"))
     sample = pd.read_csv(_data_file(data_dir, "sample_submission.csv"))
+    aux_df = _read_aux_csv(config, profile, project_dir=project_dir, data_dir=data_dir)
     if target_col not in train.columns:
         raise ValueError(f"Target column {target_col!r} not found in train.csv")
 
@@ -142,6 +147,7 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path) -> float
             transformed = run_feature_groups(
                 combined.copy(),
                 getattr(module, "FEATURE_GROUPS"),
+                aux=aux_df,
                 log_path=work_dir / "feature-groups.jsonl",
             )
         else:
@@ -227,6 +233,43 @@ def _predictor_kwargs_from_profile(
 
 def _load_profile(project_dir: Path, profile_id: str) -> dict[str, object]:
     return load_profile(project_dir, "autogluon", profile_id)
+
+
+def _read_aux_csv(
+    config: dict[str, Any],
+    profile: dict[str, object],
+    *,
+    project_dir: Path,
+    data_dir: Path,
+) -> Any | None:
+    aux_file = None
+    if _external_enabled(project_dir):
+        aux_file = _project_external_file(config)
+    aux_file = aux_file or profile.get("aux_file") or profile.get("auxiliary_file")
+    if not aux_file:
+        return None
+    path = Path(str(aux_file))
+    if not path.is_absolute():
+        path = data_dir / path
+    if not path.exists():
+        raise FileNotFoundError(f"Configured aux file not found: {path}")
+    import pandas as pd
+
+    return pd.read_csv(path)
+
+
+def _external_enabled(project_dir: Path) -> bool:
+    try:
+        root_config = read_yaml(context_path(repo_root_for_project(project_dir)))
+    except Exception:
+        root_config = {}
+    external = root_config.get("external") if isinstance(root_config.get("external"), dict) else {}
+    return bool(external.get("enabled", False))
+
+
+def _project_external_file(config: dict[str, Any]) -> object | None:
+    external = config.get("external") if isinstance(config.get("external"), dict) else {}
+    return external.get("file") or external.get("path") or external.get("aux")
 
 
 def _training_plan_from_profile(train_model, target_col: str, profile: dict[str, object]) -> TrainingPlan:

@@ -49,9 +49,11 @@ def main():
     import pandas as pd
     from autogluon.tabular import TabularPredictor
 
-    from tml.core.config import active_profile_id, load_project_config
+    from tml.core.config import active_profile_id, load_project_config, repo_root_for_project
+    from tml.core.paths import context_path
     from tml.core.profiles import load_profile
     from tml.features.groups import run_feature_groups
+    from tml.utils.yaml_io import read_yaml
 
     class_weight_col = "__tml_sample_weight"
 
@@ -139,14 +141,35 @@ def main():
             return gz
         return data_dir / f"{{stem}}.csv"
 
-    def _read_aux_csv(profile):
-        aux_file = profile.get("aux_file") or profile.get("auxiliary_file")
+    def _root_external_enabled():
+        try:
+            root_config = read_yaml(context_path(repo_root_for_project(project_dir)))
+        except Exception:
+            root_config = {{}}
+        external = root_config.get("external") if isinstance(root_config.get("external"), dict) else {{}}
+        return bool(external.get("enabled", False))
+
+    def _project_external_file(config):
+        external = config.get("external") if isinstance(config.get("external"), dict) else {{}}
+        return external.get("file") or external.get("path") or external.get("aux")
+
+    def _resolve_external_path(value):
+        path = Path(str(value))
+        if not path.is_absolute():
+            path = data_dir / path
+        return path
+
+    def _read_aux_csv(config, profile):
+        aux_file = None
+        if _root_external_enabled():
+            aux_file = _project_external_file(config)
+        aux_file = aux_file or profile.get("aux_file") or profile.get("auxiliary_file")
         if not aux_file:
-            return None
-        path = data_dir / str(aux_file)
+            return None, None
+        path = _resolve_external_path(aux_file)
         if not path.exists():
             raise FileNotFoundError(f"Configured aux file not found: {{path}}")
-        return pd.read_csv(path)
+        return pd.read_csv(path), aux_file
 
     def _force_autogluon_cpu_resources(profile):
         if profile.get("use_gpu") is not False:
@@ -475,9 +498,8 @@ def main():
                 train = pd.read_csv(_data_file("train"))
                 test = pd.read_csv(_data_file("test"))
                 sample = pd.read_csv(_data_file("sample_submission"))
-                aux_df = _read_aux_csv(profile)
+                aux_df, aux_file = _read_aux_csv(config, profile)
                 if aux_df is not None:
-                    aux_file = profile.get("aux_file") or profile.get("auxiliary_file")
                     print(
                         f"AutoGluon materialization: loaded aux file {{aux_file}} rows={{len(aux_df)}} cols={{len(aux_df.columns)}} passed_to_groups=True",
                         flush=True,

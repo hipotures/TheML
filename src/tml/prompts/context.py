@@ -26,15 +26,21 @@ def project_prompt_context(project_dir: Path, **extra: Any) -> dict[str, Any]:
     task_text = task_file.read_text(encoding="utf-8") if task_file.exists() else ""
     data_overview_file = project_dir / "docs" / "data-overview.md"
     data_overview = data_overview_file.read_text(encoding="utf-8") if data_overview_file.exists() else ""
+    external_description = _external_description(project_dir, project)
     materialization_data_overview = _materialization_data_overview(
         data_overview,
         target_column=project.get("target", {}).get("target_column"),
     )
+    if external_description:
+        materialization_data_overview = "\n\n".join(
+            part for part in (materialization_data_overview, external_description) if part
+        )
     return {
         "project_dir": str(project_dir),
         "project": project,
         "task_text": task_text,
         "data_overview": data_overview,
+        "external_description": external_description,
         "materialization_data_overview": materialization_data_overview,
         "prior_root_group_results": _existing_hypothesis_memory(project_dir),
         "existing_hypotheses": _existing_hypothesis_memory(project_dir),
@@ -60,6 +66,23 @@ def _truncate_text(value: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _external_description(project_dir: Path, project: dict[str, Any]) -> str:
+    external = project.get("external") if isinstance(project.get("external"), dict) else {}
+    description = external.get("description") or external.get("description_file")
+    if not description:
+        return ""
+    path = Path(str(description))
+    if not path.is_absolute():
+        path = project_dir / path
+    if not path.exists() or not path.is_file():
+        return ""
+    text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        return ""
+    file_name = external.get("file") or external.get("path") or external.get("aux") or path.name
+    return f"# External Data Description for {file_name}\n\n{text}"
 
 
 def _materialization_data_overview(data_overview: str, *, target_column: object | None) -> str:
