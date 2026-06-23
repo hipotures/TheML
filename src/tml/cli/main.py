@@ -703,45 +703,127 @@ def root_ensure_cmd(ctx: typer.Context) -> None:
     "autocommit",
     context_settings=EXTRA,
     help=(
-        "Commit the active project's hypothesis and branch artifacts.\n\n"
+        "Commit the active project's hypothesis artifacts, branch artifacts, and tml.yaml/tml.conf config.\n\n"
         "Accepted key=value parameters:\n"
         "  message=<text>     Commit message; defaults to the project slug.\n"
         "  yes=true           Skip the confirmation prompt."
     ),
 )
 def autocommit_cmd(ctx: typer.Context) -> None:
+    _autocommit_artifacts(
+        ctx,
+        command="tml autocommit",
+        include_root=True,
+        include_branch=True,
+        include_config=True,
+        default_message_prefix="Commit artifacts",
+        scope_label="project",
+    )
+
+
+@root_app.command(
+    "autocommit",
+    context_settings=EXTRA,
+    help=(
+        "Commit the active project's ROOT hypothesis artifacts.\n\n"
+        "Accepted key=value parameters:\n"
+        "  message=<text>     Commit message; defaults to the project slug.\n"
+        "  yes=true           Skip the confirmation prompt."
+    ),
+)
+def root_autocommit_cmd(ctx: typer.Context) -> None:
+    _autocommit_artifacts(
+        ctx,
+        command="tml root autocommit",
+        include_root=True,
+        include_branch=False,
+        include_config=False,
+        default_message_prefix="Commit ROOT hypotheses",
+        scope_label="ROOT",
+    )
+
+
+def _autocommit_artifacts(
+    ctx: typer.Context,
+    *,
+    command: str,
+    include_root: bool,
+    include_branch: bool,
+    include_config: bool,
+    default_message_prefix: str,
+    scope_label: str,
+) -> None:
     try:
         ref = active_project_ref()
-        ensure_root_baseline(ref.path)
-        _reject_positional(ctx.args, "tml autocommit")
+        if include_root:
+            ensure_root_baseline(ref.path)
+        _reject_positional(ctx.args, command)
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"message", "yes"}, "tml autocommit")
-        message = str(overrides.get("message") or f"Commit artifacts for {ref.slug}")
+        _validate_override_keys(overrides, {"message", "yes"}, command)
+        message = str(overrides.get("message") or f"{default_message_prefix} for {ref.slug}")
         assume_yes = _bool(overrides.get("yes", False))
-        hypotheses_path = ref.path / "hypotheses"
-        if not hypotheses_path.exists():
-            raise TmlError(f"Hypotheses directory does not exist: {hypotheses_path}")
-        commit_paths = [hypotheses_path]
-        branches_path = ref.path / "branches"
-        if branches_path.exists():
-            commit_paths.append(branches_path)
+        commit_paths = _autocommit_paths(ref.path, include_root=include_root, include_branch=include_branch, include_config=include_config)
+        if not commit_paths:
+            console.print(f"No {scope_label} artifact paths found for {ref.slug}.")
+            return
         changed_before = _git_changed_paths(workspace_root(), commit_paths)
         if not changed_before:
-            console.print(f"No project artifact changes to commit for {ref.slug}.")
+            console.print(f"No {scope_label} artifact changes to commit for {ref.slug}.")
             return
-        _print_project_autocommit_plan(ref.slug, commit_paths, message, changed_before)
-        if not assume_yes and not Confirm.ask("Commit project artifacts?", default=False, console=console):
-            console.print("Project artifacts autocommit cancelled.")
+        _print_project_autocommit_plan(ref.slug, commit_paths, message, changed_before, scope_label=scope_label)
+        if not assume_yes and not Confirm.ask(f"Commit {scope_label} artifacts?", default=False, console=console):
+            console.print(f"{scope_label} artifacts autocommit cancelled.")
             return
         _git_add_paths(workspace_root(), commit_paths)
         staged = _git_staged_paths(workspace_root(), commit_paths)
         if not staged:
-            console.print(f"No staged project artifact changes to commit for {ref.slug}.")
+            console.print(f"No staged {scope_label} artifact changes to commit for {ref.slug}.")
             return
         _git_commit_paths(workspace_root(), commit_paths, message)
-        console.print(f"Committed {len(staged)} project artifact files for {ref.slug}.")
+        console.print(f"Committed {len(staged)} {scope_label} artifact files for {ref.slug}.")
     except Exception as exc:
         _abort(exc)
+
+
+def _autocommit_paths(project_dir: Path, *, include_root: bool, include_branch: bool, include_config: bool) -> list[Path]:
+    paths: list[Path] = []
+    if include_root:
+        hypotheses_path = project_dir / "hypotheses"
+        if not hypotheses_path.exists():
+            raise TmlError(f"Hypotheses directory does not exist: {hypotheses_path}")
+        paths.append(hypotheses_path)
+    if include_branch:
+        branches_path = project_dir / "branches"
+        if branches_path.exists():
+            paths.append(branches_path)
+    if include_config:
+        for config_name in ("tml.yaml", "tml.conf"):
+            config_path = workspace_root() / config_name
+            if config_path.exists():
+                paths.append(config_path)
+    return paths
+
+
+@branch_app.command(
+    "autocommit",
+    context_settings=EXTRA,
+    help=(
+        "Commit the active project's BRANCH artifacts.\n\n"
+        "Accepted key=value parameters:\n"
+        "  message=<text>     Commit message; defaults to the project slug.\n"
+        "  yes=true           Skip the confirmation prompt."
+    ),
+)
+def branch_autocommit_cmd(ctx: typer.Context) -> None:
+    _autocommit_artifacts(
+        ctx,
+        command="tml branch autocommit",
+        include_root=False,
+        include_branch=True,
+        include_config=False,
+        default_message_prefix="Commit BRANCH artifacts",
+        scope_label="BRANCH",
+    )
 
 
 @branch_app.command("add", context_settings=EXTRA, help="Compose a new BRANCH from selected sources.")
@@ -1306,11 +1388,18 @@ def _command_status_requested(args: list[str], command: str) -> bool:
     raise TmlError(f"Unexpected argument for {command}: {positional[0]}")
 
 
-def _print_project_autocommit_plan(project_slug: str, artifact_paths: list[Path], message: str, changed_paths: list[str]) -> None:
+def _print_project_autocommit_plan(
+    project_slug: str,
+    artifact_paths: list[Path],
+    message: str,
+    changed_paths: list[str],
+    *,
+    scope_label: str,
+) -> None:
     preview = ", ".join(changed_paths[:3])
     if len(changed_paths) > 3:
         preview += f", ... +{len(changed_paths) - 3}"
-    table = Table(title="Project artifacts autocommit plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table = Table(title=f"{scope_label} artifacts autocommit plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
     table.add_column("Parameter", style="bold", no_wrap=True)
     table.add_column("Value", overflow="fold")
     table.add_row("Project", project_slug)
