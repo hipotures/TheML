@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: 6016dc650077bfbf23377cc7c0af3c30de687ff1b28c97c385c163bcde2192f8
+    created_at: '2026-06-23T14:56:07'
+feature_group:
+  logical_name: flux_allocation_entropy
+  version_id: flux_allocation_entropy@000047
+  source_hypothesis_id: '000047'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py

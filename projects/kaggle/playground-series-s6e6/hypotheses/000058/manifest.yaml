@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: 5161a75696fee8416023afb8c32ed1c400967e9a947f9eae119b33623839a006
+    created_at: '2026-06-23T15:05:07'
+feature_group:
+  logical_name: redshift_branch_deconvolved_flux_posteriors
+  version_id: redshift_branch_deconvolved_flux_posteriors@000058
+  source_hypothesis_id: 000058
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py

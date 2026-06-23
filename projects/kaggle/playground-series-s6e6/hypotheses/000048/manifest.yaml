@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: e969ea9c63ff5e98c57828a4fe73d7558d509c4234074df87d3d6b5960631858
+    created_at: '2026-06-23T14:56:39'
+feature_group:
+  logical_name: luptitude_regime_flux_features
+  version_id: luptitude_regime_flux_features@000048
+  source_hypothesis_id: 000048
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py

@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-002.py
+    sha256: 206ec538c8b4c373eaf44330d13723874f09d6162b911376e5efb8dc7b07f11e
+    created_at: '2026-06-23T15:52:18'
+feature_group:
+  logical_name: tag_redshift_compatibility_residuals
+  version_id: tag_redshift_compatibility_residuals@000059
+  source_hypothesis_id: 000059
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-002.py

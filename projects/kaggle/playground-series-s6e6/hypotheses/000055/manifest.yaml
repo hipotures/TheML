@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: af5e202eaf72e5fa9213c856df0248c7023dacc79796c6d8ac2a1c8a684f5dd0
+    created_at: '2026-06-23T15:02:41'
+feature_group:
+  logical_name: asinh_jacobian_weighted_shape
+  version_id: asinh_jacobian_weighted_shape@000055
+  source_hypothesis_id: '000055'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py

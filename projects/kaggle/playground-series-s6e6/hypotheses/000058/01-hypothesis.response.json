@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Deconvolved Flux-Branch Posteriors\",\n  \"group_name\": \"redshift_branch_deconvolved_flux_posteriors\",\n  \"family\": \"probabilistic_density_geometry\",\n  \"summary\": \"Model each object\u2019s relative ugriz flux pattern with uncertainty-smoothed, class- and redshift-branch-conditioned generative densities and use the resulting posterior mass, margins, and ambiguity signals as compact features that resolve quasar-star overlap while preserving galaxy cues.\",\n  \"depends_on\": [],\n  \"strategy\": \"Convert ugriz magnitudes to linear fluxes F_b = 10^{-0.4 m_b} and form a 4D relative-flux vector x = [log(F_u/F_i), log(F_g/F_i), log(F_r/F_i), log(F_z/F_i)] plus optional additive color fallback features [u-g, g-r, r-i, i-z] for robustness. Assign each row to overlapping i-band windows (width 0.8 mag, step 0.4); for quasars also split a redshift branch variable r in {z<2.2, 2.2<=z<=3.5, z>3.5}, while galaxies and stars use a shared non-branch mode. In every populated (i-window, class, branch) stratum, fit a fixed-K Gaussian mixture on x using only training rows of that stratum (for example K=10-20, diagonal floor on covariance, equalized component weight initialization). Estimate a per-window empirical noise matrix V from robust MAD of colors in that i-window, and deconvolve-noise likelihoods by evaluating each component with Sigma_tilde = Sigma_k + V. For each query row in stratum s, compute deconvolved class likelihood L_c,s = \u03a3_k \u03c0_ck N(x|\u03bc_ck, \u03a3_tilde_ck), branch likelihoods for QSO_low/QSO_mid/QSO_high likewise, then normalize to posterior masses P_c and P_qso,* using smoothed class priors from train counts in the same i-window (backoff to nearest populated window if empty). Emit compact features: posterior logits log((P_c+1e-8)/(1-P_c+1e-8)) for STAR, GALAXY, QSO and for each QSO branch, pairwise margins log((P_qso+1e-8)/(P_star+1e-8)) and log((P_qso+1e-8)/(P_galaxy+1e-8)), branch concentration max(P_qso_branch)/sum(P_qso_*), branch entropy over the three QSO branches, and branch-count indicator (number of branches with P_qso_branch > 0.5*max_branch), with all probabilities clipped to [1e-8, 1-1e-8] and all log features truncated to finite range.\",\n  \"expected_signal\": \"This approach converts the physical separation logic behind SDSS quasar-stellar-galaxy color behavior into smooth likelihoods, which should better capture medium-z quasar ambiguity near the stellar-overlap region, preserve galaxy probability structure, and provide calibrated uncertainty-sensitive signals that are more informative for balanced accuracy than hard color cuts.\",\n  \"risk\": \"High-dimensional mixture fitting can overfit in sparse bins (especially high-redshift quasars), branch priors may drift if the test distribution differs from training, and using magnitude-derived noise proxies instead of true photometric errors may miscalibrate likelihood sharpness near faint limits.\"\n}",
+  "usage": {
+    "threadId": "019ef48c-3556-7cd1-809b-57caa75e6ca8",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8192,
+        "inputTokens": 65724,
+        "outputTokens": 17997,
+        "reasoningOutputTokens": 17115,
+        "totalTokens": 83721
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 8192,
+        "inputTokens": 65724,
+        "outputTokens": 17997,
+        "reasoningOutputTokens": 17115,
+        "totalTokens": 83721
+      }
+    },
+    "turnId": "019ef48c-3563-7ca1-a7ff-a357cf937ccf"
+  },
+  "wall_ms": 49982,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

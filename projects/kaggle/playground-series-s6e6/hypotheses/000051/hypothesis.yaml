@@ -1,0 +1,35 @@
+title: Redshift-anchored K-correction residual signatures
+group_name: k_correction_residual_manifold
+family: k_correction_consistency
+summary: Estimate a compact redshift- and color-driven K-correction surface from existing
+  photometry and convert each object to pseudo-rest-frame magnitudes, then use deviations
+  from local regime-consistent corrected-Sed behavior to expose class-specific SED-family
+  mismatch.
+depends_on: []
+strategy: "For each band q in {u,g,r,i,z}, fit a low-order polynomial surface in redshift\
+  \ and one adjacent color using all rows: K_q(z, c_q)=\u03A3_{a=1..2} \u03A3_{b=0..2}\
+  \ \u03B2_{a,b}^{(q)} z^a c_q^b with no constant term (so K_q(0,\xB7)=0), where c_u=u\u2212\
+  g, c_g=g\u2212r, c_r=r\u2212i, c_i=i\u2212z, and c_z=g\u2212r. Fit these surfaces\
+  \ in three redshift regimes: [0,0.5), [0.5,2), and [2,\u221E) to avoid strong extrapolation,\
+  \ using robust regression and winsorizing coefficients if needed. Compute pseudo-rest\
+  \ magnitudes M_q = m_q \u2212 K_q(z,c_q) for each object, plus regime support/edge\
+  \ flags (inside regime-fit hull, clipped-by-edge, low-support bin). Build residual\
+  \ features by comparing M_q against regime- and c_q-local expectations: for each\
+  \ q, M_q_resid = M_q \u2212 median(M_q | z-bin, c_q-bin), and a MAD-scaled version\
+  \ M_q_zscore = M_q_resid / MAD(M_q in same bin). Add corrected-color slopes and\
+  \ smoothness scores on M_q, such as (M_u\u2212M_g)_resid, (M_g\u2212M_r)_resid,\
+  \ (M_r\u2212M_i)_resid, (M_i\u2212M_z)_resid, and the dispersion of adjacent corrected\
+  \ slopes, then keep only these deterministic columns."
+expected_signal: A physically plausible galaxy-like SED should admit a relatively
+  stable rest-frame correction and low, structured residuals across bands, while many
+  stellar SEDs near redshift zero and quasar SEDs with strong non-thermal or line-driven
+  behavior should show regime-dependent departures, giving class-separating structure
+  beyond raw magnitudes and redshift.
+risk: High-redshift and low-support bins require edge handling and may produce unstable
+  corrections, especially where polynomial extrapolation is used; this can add noise
+  and occasionally confuse rare true objects that lie off the fitted manifold, and
+  the family fit quality is sensitive to regression stability choices.
+schema_version: 1
+hypothesis_id: '000051'
+enabled: true
+created_at: '2026-06-23T14:48:44'

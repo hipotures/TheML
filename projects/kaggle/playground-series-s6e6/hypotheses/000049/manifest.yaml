@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: d30855bbecd2750245ce571b3532dc85af6c654a53e9b8f40eae3dc4c3673855
+    created_at: '2026-06-23T14:57:06'
+feature_group:
+  logical_name: asinh_censoring_regime_geometry
+  version_id: asinh_censoring_regime_geometry@000049
+  source_hypothesis_id: 000049
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py

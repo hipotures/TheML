@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: de43b0bbc19a604987104f6dfea4e88283733172fd57de253c5cdef8752b984f
+    created_at: '2026-06-23T15:03:56'
+feature_group:
+  logical_name: quasar_stellar_locus_conflict
+  version_id: quasar_stellar_locus_conflict@000057
+  source_hypothesis_id: '000057'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py

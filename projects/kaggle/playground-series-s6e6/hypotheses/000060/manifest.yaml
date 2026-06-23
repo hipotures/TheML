@@ -1,0 +1,12 @@
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    sha256: 30e2d1e4af184cc1644750e87d75ec54278e33fdd4f0d62674600284790db307
+    created_at: '2026-06-23T15:07:07'
+feature_group:
+  logical_name: metadata_redshift_magnitude_class_priors
+  version_id: metadata_redshift_magnitude_class_priors@000060
+  source_hypothesis_id: '000060'
+  operation: create_new_root_group
+  depends_on: []
+  code_artifact: autogluon-001.py
