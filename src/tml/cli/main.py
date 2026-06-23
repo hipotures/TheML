@@ -703,7 +703,7 @@ def root_ensure_cmd(ctx: typer.Context) -> None:
     "autocommit",
     context_settings=EXTRA,
     help=(
-        "Commit the active project's ROOT hypothesis artifacts.\n\n"
+        "Commit the active project's hypothesis and branch artifacts.\n\n"
         "Accepted key=value parameters:\n"
         "  message=<text>     Commit message; defaults to the project slug.\n"
         "  yes=true           Skip the confirmation prompt."
@@ -716,27 +716,30 @@ def autocommit_cmd(ctx: typer.Context) -> None:
         _reject_positional(ctx.args, "tml autocommit")
         overrides = _overrides(ctx.args)
         _validate_override_keys(overrides, {"message", "yes"}, "tml autocommit")
-        message = str(overrides.get("message") or f"Commit ROOT hypotheses for {ref.slug}")
+        message = str(overrides.get("message") or f"Commit artifacts for {ref.slug}")
         assume_yes = _bool(overrides.get("yes", False))
         hypotheses_path = ref.path / "hypotheses"
         if not hypotheses_path.exists():
             raise TmlError(f"Hypotheses directory does not exist: {hypotheses_path}")
         commit_paths = [hypotheses_path]
+        branches_path = ref.path / "branches"
+        if branches_path.exists():
+            commit_paths.append(branches_path)
         changed_before = _git_changed_paths(workspace_root(), commit_paths)
         if not changed_before:
-            console.print(f"No ROOT artifact changes to commit for {ref.slug}.")
+            console.print(f"No project artifact changes to commit for {ref.slug}.")
             return
-        _print_root_autocommit_plan(ref.slug, commit_paths, message, changed_before)
-        if not assume_yes and not Confirm.ask("Commit ROOT artifacts?", default=False, console=console):
-            console.print("ROOT artifacts autocommit cancelled.")
+        _print_project_autocommit_plan(ref.slug, commit_paths, message, changed_before)
+        if not assume_yes and not Confirm.ask("Commit project artifacts?", default=False, console=console):
+            console.print("Project artifacts autocommit cancelled.")
             return
         _git_add_paths(workspace_root(), commit_paths)
         staged = _git_staged_paths(workspace_root(), commit_paths)
         if not staged:
-            console.print(f"No staged ROOT artifact changes to commit for {ref.slug}.")
+            console.print(f"No staged project artifact changes to commit for {ref.slug}.")
             return
         _git_commit_paths(workspace_root(), commit_paths, message)
-        console.print(f"Committed {len(staged)} ROOT artifact files for {ref.slug}.")
+        console.print(f"Committed {len(staged)} project artifact files for {ref.slug}.")
     except Exception as exc:
         _abort(exc)
 
@@ -1303,11 +1306,11 @@ def _command_status_requested(args: list[str], command: str) -> bool:
     raise TmlError(f"Unexpected argument for {command}: {positional[0]}")
 
 
-def _print_root_autocommit_plan(project_slug: str, artifact_paths: list[Path], message: str, changed_paths: list[str]) -> None:
+def _print_project_autocommit_plan(project_slug: str, artifact_paths: list[Path], message: str, changed_paths: list[str]) -> None:
     preview = ", ".join(changed_paths[:3])
     if len(changed_paths) > 3:
         preview += f", ... +{len(changed_paths) - 3}"
-    table = Table(title="ROOT hypotheses autocommit plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table = Table(title="Project artifacts autocommit plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
     table.add_column("Parameter", style="bold", no_wrap=True)
     table.add_column("Value", overflow="fold")
     table.add_row("Project", project_slug)
