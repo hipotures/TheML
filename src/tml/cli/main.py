@@ -9,6 +9,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Annotated
 
 import typer
 from rich import box
@@ -738,12 +739,27 @@ def autocommit_cmd(ctx: typer.Context) -> None:
 
 
 @branch_app.command("add", context_settings=EXTRA, help="Compose a new BRANCH from selected sources.")
-def branch_add_cmd(ctx: typer.Context) -> None:
+def branch_add_cmd(
+    ctx: typer.Context,
+    parent: Annotated[
+        str | None,
+        typer.Argument(help="Required key=value parameter: parent=<hypothesis|branch|node>.", metavar="[parent=<ref>]"),
+    ] = None,
+    source: Annotated[
+        str | None,
+        typer.Argument(help="Required key=value parameter: source=<hypothesis|branch|node>.", metavar="[source=<ref>]"),
+    ] = None,
+    mode: Annotated[
+        str | None,
+        typer.Argument(help="Optional key=value parameter: mode=<name>; defaults to the active mode.", metavar="[mode=<name>]"),
+    ] = None,
+) -> None:
     try:
         ref = active_project_ref()
-        _reject_positional(ctx.args, "tml branch add")
+        args = _command_args(ctx, parent, source, mode)
+        _reject_positional(args, "tml branch add")
         config = load_project_config(ref.path)
-        overrides = _overrides(ctx.args)
+        overrides = _overrides(args)
         _validate_override_keys(overrides, {"parent", "source", "mode"}, "tml branch add")
         parent = str(overrides.get("parent") or "")
         source = str(overrides.get("source") or "")
@@ -785,11 +801,25 @@ def branch_status_cmd(ctx: typer.Context) -> None:
 
 
 @branch_app.command("run", context_settings=EXTRA, help="Run missing BRANCH materializations.")
-def branch_run_cmd(ctx: typer.Context) -> None:
+def branch_run_cmd(
+    ctx: typer.Context,
+    parameters: Annotated[
+        list[str] | None,
+        typer.Argument(
+            help=(
+                "Optional positional command/status token and key=value parameters. "
+                "Accepted command token: status. Accepted fixed keys: mode, branch, id, yes. "
+                "Profile override keys are also accepted for the active mode."
+            ),
+            metavar="[status] [mode=<name>] [branch=<id>] [id=<id>] [yes=true] [profile_key=<value>]",
+        ),
+    ] = None,
+) -> None:
     try:
         ref = active_project_ref()
-        status_only = _command_status_requested(ctx.args, "tml branch run")
-        overrides = _overrides(ctx.args)
+        args = _command_args(ctx, *(parameters or []))
+        status_only = _command_status_requested(args, "tml branch run")
+        overrides = _overrides(args)
         mode = str(overrides["mode"]) if "mode" in overrides else None
         config = load_project_config(ref.path)
         active_run_mode = mode or active_mode(config)
@@ -1142,6 +1172,12 @@ def _overrides(args: list[str]) -> dict[str, object]:
         key, value = arg.split("=", 1)
         parsed[key] = _coerce(value)
     return parsed
+
+
+def _command_args(ctx: typer.Context, *values: str | None) -> list[str]:
+    args = [value for value in values if value is not None]
+    args.extend(ctx.args)
+    return args
 
 
 def _validate_override_keys(overrides: dict[str, object], allowed: set[str], command: str) -> None:
