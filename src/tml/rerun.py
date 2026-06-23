@@ -73,6 +73,7 @@ class RerunPlan:
 def rerun_plan(project_dir: Path, *, sha_prefix: str) -> RerunPlan:
     upsert_project(project_dir)
     source_row = submission_by_sha_prefix(project_dir, sha_prefix)
+    _validate_rerun_source_row(source_row, sha_prefix=sha_prefix)
     ranked_source_row = _ranked_source_row(project_dir, source_row)
     source_node = node_record(project_dir, str(source_row["node_id"]))
     mode = str(source_row.get("mode") or source_node.get("mode") or "")
@@ -250,6 +251,14 @@ def _source_from_submission(
         materialization_path=materialization_path,
         code_hash=str(materialization["code_hash"]),
     )
+
+
+def _validate_rerun_source_row(source_row: dict[str, object], *, sha_prefix: str) -> None:
+    source_sha = _optional_str(source_row.get("source_submission_sha256"))
+    if str(source_row.get("kind") or "") == "rerun" or source_sha:
+        submission_sha = str(source_row.get("submission_sha256") or sha_prefix)[:10]
+        hint = f"; rerun the original source sha={source_sha[:10]}" if source_sha else ""
+        raise ValueError(f"Submission {submission_sha} is already a rerun{hint}.")
 
 
 def _ranked_source_row(project_dir: Path, source_row: dict[str, object]) -> dict[str, object]:

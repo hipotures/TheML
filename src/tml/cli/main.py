@@ -2006,17 +2006,20 @@ def _print_submission_actions(rows: list[dict[str, object]]) -> None:
         and str(row.get("status") or "") == "complete"
         and str(row.get("submit_status") or "") == "not_submitted"
         and str(row.get("submission_sha256") or "")
-    ][:5]
-    if ready:
+    ]
+    ready_submit = ready[:5]
+    ready_rerun = [row for row in ready if _is_rerunnable_submission(row)][:5]
+    if ready_submit:
         console.print()
         console.print("[bold]Ready submit commands:[/bold]")
-        for row in ready:
+        for row in ready_submit:
             sha = str(row.get("submission_sha256") or "")[:10]
             console.print(f"uv run tml kaggle submit sha={sha}")
 
+    if ready_rerun:
         console.print()
         console.print("[bold]Ready rerun commands:[/bold]")
-        for row in ready:
+        for row in ready_rerun:
             sha = str(row.get("submission_sha256") or "")[:10]
             console.print(f"uv run tml rerun sha={sha}")
     synced_rows = sum(1 for row in rows if str(row.get("remote_status") or ""))
@@ -2024,6 +2027,12 @@ def _print_submission_actions(rows: list[dict[str, object]]) -> None:
         console.print(f"Remote Kaggle submissions synced local rows: {synced_rows}")
     else:
         console.print("Remote Kaggle submissions not synced. Run: uv run tml kaggle sync")
+
+
+def _is_rerunnable_submission(row: dict[str, object]) -> bool:
+    if str(row.get("kind") or "") == "rerun":
+        return False
+    return not str(row.get("source_submission_sha256") or "")
 
 
 def _validate_submit_row(row: dict[str, object], *, allow_uploaded: bool = False) -> None:
