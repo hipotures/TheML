@@ -700,6 +700,7 @@ def root_ensure_cmd(ctx: typer.Context) -> None:
     help=(
         "Commit the active project's ROOT hypothesis artifacts.\n\n"
         "Accepted key=value parameters:\n"
+        "  branches=false    Exclude active project's branch artifacts.\n"
         "  message=<text>     Commit message; defaults to the project slug.\n"
         "  yes=true           Skip the confirmation prompt."
     ),
@@ -710,27 +711,34 @@ def root_autocommit_cmd(ctx: typer.Context) -> None:
         ensure_root_baseline(ref.path)
         _reject_positional(ctx.args, "tml root autocommit")
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"message", "yes"}, "tml root autocommit")
+        _validate_override_keys(overrides, {"branches", "message", "yes"}, "tml root autocommit")
         message = str(overrides.get("message") or f"Commit ROOT hypotheses for {ref.slug}")
         assume_yes = _bool(overrides.get("yes", False))
+        include_branches = _bool(overrides.get("branches", True))
         hypotheses_path = ref.path / "hypotheses"
         if not hypotheses_path.exists():
             raise TmlError(f"Hypotheses directory does not exist: {hypotheses_path}")
-        changed_before = _git_changed_paths(workspace_root(), hypotheses_path)
+        commit_paths = [hypotheses_path]
+        branches_path = ref.path / "branches"
+        if include_branches:
+            if not branches_path.exists():
+                raise TmlError(f"Branches directory does not exist: {branches_path}")
+            commit_paths.append(branches_path)
+        changed_before = _git_changed_paths(workspace_root(), commit_paths)
         if not changed_before:
-            console.print(f"No ROOT hypothesis changes to commit for {ref.slug}.")
+            console.print(f"No ROOT artifact changes to commit for {ref.slug}.")
             return
-        _print_root_autocommit_plan(ref.slug, hypotheses_path, message, changed_before)
-        if not assume_yes and not Confirm.ask("Commit ROOT hypotheses?", default=False, console=console):
-            console.print("ROOT hypotheses autocommit cancelled.")
+        _print_root_autocommit_plan(ref.slug, commit_paths, message, changed_before)
+        if not assume_yes and not Confirm.ask("Commit ROOT artifacts?", default=False, console=console):
+            console.print("ROOT artifacts autocommit cancelled.")
             return
-        _git_add_path(workspace_root(), hypotheses_path)
-        staged = _git_staged_paths(workspace_root(), hypotheses_path)
+        _git_add_paths(workspace_root(), commit_paths)
+        staged = _git_staged_paths(workspace_root(), commit_paths)
         if not staged:
-            console.print(f"No staged ROOT hypothesis changes to commit for {ref.slug}.")
+            console.print(f"No staged ROOT artifact changes to commit for {ref.slug}.")
             return
-        _git_commit_path(workspace_root(), hypotheses_path, message)
-        console.print(f"Committed {len(staged)} ROOT hypothesis files for {ref.slug}.")
+        _git_commit_paths(workspace_root(), commit_paths, message)
+        console.print(f"Committed {len(staged)} ROOT artifact files for {ref.slug}.")
     except Exception as exc:
         _abort(exc)
 
@@ -1146,7 +1154,7 @@ def _command_status_requested(args: list[str], command: str) -> bool:
     raise TmlError(f"Unexpected argument for {command}: {positional[0]}")
 
 
-def _print_root_autocommit_plan(project_slug: str, hypotheses_path: Path, message: str, changed_paths: list[str]) -> None:
+def _print_root_autocommit_plan(project_slug: str, artifact_paths: list[Path], message: str, changed_paths: list[str]) -> None:
     preview = ", ".join(changed_paths[:3])
     if len(changed_paths) > 3:
         preview += f", ... +{len(changed_paths) - 3}"
@@ -1154,8 +1162,12 @@ def _print_root_autocommit_plan(project_slug: str, hypotheses_path: Path, messag
     table.add_column("Parameter", style="bold", no_wrap=True)
     table.add_column("Value", overflow="fold")
     table.add_row("Project", project_slug)
-    table.add_row("Path", _git_pathspec(workspace_root(), hypotheses_path))
+    table.add_row("Paths", ", ".join(_git_pathspecs(workspace_root(), artifact_paths)))
     table.add_row("Changed files", str(len(changed_paths)))
+    for artifact_path in artifact_paths:
+        pathspec = _git_pathspec(workspace_root(), artifact_path)
+        count = sum(1 for changed_path in changed_paths if changed_path == pathspec or changed_path.startswith(f"{pathspec}/"))
+        table.add_row(f"{artifact_path.name} files", str(count))
     table.add_row("Preview", preview)
     table.add_row("Commit message", message)
     console.print(table)
@@ -1168,8 +1180,12 @@ def _git_pathspec(root: Path, path: Path) -> str:
         return path.as_posix()
 
 
-def _git_changed_paths(root: Path, path: Path) -> list[str]:
-    result = _run_git(root, "status", "--porcelain", "--", _git_pathspec(root, path))
+def _git_pathspecs(root: Path, paths: list[Path]) -> list[str]:
+    return [_git_pathspec(root, path) for path in paths]
+
+
+def _git_changed_paths(root: Path, paths: list[Path]) -> list[str]:
+    result = _run_git(root, "status", "--porcelain", "--", *_git_pathspecs(root, paths))
     paths: list[str] = []
     for line in result.stdout.splitlines():
         text = line.strip()
@@ -1179,17 +1195,17 @@ def _git_changed_paths(root: Path, path: Path) -> list[str]:
     return paths
 
 
-def _git_staged_paths(root: Path, path: Path) -> list[str]:
-    result = _run_git(root, "diff", "--cached", "--name-only", "--", _git_pathspec(root, path))
+def _git_staged_paths(root: Path, paths: list[Path]) -> list[str]:
+    result = _run_git(root, "diff", "--cached", "--name-only", "--", *_git_pathspecs(root, paths))
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def _git_add_path(root: Path, path: Path) -> None:
-    _run_git(root, "add", "--", _git_pathspec(root, path))
+def _git_add_paths(root: Path, paths: list[Path]) -> None:
+    _run_git(root, "add", "--", *_git_pathspecs(root, paths))
 
 
-def _git_commit_path(root: Path, path: Path, message: str) -> None:
-    _run_git(root, "commit", "-m", message, "--", _git_pathspec(root, path))
+def _git_commit_paths(root: Path, paths: list[Path], message: str) -> None:
+    _run_git(root, "commit", "-m", message, "--", *_git_pathspecs(root, paths))
 
 
 def _run_git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
