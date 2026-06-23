@@ -73,77 +73,22 @@ def branch_add_algorithmic(
     stop_reason = ""
 
     while len(items) < steps:
-        selected: tuple[dict[str, Any], str, Path | None] | None = None
-        candidates = branch_algorithm_candidate_pairs(
+        item, item_skip_reasons, item_stop_reason = _branch_add_algorithmic_next(
             project_dir,
-            mode=active_run_mode,
+            algorithm=algorithm,
+            active_run_mode=active_run_mode,
             profile_id=profile_id,
-            parent_kinds=algorithm.parent_kinds,
-            source_kinds=algorithm.source_kinds,
-            max_children=algorithm.max_children,
-            limit=algorithm.candidate_limit,
+            planned_compositions=planned_compositions,
+            child_counts=child_counts,
+            dry_run=dry_run,
+            item_index=len(items) + 1,
         )
-        if not candidates:
-            stop_reason = "No score-ranked candidate pairs found."
+        for reason, count in item_skip_reasons.items():
+            skip_reasons[reason] = skip_reasons.get(reason, 0) + count
+        if item is None:
+            stop_reason = item_stop_reason
             break
-
-        for candidate in candidates:
-            parent_key = (str(candidate["parent_kind"]), str(candidate["parent_id"]))
-            parent_child_count = child_counts.get(parent_key, int(candidate["parent_child_count"] or 0))
-            if parent_child_count >= algorithm.max_children:
-                _count_skip(skip_reasons, "parent_child_limit")
-                continue
-            try:
-                composition = plan_branch_composition(
-                    project_dir,
-                    parent_ref=str(candidate["parent_ref"]),
-                    source_ref=str(candidate["source_ref"]),
-                    mode=active_run_mode,
-                )
-            except TmlError:
-                _count_skip(skip_reasons, "invalid_composition")
-                continue
-
-            if composition.existing_branch is not None:
-                _count_skip(skip_reasons, "existing_composition")
-                planned_compositions.add(composition.composition_hash)
-                continue
-            if composition.composition_hash in planned_compositions:
-                _count_skip(skip_reasons, "planned_composition")
-                continue
-
-            if dry_run:
-                branch_id = f"planned-{len(items) + 1}"
-                materialization_path = None
-            else:
-                created = add_branch(
-                    project_dir,
-                    parent_ref=str(candidate["parent_ref"]),
-                    source_ref=str(candidate["source_ref"]),
-                    mode=active_run_mode,
-                )
-                branch_id = created.branch_id
-                materialization_path = created.materialization_path
-
-            selected = (candidate, branch_id, materialization_path)
-            planned_compositions.add(composition.composition_hash)
-            child_counts[parent_key] = parent_child_count + 1
-            items.append(
-                BranchAlgorithmItem(
-                    branch_id=branch_id,
-                    parent_ref=str(candidate["parent_ref"]),
-                    source_ref=str(candidate["source_ref"]),
-                    parent_score=_optional_float(candidate.get("parent_score")),
-                    source_score=_optional_float(candidate.get("source_score")),
-                    composition_hash=composition.composition_hash,
-                    materialization_path=materialization_path,
-                )
-            )
-            break
-
-        if selected is None:
-            stop_reason = f"No valid candidate pair found in the top {len(candidates)} candidate pairs."
-            break
+        items.append(item)
 
     if not stop_reason and len(items) >= steps:
         stop_reason = "Requested steps satisfied."
@@ -160,6 +105,29 @@ def branch_add_algorithmic(
         skip_reasons=skip_reasons,
         stop_reason=stop_reason,
     )
+
+
+def branch_add_algorithmic_one(
+    project_dir: Path,
+    *,
+    algo_id: str,
+    mode: str | None = None,
+) -> BranchAlgorithmItem | None:
+    config = load_project_config(project_dir)
+    active_run_mode = mode or active_mode(config)
+    profile_id = active_profile_id(config, active_run_mode)
+    algorithm = load_branch_algorithm(project_dir, algo_id)
+    item, _, _ = _branch_add_algorithmic_next(
+        project_dir,
+        algorithm=algorithm,
+        active_run_mode=active_run_mode,
+        profile_id=profile_id,
+        planned_compositions=existing_branch_composition_hashes(project_dir, mode=active_run_mode),
+        child_counts=direct_branch_child_counts(project_dir, mode=active_run_mode),
+        dry_run=False,
+        item_index=1,
+    )
+    return item
 
 
 def load_branch_algorithm(project_dir: Path, algo_id: str) -> BranchAlgorithmConfig:
@@ -211,6 +179,87 @@ def _parse_branch_algorithm(path: Path, algo_id: str, payload: dict[str, Any]) -
         max_children=max_children,
         epsilon=epsilon,
     )
+
+
+def _branch_add_algorithmic_next(
+    project_dir: Path,
+    *,
+    algorithm: BranchAlgorithmConfig,
+    active_run_mode: str,
+    profile_id: str,
+    planned_compositions: set[str],
+    child_counts: dict[tuple[str, str], int],
+    dry_run: bool,
+    item_index: int,
+) -> tuple[BranchAlgorithmItem | None, dict[str, int], str]:
+    skip_reasons: dict[str, int] = {}
+    candidates = branch_algorithm_candidate_pairs(
+        project_dir,
+        mode=active_run_mode,
+        profile_id=profile_id,
+        parent_kinds=algorithm.parent_kinds,
+        source_kinds=algorithm.source_kinds,
+        max_children=algorithm.max_children,
+        limit=algorithm.candidate_limit,
+    )
+    if not candidates:
+        return None, skip_reasons, "No score-ranked candidate pairs found."
+
+    for candidate in candidates:
+        parent_key = (str(candidate["parent_kind"]), str(candidate["parent_id"]))
+        parent_child_count = child_counts.get(parent_key, int(candidate["parent_child_count"] or 0))
+        if parent_child_count >= algorithm.max_children:
+            _count_skip(skip_reasons, "parent_child_limit")
+            continue
+        try:
+            composition = plan_branch_composition(
+                project_dir,
+                parent_ref=str(candidate["parent_ref"]),
+                source_ref=str(candidate["source_ref"]),
+                mode=active_run_mode,
+            )
+        except TmlError:
+            _count_skip(skip_reasons, "invalid_composition")
+            continue
+
+        if composition.existing_branch is not None:
+            _count_skip(skip_reasons, "existing_composition")
+            planned_compositions.add(composition.composition_hash)
+            continue
+        if composition.composition_hash in planned_compositions:
+            _count_skip(skip_reasons, "planned_composition")
+            continue
+
+        if dry_run:
+            branch_id = f"planned-{item_index}"
+            materialization_path = None
+        else:
+            created = add_branch(
+                project_dir,
+                parent_ref=str(candidate["parent_ref"]),
+                source_ref=str(candidate["source_ref"]),
+                mode=active_run_mode,
+            )
+            branch_id = created.branch_id
+            materialization_path = created.materialization_path
+
+        planned_compositions.add(composition.composition_hash)
+        child_counts[parent_key] = parent_child_count + 1
+        return (
+            BranchAlgorithmItem(
+                branch_id=branch_id,
+                parent_ref=str(candidate["parent_ref"]),
+                source_ref=str(candidate["source_ref"]),
+                parent_score=_optional_float(candidate.get("parent_score")),
+                source_score=_optional_float(candidate.get("source_score")),
+                composition_hash=composition.composition_hash,
+                materialization_path=materialization_path,
+            ),
+            skip_reasons,
+            "",
+        )
+
+    return None, skip_reasons, f"No valid candidate pair found in the top {len(candidates)} candidate pairs."
 
 
 def _node_kinds(value: object, *, default: list[str]) -> list[str]:

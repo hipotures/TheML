@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from tml.core.config import active_mode, active_profile_id, load_project_config, repo_root_for_project
 from tml.core.ids import node_id
@@ -14,7 +15,9 @@ from tml.db.state import (
     active_or_create_run,
     branch_already_evaluated,
     branch_run_candidates,
+    node_record,
     next_node_step,
+    pending_branch_run_candidates,
     upsert_node_result,
     upsert_node_start,
     upsert_project,
@@ -40,6 +43,15 @@ class BranchRunPlan:
     already_evaluated_count: int
     iteration_count: int
     branch_ids: list[str]
+
+
+@dataclass(frozen=True)
+class BranchRunItem:
+    branch_id: str
+    run_status: str
+    metric: float | None
+    node_id: str
+    run_seconds: int | None
 
 
 def branch_run_plan(
@@ -81,6 +93,47 @@ def branch_run_plan(
     )
 
 
+def next_pending_branch(
+    project_dir: Path,
+    *,
+    mode: str,
+    profile_id: str,
+) -> dict[str, Any] | None:
+    records = pending_branch_run_candidates(project_dir, mode=mode, profile_id=profile_id)
+    return records[0] if records else None
+
+
+def run_one_branch(
+    project_dir: Path,
+    mode: str | None = None,
+    *,
+    branch_id: str,
+    profile_overrides: dict[str, object] | None = None,
+    progress: Callable[[str], None] | None = None,
+) -> BranchRunItem | None:
+    upsert_project(project_dir)
+    config = load_project_config(project_dir)
+    mode = mode or active_mode(config)
+    profile_id = active_profile_id(config, mode)
+    run = active_or_create_run(project_dir)
+    records = pending_branch_run_candidates(project_dir, mode=mode, profile_id=profile_id, branch_id=branch_id)
+    if not records:
+        return None
+    next_step = next_node_step(project_dir, run.name)
+    return _run_branch_record(
+        project_dir,
+        mode=mode,
+        profile_id=profile_id,
+        run=run,
+        next_step=next_step,
+        record=records[0],
+        pending_index=1,
+        pending_total=1,
+        profile_overrides=profile_overrides,
+        progress=progress,
+    )
+
+
 def run_missing_branches(
     project_dir: Path,
     mode: str | None = None,
@@ -96,106 +149,132 @@ def run_missing_branches(
     run = active_or_create_run(project_dir)
     ran: list[str] = []
     next_step = next_node_step(project_dir, run.name)
-    records = branch_run_candidates(project_dir, mode, branch_id=branch_id)
-    pending_records = [
-        record
-        for record in records
-        if not branch_already_evaluated(
-            project_dir,
-            branch_id=str(record["branch_id"]),
-            mode=mode,
-            profile_id=profile_id,
-            code_hash=str(record["code_hash"]),
-        )
-    ]
+    pending_records = pending_branch_run_candidates(project_dir, mode=mode, profile_id=profile_id, branch_id=branch_id)
     pending_total = len(pending_records)
     for pending_index, record in enumerate(pending_records, start=1):
-        bid = str(record["branch_id"])
-        branch_dir = project_dir / str(record["path"]).rsplit("/", 1)[0]
-        materialization = branch_dir / "materializations" / str(record["file"])
-        code_hash = str(record["code_hash"])
-        nid = node_id(next_step)
-        next_step += 1
-        node_dir = run / "artifacts" / nid
-        node_dir.mkdir(parents=True, exist_ok=True)
-        start_payload = {
-            "schema_version": 1,
-            "node_id": nid,
-            "run_id": run.name,
-            "step": int(nid.rsplit("-", 1)[-1]),
-            "kind": "branch",
-            "branch_id": bid,
-            "mode": mode,
-            "profile_id": profile_id,
-            "created_at": datetime.now().isoformat(timespec="seconds"),
-        }
-        write_yaml(node_dir / "node.start.yaml", start_payload)
-        upsert_node_start(project_dir, node_dir, start_payload)
-        shutil.copy2(branch_dir / "branch.yaml", node_dir / "01-branch.yaml")
-        group_code = materialization.read_text(encoding="utf-8")
-        validate_group_code_source(group_code)
-        atomic_write_text(
-            node_dir / "02-code.py",
-            build_wrapped_materialization_source(
-                mode,
-                group_code,
-                project_dir,
-                profile_overrides=profile_overrides,
-            ),
-        )
-        write_yaml(node_dir / "started.yaml", {"created_at": datetime.now().isoformat(timespec="seconds")})
-        if progress is not None:
-            progress(f"BRANCH run {bid} {mode} ({pending_index}/{pending_total}): executing node {nid}")
-        write_branch_runtime_state(
+        item = _run_branch_record(
             project_dir,
-            branch_id=bid,
-            node_id=nid,
-            run_id=run.name,
             mode=mode,
             profile_id=profile_id,
+            run=run,
+            next_step=next_step,
+            record=record,
+            pending_index=pending_index,
+            pending_total=pending_total,
+            profile_overrides=profile_overrides,
+            progress=progress,
         )
-        try:
-            result = run_python_script(
-                node_dir / "02-code.py",
-                node_dir / "work",
-                timeout_seconds=_execution_timeout_seconds(profile_overrides),
-                cwd=repo_root_for_project(project_dir) if mode == "autogluon" else None,
-            )
-            write_attempt_result(node_dir, result)
-            finished_at = datetime.now().isoformat(timespec="seconds")
-            if result.status == "ok":
-                _write_success_markers(node_dir, nid, bid, mode, profile_id, code_hash, result)
-                upsert_node_result(project_dir, node_dir, status="complete", metric=result.metric, code_hash=code_hash, finished_at=finished_at)
-            else:
-                write_yaml(
-                    node_dir / "failed.yaml",
-                    {
-                        "schema_version": 1,
-                        "node_id": nid,
-                        "branch_id": bid,
-                        "mode": mode,
-                        "profile_id": profile_id,
-                        "code_hash": code_hash,
-                        "status": "failed",
-                        "error": result.error,
-                        "created_at": finished_at,
-                    },
-                )
-                upsert_node_result(
-                    project_dir,
-                    node_dir,
-                    status="failed",
-                    metric=result.metric,
-                    code_hash=code_hash,
-                    finished_at=finished_at,
-                    error=result.error,
-                )
-            if progress is not None:
-                progress(f"BRANCH run {bid} {mode} ({pending_index}/{pending_total}): {result.status}")
-            ran.append(bid)
-        finally:
-            clear_branch_runtime_state()
+        next_step += 1
+        ran.append(item.branch_id)
     return ran
+
+
+def _run_branch_record(
+    project_dir: Path,
+    *,
+    mode: str,
+    profile_id: str,
+    run: Path,
+    next_step: int,
+    record: dict[str, Any],
+    pending_index: int,
+    pending_total: int,
+    profile_overrides: dict[str, object] | None,
+    progress: Callable[[str], None] | None,
+) -> BranchRunItem:
+    bid = str(record["branch_id"])
+    branch_dir = project_dir / str(record["path"]).rsplit("/", 1)[0]
+    materialization = branch_dir / "materializations" / str(record["file"])
+    code_hash = str(record["code_hash"])
+    nid = node_id(next_step)
+    node_dir = run / "artifacts" / nid
+    node_dir.mkdir(parents=True, exist_ok=True)
+    start_payload = {
+        "schema_version": 1,
+        "node_id": nid,
+        "run_id": run.name,
+        "step": int(nid.rsplit("-", 1)[-1]),
+        "kind": "branch",
+        "branch_id": bid,
+        "mode": mode,
+        "profile_id": profile_id,
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    write_yaml(node_dir / "node.start.yaml", start_payload)
+    upsert_node_start(project_dir, node_dir, start_payload)
+    shutil.copy2(branch_dir / "branch.yaml", node_dir / "01-branch.yaml")
+    group_code = materialization.read_text(encoding="utf-8")
+    validate_group_code_source(group_code)
+    atomic_write_text(
+        node_dir / "02-code.py",
+        build_wrapped_materialization_source(
+            mode,
+            group_code,
+            project_dir,
+            profile_overrides=profile_overrides,
+        ),
+    )
+    write_yaml(node_dir / "started.yaml", {"created_at": datetime.now().isoformat(timespec="seconds")})
+    if progress is not None:
+        progress(f"BRANCH run {bid} {mode} ({pending_index}/{pending_total}): executing node {nid}")
+    write_branch_runtime_state(
+        project_dir,
+        branch_id=bid,
+        node_id=nid,
+        run_id=run.name,
+        mode=mode,
+        profile_id=profile_id,
+    )
+    try:
+        result = run_python_script(
+            node_dir / "02-code.py",
+            node_dir / "work",
+            timeout_seconds=_execution_timeout_seconds(profile_overrides),
+            cwd=repo_root_for_project(project_dir) if mode == "autogluon" else None,
+        )
+        write_attempt_result(node_dir, result)
+        finished_at = datetime.now().isoformat(timespec="seconds")
+        run_status = "complete" if result.status == "ok" else "failed"
+        if result.status == "ok":
+            _write_success_markers(node_dir, nid, bid, mode, profile_id, code_hash, result)
+            upsert_node_result(project_dir, node_dir, status=run_status, metric=result.metric, code_hash=code_hash, finished_at=finished_at)
+        else:
+            write_yaml(
+                node_dir / "failed.yaml",
+                {
+                    "schema_version": 1,
+                    "node_id": nid,
+                    "branch_id": bid,
+                    "mode": mode,
+                    "profile_id": profile_id,
+                    "code_hash": code_hash,
+                    "status": run_status,
+                    "error": result.error,
+                    "created_at": finished_at,
+                },
+            )
+            upsert_node_result(
+                project_dir,
+                node_dir,
+                status=run_status,
+                metric=result.metric,
+                code_hash=code_hash,
+                finished_at=finished_at,
+                error=result.error,
+            )
+        if progress is not None:
+            progress(f"BRANCH run {bid} {mode} ({pending_index}/{pending_total}): {result.status}")
+    finally:
+        clear_branch_runtime_state()
+    node = node_record(project_dir, nid)
+    run_seconds_value = node.get("run_seconds")
+    return BranchRunItem(
+        branch_id=bid,
+        run_status=run_status,
+        metric=result.metric,
+        node_id=nid,
+        run_seconds=int(run_seconds_value) if isinstance(run_seconds_value, int) else None,
+    )
 
 
 def _write_success_markers(node_dir: Path, node_id_value: str, branch_id: str, mode: str, profile_id: str, code_hash: str, result) -> None:

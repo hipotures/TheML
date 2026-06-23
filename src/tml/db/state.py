@@ -882,6 +882,32 @@ def branch_run_candidates(project_dir: Path, mode: str, branch_id: str | None = 
     return [dict(row) for row in rows]
 
 
+def pending_branch_run_candidates(project_dir: Path, *, mode: str, profile_id: str, branch_id: str | None = None) -> list[dict[str, Any]]:
+    db_path = ensure_project_db(project_dir)
+    sql = """
+        SELECT branch_id, path, materialization_file AS file, code_hash, composition_hash, summary, created_at
+        FROM branches b
+        WHERE b.mode=? AND b.status='materialized'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM evaluations e
+            WHERE e.kind='branch'
+              AND e.branch_id=b.branch_id
+              AND e.mode=b.mode
+              AND e.profile_id=?
+              AND e.code_hash=b.code_hash
+          )
+    """
+    params: list[Any] = [mode, profile_id]
+    if branch_id:
+        sql += " AND b.branch_id=?"
+        params.append(_normalize_branch_id(branch_id))
+    sql += " ORDER BY b.branch_id"
+    with connect(db_path) as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(row) for row in rows]
+
+
 def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = None) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
     sql = """

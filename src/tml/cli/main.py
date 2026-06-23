@@ -23,6 +23,7 @@ from typer.core import TyperGroup
 
 from tml.branches.algorithms import BranchAlgorithmResult, branch_add_algorithmic
 from tml.branches.compose import BranchDeletePlan, CreatedBranch, add_branch, branch_delete_plan, delete_branch
+from tml.branches.grow import BranchGrowPlan, BranchGrowResult, branch_grow, branch_grow_plan
 from tml.branches.runtime_state import read_branch_runtime_state
 from tml.branches.run import BranchRunPlan, branch_run_plan, run_missing_branches
 from tml.cli.prompt_output import print_prompt_choices, print_prompt_probe_summary, print_prompt_render_summary
@@ -771,8 +772,7 @@ def branch_add_cmd(
         if has_algorithm:
             if "steps" not in overrides:
                 raise TmlError("Missing required parameter: steps=<N>.")
-            if "algo" not in overrides:
-                raise TmlError("Missing required parameter: algo=<id>.")
+            algo_id = str(overrides.get("algo") or "default")
             dry_run = _bool(overrides.get("dry-run", overrides.get("dry_run", False)))
             try:
                 steps = int(overrides["steps"])
@@ -781,7 +781,7 @@ def branch_add_cmd(
             result = branch_add_algorithmic(
                 ref.path,
                 steps=steps,
-                algo_id=str(overrides["algo"]),
+                algo_id=algo_id,
                 mode=mode,
                 dry_run=dry_run,
             )
@@ -797,6 +797,76 @@ def branch_add_cmd(
         created = add_branch(ref.path, parent_ref=parent_ref, source_ref=source_ref, mode=mode)
         _print_branch_add_summary(ref.slug, created)
         _print_branch_status(ref.path, mode=mode, branch_id=created.branch_id, executed_ids=set(), executed_count=None)
+    except Exception as exc:
+        _abort(exc)
+
+
+@branch_app.command("grow", context_settings=EXTRA, help="Iteratively run pending BRANCH nodes or add and run one candidate at a time.")
+def branch_grow_cmd(
+    ctx: typer.Context,
+    parameters: Annotated[
+        list[str] | None,
+        typer.Argument(
+            help=(
+                "Required key=value parameter: steps=<N>. Optional fixed keys: algo, mode, yes. "
+                "Profile override keys are also accepted for the active mode."
+            ),
+            metavar="steps=<N> [algo=<id>] [mode=<name>] [yes=true] [profile_key=<value>]",
+        ),
+    ] = None,
+) -> None:
+    try:
+        ref = active_project_ref()
+        args = _command_args(ctx, *(parameters or []))
+        _reject_positional(args, "tml branch grow")
+        overrides = _overrides(args)
+        if "parent" in overrides or "source" in overrides:
+            raise TmlError("tml branch grow is algorithmic only; do not pass parent/source.")
+        if "dry_run" in overrides or "dry-run" in overrides:
+            raise TmlError("tml branch grow does not support dry_run.")
+        mode = str(overrides["mode"]) if "mode" in overrides else None
+        config = load_project_config(ref.path)
+        active_run_mode = mode or active_mode(config)
+        allowed = {"steps", "algo", "mode", "yes"} | _profile_override_keys(ref.path, active_run_mode)
+        _validate_override_keys(overrides, allowed, "tml branch grow")
+        if "steps" not in overrides:
+            raise TmlError("Missing required parameter: steps=<N>.")
+        try:
+            steps = int(overrides["steps"])
+        except (TypeError, ValueError) as exc:
+            raise TmlError("steps must be a positive integer.") from exc
+        if steps <= 0:
+            raise TmlError("steps must be a positive integer.")
+        algo_id = str(overrides.get("algo") or "default")
+        assume_yes = _bool(overrides.get("yes", False))
+        run_overrides = {key: value for key, value in overrides.items() if key not in {"steps", "algo", "mode", "yes"}}
+        plan = branch_grow_plan(
+            ref.path,
+            steps=steps,
+            algo_id=algo_id,
+            mode=mode,
+            profile_overrides=run_overrides,
+        )
+        _print_branch_grow_plan(ref.slug, plan)
+        if not assume_yes and not Confirm.ask("Start BRANCH grow?", default=False, console=console):
+            console.print("BRANCH grow cancelled.")
+            return
+        result = branch_grow(
+            ref.path,
+            steps=steps,
+            algo_id=algo_id,
+            mode=mode,
+            profile_overrides=run_overrides,
+            progress=console.print,
+        )
+        _print_branch_grow_summary(result)
+        _print_branch_status(
+            ref.path,
+            mode=active_run_mode,
+            branch_id=None,
+            executed_ids={item.branch_id for item in result.items},
+            executed_count=result.processed_steps,
+        )
     except Exception as exc:
         _abort(exc)
 
@@ -1583,6 +1653,61 @@ def _print_branch_run_plan(project_slug: str, plan: BranchRunPlan, *, branch_id:
     table.add_row("Iterations to run", str(plan.iteration_count))
     table.add_row("Branch IDs", id_text)
     console.print(table)
+
+
+def _print_branch_grow_plan(project_slug: str, plan: BranchGrowPlan) -> None:
+    table = Table(title="BRANCH grow plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Mode", plan.mode)
+    table.add_row("Active profile", plan.profile_id)
+    table.add_row("Algorithm", plan.algorithm_id)
+    table.add_row("Config", _repo_relative(workspace_root(), plan.config_path))
+    table.add_row("Steps", str(plan.requested_steps))
+    table.add_row("Pending branch runs", str(plan.pending_branch_runs))
+    table.add_row("Execution timeout seconds", str(plan.execution_timeout_seconds))
+    console.print(table)
+
+
+def _print_branch_grow_summary(result: BranchGrowResult) -> None:
+    table = Table(title="BRANCH grow result", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Mode", result.mode)
+    table.add_row("Active profile", result.profile_id)
+    table.add_row("Algorithm", result.algorithm_id)
+    table.add_row("Steps", str(result.requested_steps))
+    table.add_row("Processed", str(result.processed_steps))
+    table.add_row("Existing pending", str(result.existing_pending_steps))
+    table.add_row("New branches", str(result.new_branch_steps))
+    table.add_row("Stop reason", result.stop_reason)
+    console.print(table)
+
+    item_table = Table(title="Processed branches", box=box.SIMPLE_HEAVY, show_header=True, pad_edge=False)
+    item_table.add_column("Step", justify="right", no_wrap=True)
+    item_table.add_column("Action", no_wrap=True)
+    item_table.add_column("Branch", no_wrap=True)
+    item_table.add_column("Parent", no_wrap=True)
+    item_table.add_column("Source", no_wrap=True)
+    item_table.add_column("Run", no_wrap=True)
+    item_table.add_column("Score", justify="right", no_wrap=True)
+    item_table.add_column("Node", no_wrap=True)
+    for item in result.items:
+        item_table.add_row(
+            str(item.step_index),
+            item.action,
+            item.branch_id,
+            item.parent_ref or "-",
+            item.source_ref or "-",
+            item.run_status,
+            _format_score(item.metric),
+            item.node_id or "",
+        )
+    if result.items:
+        console.print(item_table)
+    else:
+        console.print("No BRANCH nodes were processed.")
 
 
 def _print_rerun_plan(project_slug: str, plan: RerunPlan) -> None:
