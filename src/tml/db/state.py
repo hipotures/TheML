@@ -118,7 +118,7 @@ def upsert_materialization(
             conn.execute(
                 """
                 UPDATE materializations
-                SET status='bug', active=0, source_node_id=COALESCE(source_node_id, ?)
+                SET status='superseded', active=0, source_node_id=COALESCE(source_node_id, ?)
                 WHERE hypothesis_id=? AND mode=? AND file=?
                 """,
                 (source_node_id, hid, mode, fixed_from_file),

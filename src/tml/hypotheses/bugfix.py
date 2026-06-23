@@ -157,7 +157,7 @@ def bugfix_failed_materializations(
             response_path = mat_dir / f"{target.stem}.response.md"
             error_text = (
                 f"Invalid bugfix for hypothesis {hid} ({mode}); "
-                f"response={response_path}: {exc}"
+                f"response={_project_path_text(project_dir, response_path)}: {exc}"
             )
             atomic_write_text(mat_dir / f"{target.stem}.error.txt", error_text + "\n")
             upsert_failed_materialization(project_dir, hdir, mode, target.name, code_text=group_code)
@@ -184,6 +184,13 @@ def bugfix_failed_materializations(
 
 def _candidate_hypothesis_dir(project_dir: Path, record: dict[str, object]) -> Path:
     return project_dir / str(record["path"]).rsplit("/", 1)[0]
+
+
+def _project_path_text(project_dir: Path, path: Path) -> str:
+    try:
+        return path.relative_to(project_dir).as_posix()
+    except ValueError:
+        return path.name
 
 
 def _next_materialization_path(project_dir: Path, mat_dir: Path, mode: str, hypothesis_id: str) -> Path:
@@ -220,7 +227,7 @@ def _failure_context(project_dir: Path, record: dict[str, object]) -> str:
         stem = Path(str(record.get("file") or "")).stem
         error_path = hdir / "materializations" / f"{stem}.error.txt"
         if error_path.exists():
-            return error_path.read_text(encoding="utf-8", errors="replace").strip()
+            return _sanitize_error_text(project_dir, error_path.read_text(encoding="utf-8", errors="replace").strip())
         return "No failed node artifact path was recorded. The materialization failed during validation before execution."
     node_dir = project_dir / str(node_path)
     parts: list[str] = []
@@ -237,6 +244,10 @@ def _failure_context(project_dir: Path, record: dict[str, object]) -> str:
             if text.strip():
                 parts.append(f"{name}:\n{text}")
     return "\n\n".join(parts) if parts else "No error text was found in the failed node artifacts."
+
+
+def _sanitize_error_text(project_dir: Path, text: str) -> str:
+    return text.replace(str(project_dir) + "/", "")
 
 
 def _truncate(text: str, limit: int) -> str:

@@ -1,1 +1,1 @@
-Invalid materialization for hypothesis 000041 (autogluon); response=/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/hypotheses/000041/materializations/autogluon-001.response.md: Group materialization must not execute top-level code outside imports, definitions, and registry assignments
+Invalid materialization for hypothesis 000041 (autogluon); response=hypotheses/000041/materializations/autogluon-001.response.md: Group materialization must not execute top-level code outside imports, definitions, and registry assignments

@@ -68,7 +68,7 @@ def root_materialization_plan(
             continue
         hdir = _candidate_hypothesis_dir(project_dir, record)
         target = _materialization_target(project_dir, hdir, mode, version=version)
-        if target.exists() or _has_failed_materialization_attempt(project_dir, record, mode, target):
+        if target.exists() or _has_materialization_record(project_dir, record, mode, target, version=version):
             existing_count += 1
             continue
         pending_ids.append(str(record["hypothesis_id"]))
@@ -120,7 +120,7 @@ def materialize_missing(
         mat_dir = hdir / "materializations"
         mat_dir.mkdir(parents=True, exist_ok=True)
         target = _materialization_target(project_dir, hdir, mode, version=version)
-        if not target.exists() and _has_failed_materialization_attempt(project_dir, record, mode, target):
+        if not target.exists() and _has_materialization_record(project_dir, record, mode, target, version=version):
             continue
         if target.exists():
             active_file = _manifest_active_file(hdir, mode)
@@ -177,7 +177,7 @@ def materialize_missing(
             response_path = mat_dir / f"{target.stem}.response.md"
             error_text = (
                 f"Invalid materialization for hypothesis {hdir.name} ({mode}); "
-                f"response={response_path}: {exc}"
+                f"response={_project_path_text(project_dir, response_path)}: {exc}"
             )
             atomic_write_text(mat_dir / f"{target.stem}.error.txt", error_text + "\n")
             upsert_failed_materialization(project_dir, hdir, mode, target.name, code_text=group_code)
@@ -195,21 +195,33 @@ def _candidate_hypothesis_dir(project_dir: Path, record: dict[str, object]) -> P
     return project_dir / str(record["path"]).rsplit("/", 1)[0]
 
 
-def _has_failed_materialization_attempt(
+def _project_path_text(project_dir: Path, path: Path) -> str:
+    try:
+        return path.relative_to(project_dir).as_posix()
+    except ValueError:
+        return path.name
+
+
+def _has_materialization_record(
     project_dir: Path,
     record: dict[str, object],
     mode: str,
     target: Path,
+    *,
+    version: str | None,
 ) -> bool:
-    return (
-        materialization_status(
-            project_dir,
-            hypothesis_id=str(record["hypothesis_id"]),
-            mode=mode,
-            file_name=target.name,
-        )
-        == "failed"
+    hypothesis_id = str(record["hypothesis_id"])
+    status = materialization_status(
+        project_dir,
+        hypothesis_id=hypothesis_id,
+        mode=mode,
+        file_name=target.name,
     )
+    if status in {"failed", "bug", "superseded"}:
+        return True
+    if version is None:
+        return any(bool(row.get("active")) for row in materialization_rows(project_dir, mode=mode, hypothesis_id=hypothesis_id))
+    return False
 
 
 def _needs_materialization(
@@ -221,7 +233,13 @@ def _needs_materialization(
 ) -> bool:
     hdir = _candidate_hypothesis_dir(project_dir, record)
     target = _materialization_target(project_dir, hdir, mode, version=version)
-    return not target.exists() and not _has_failed_materialization_attempt(project_dir, record, mode, target)
+    return not target.exists() and not _has_materialization_record(
+        project_dir,
+        record,
+        mode,
+        target,
+        version=version,
+    )
 
 
 def _materialization_target(project_dir: Path, hdir: Path, mode: str, *, version: str | None = None) -> Path:
@@ -278,7 +296,7 @@ def _rewrite_group_only_from_response(
     except ValueError as exc:
         raise ValueError(
             f"Invalid materialization for hypothesis {hdir.name} ({mode}); "
-            f"response={response_path}: {exc}"
+            f"response={_project_path_text(hdir.parents[1], response_path)}: {exc}"
         ) from exc
     atomic_write_text(target, group_code)
     _update_manifest(hdir, mode, target, hypothesis)

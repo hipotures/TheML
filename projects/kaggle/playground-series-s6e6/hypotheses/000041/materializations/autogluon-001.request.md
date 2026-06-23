@@ -37,7 +37,7 @@ redshift (float64) has range: -0.01 - 7.01, 0 nan values
 spectral_type (object) has 4 unique values: ['M', 'O/B', 'G/K', 'A/F'], 0 nan values
 galaxy_population (object) has 2 unique values: ['Red_Sequence', 'Blue_Cloud'], 0 nan values
 
-# External Data Description for /home/xai/DEV/aideml/workspaces/2-liberal-celadon-panther/input/star_classification.csv
+# External Data Description for star_classification.csv
 
 Original SDSS17 Stellar Classification Dataset.
 

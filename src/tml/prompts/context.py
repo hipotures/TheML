@@ -81,8 +81,18 @@ def _external_description(project_dir: Path, project: dict[str, Any]) -> str:
     text = path.read_text(encoding="utf-8").strip()
     if not text:
         return ""
-    file_name = external.get("file") or external.get("path") or external.get("aux") or path.name
+    file_name = _display_path(project_dir, external.get("file") or external.get("path") or external.get("aux") or path.name)
     return f"# External Data Description for {file_name}\n\n{text}"
+
+
+def _display_path(project_dir: Path, value: object) -> str:
+    path = Path(str(value))
+    if path.is_absolute():
+        try:
+            return path.relative_to(project_dir).as_posix()
+        except ValueError:
+            return path.name
+    return path.as_posix()
 
 
 def _materialization_data_overview(data_overview: str, *, target_column: object | None) -> str:
