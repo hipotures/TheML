@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-autogluon = ["autogluon>=1.5,<1.6"]
+autogluon = ["autogluon.tabular>=1.5,<1.6"]
 
 [project.scripts]
 tml = "tml.cli.main:app"

@@ -32,8 +32,10 @@ torch-geometric
 lightgbm
 xgboost
 catboost
-autogluon
-# ray intentionally disabled; AutoGluon should fall back to local/sequential fitting.
+autogluon.tabular
+# Do not install the AutoGluon meta-package or ray. Ray makes AutoGluon use
+# parallel fold workers that fail in TheML artifact workdirs; tabular-only
+# AutoGluon should fall back to local/sequential fitting when ray is absent.
 statsmodels
 matplotlib
 seaborn
