@@ -1646,6 +1646,8 @@ def _root_materialization_row(db_row: dict[str, object]) -> list[object]:
 
 
 def _materialization_status_icon(status: str, *, active: bool) -> Text:
+    if status == "failed":
+        return Text("!", style="bold red")
     if status == "bug":
         return Text("⚠", style="bold red")
     if status == "fixed":

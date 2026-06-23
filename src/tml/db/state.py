@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from tml.utils.hashing import sha256_file
+from tml.utils.hashing import sha256_file, sha256_text
 from tml.utils.yaml_io import read_yaml
 
 from .connect import connect
@@ -153,6 +153,56 @@ def upsert_materialization(
                 source_node_id,
                 fixed_from_file,
                 fixed_from_code_hash,
+                summary.get("model"),
+                summary.get("reasoning_tokens"),
+                summary.get("total_tokens"),
+                summary.get("generation_seconds"),
+            ),
+        )
+        conn.commit()
+
+
+def upsert_failed_materialization(
+    project_dir: Path,
+    hdir: Path,
+    mode: str,
+    file_name: str,
+    *,
+    code_text: str,
+) -> None:
+    db_path = ensure_project_db(project_dir)
+    hid = hdir.name
+    stem = Path(file_name).stem
+    summary = _run_summary(
+        hdir / "materializations" / f"{stem}.request.json",
+        hdir / "materializations" / f"{stem}.response.json",
+    )
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO materializations(
+              hypothesis_id, mode, file, code_hash, status, active, source_node_id,
+              fixed_from_file, fixed_from_code_hash, model, reasoning_tokens,
+              total_tokens, generation_seconds
+            )
+            VALUES (?, ?, ?, ?, 'failed', 0, NULL, NULL, NULL, ?, ?, ?, ?)
+            ON CONFLICT(hypothesis_id, mode, file) DO UPDATE SET
+              code_hash=excluded.code_hash,
+              status='failed',
+              active=0,
+              source_node_id=NULL,
+              fixed_from_file=NULL,
+              fixed_from_code_hash=NULL,
+              model=excluded.model,
+              reasoning_tokens=excluded.reasoning_tokens,
+              total_tokens=excluded.total_tokens,
+              generation_seconds=excluded.generation_seconds
+            """,
+            (
+                hid,
+                mode,
+                file_name,
+                sha256_text(code_text),
                 summary.get("model"),
                 summary.get("reasoning_tokens"),
                 summary.get("total_tokens"),

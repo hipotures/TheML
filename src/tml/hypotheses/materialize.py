@@ -9,7 +9,7 @@ from pathlib import Path
 from tml.ai import ModelInvocation, run_model_invocation
 from tml.ai.models import resolve_model_spec, resolve_role_model
 from tml.core.config import repo_models_for_project, repo_providers_for_project, repo_root_for_project
-from tml.db.state import materialization_candidates, upsert_materialization, upsert_project
+from tml.db.state import materialization_candidates, upsert_failed_materialization, upsert_materialization, upsert_project
 from tml.features.validation import validate_group_code_source
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
@@ -164,12 +164,17 @@ def materialize_missing(
         group_code = _parse_code(response.text)
         try:
             validate_group_code_source(group_code)
-        except ValueError as exc:
-            response_path = mat_dir / f"{mode}-001.response.md"
-            raise ValueError(
+        except (SyntaxError, ValueError) as exc:
+            response_path = mat_dir / f"{target.stem}.response.md"
+            error_text = (
                 f"Invalid materialization for hypothesis {hdir.name} ({mode}); "
                 f"response={response_path}: {exc}"
-            ) from exc
+            )
+            atomic_write_text(mat_dir / f"{target.stem}.error.txt", error_text + "\n")
+            upsert_failed_materialization(project_dir, hdir, mode, target.name, code_text=group_code)
+            if progress is not None:
+                progress(f"{progress_prefix}: failed validation: {exc}", None)
+            continue
         atomic_write_text(target, group_code)
         _update_manifest(hdir, mode, target, hypothesis)
         upsert_materialization(project_dir, hdir, mode, target)
