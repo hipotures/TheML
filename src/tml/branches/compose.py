@@ -21,6 +21,7 @@ from tml.db.state import (
     upsert_branch,
 )
 from tml.features.validation import validate_group_code_source
+from tml.hypotheses.revisions import migrate_hypothesis_dir, revision_records
 from tml.utils.hashing import sha256_file, sha256_text
 from tml.utils.yaml_io import read_yaml, write_yaml
 
@@ -288,7 +289,8 @@ def build_branch_materialization_source(project_dir: Path, components: list[dict
 
 def _resolve_hypothesis(project_dir: Path, hypothesis_id: str, *, mode: str) -> BranchSource:
     hdir = project_dir / "hypotheses" / hypothesis_id
-    if not (hdir / "hypothesis.yaml").exists():
+    migrate_hypothesis_dir(project_dir, hdir)
+    if not revision_records(hdir):
         raise TmlError(f"Hypothesis does not exist: {hypothesis_id}")
     manifest = read_yaml(hdir / "manifest.yaml")
     mats = manifest.get("materializations") if isinstance(manifest.get("materializations"), dict) else {}

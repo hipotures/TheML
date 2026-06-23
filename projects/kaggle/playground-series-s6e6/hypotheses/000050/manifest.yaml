@@ -1,12 +1,19 @@
+hypothesis:
+  id: '000050'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-002.py
-    sha256: 0baec78807f51d0f45602b952c93f75fe952aa91814d2cab5648efba9878f015
-    created_at: '2026-06-23T15:52:00'
-feature_group:
-  logical_name: main_sequence_parallax_plausibility
-  version_id: main_sequence_parallax_plausibility@000050
-  source_hypothesis_id: '000050'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-002.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: bb1cbd9904cc2443f2dca9c1be5f2fad0ebe35416f1f2ea06bfd9065f201be63
+      created_at: '2026-06-23T15:52:00'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: 0baec78807f51d0f45602b952c93f75fe952aa91814d2cab5648efba9878f015
+      created_at: '2026-06-23T15:52:00'

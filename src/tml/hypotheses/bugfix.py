@@ -22,6 +22,7 @@ from tml.utils.yaml_io import read_yaml
 
 from .baseline import ensure_root_baseline
 from .materialize import _parse_code, _update_manifest
+from .revisions import load_revision, materialization_revision
 
 
 @dataclass(frozen=True)
@@ -165,8 +166,9 @@ def bugfix_failed_materializations(
                 progress(f"{progress_prefix}: failed validation: {exc}", None)
             continue
         atomic_write_text(target, group_code)
-        hypothesis = read_yaml(hdir / "hypothesis.yaml")
-        _update_manifest(hdir, mode, target, hypothesis)
+        source_revision = materialization_revision(hdir, mode, source.name)
+        hypothesis = load_revision(hdir, source_revision).payload
+        _update_manifest(hdir, mode, target, hypothesis, revision=source_revision)
         upsert_materialization(
             project_dir,
             hdir,
@@ -177,6 +179,7 @@ def bugfix_failed_materializations(
             source_node_id=bugfix_context["node_id"],
             fixed_from_file=source.name,
             fixed_from_code_hash=str(record["code_hash"]),
+            hypothesis_revision=source_revision,
         )
         created += 1
     return created

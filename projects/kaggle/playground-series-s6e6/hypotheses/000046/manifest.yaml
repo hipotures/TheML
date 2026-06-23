@@ -1,12 +1,35 @@
+hypothesis:
+  id: '000046'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-006.py
-    sha256: a7a41239479d548d12304c6681f87bedbff1831ca0818417259584e46fa1f62d
-    created_at: '2026-06-23T17:09:14'
-feature_group:
-  logical_name: local_manifold_codimension
-  version_id: local_manifold_codimension@000046
-  source_hypothesis_id: '000046'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-006.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: fb1b171d4c67884ab33b1d97e95eec6aa79a41201ba8ca970453767cb7bc4b8e
+      created_at: '2026-06-23T17:09:14'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: d81f42b1c6588cbb70b9c9ee83f2881fd4a9d55d081d4f88eb6aabfda56b3bd3
+      created_at: '2026-06-23T17:09:14'
+    - file: autogluon-003.py
+      revision: 1
+      sha256: 50aa0459341944e20cd3af616e89d81830bab49e1a24a01efb0fa3270c09b991
+      created_at: '2026-06-23T17:09:14'
+    - file: autogluon-004.py
+      revision: 1
+      sha256: c1b62412dcda45b25f6c0ddbfe7fbced9cd492eb9b664e55f9fb3f1efc866088
+      created_at: '2026-06-23T17:09:14'
+    - file: autogluon-005.py
+      revision: 1
+      sha256: 49c7dfc82434fa67f8baf43b74637385ae25d07e5759133ed1cb2c67a13e0e25
+      created_at: '2026-06-23T17:09:14'
+    - file: autogluon-006.py
+      revision: 1
+      sha256: a7a41239479d548d12304c6681f87bedbff1831ca0818417259584e46fa1f62d
+      created_at: '2026-06-23T17:09:14'

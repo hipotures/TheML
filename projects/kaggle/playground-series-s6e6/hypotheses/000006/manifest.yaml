@@ -1,12 +1,15 @@
+hypothesis:
+  id: '000006'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: 04be4de25be0faf90f574c88d4fbcdeed30514a04bed06654ceb34db2a08cce2
-    created_at: '2026-06-22T13:57:10'
-feature_group:
-  logical_name: bandpass_break_localization
-  version_id: bandpass_break_localization@000006
-  source_hypothesis_id: '000006'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 04be4de25be0faf90f574c88d4fbcdeed30514a04bed06654ceb34db2a08cce2
+      created_at: '2026-06-22T13:57:10'

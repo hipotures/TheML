@@ -19,6 +19,7 @@ def migrate(db_path: Path) -> None:
         _ensure_column(conn, "hypotheses", "web_search_enabled", "INTEGER NOT NULL DEFAULT 0")
         _ensure_column(conn, "hypotheses", "web_search_has_results", "INTEGER NOT NULL DEFAULT 0")
         _ensure_column(conn, "materializations", "model", "TEXT")
+        _ensure_column(conn, "materializations", "hypothesis_revision", "INTEGER")
         _ensure_column(conn, "materializations", "status", "TEXT NOT NULL DEFAULT 'active'")
         _ensure_column(conn, "materializations", "active", "INTEGER NOT NULL DEFAULT 1")
         _ensure_column(conn, "materializations", "source_node_id", "TEXT")
@@ -29,11 +30,17 @@ def migrate(db_path: Path) -> None:
         _ensure_column(conn, "materializations", "generation_seconds", "INTEGER")
         _ensure_column(conn, "nodes", "kind", "TEXT NOT NULL DEFAULT 'root'")
         _ensure_column(conn, "nodes", "branch_id", "TEXT")
+        _ensure_column(conn, "nodes", "hypothesis_revision", "INTEGER")
+        _ensure_column(conn, "nodes", "materialization_file", "TEXT")
         _ensure_column(conn, "nodes", "created_at", "TEXT")
         _ensure_column(conn, "nodes", "finished_at", "TEXT")
         _ensure_column(conn, "nodes", "run_seconds", "INTEGER")
         _ensure_column(conn, "evaluations", "kind", "TEXT NOT NULL DEFAULT 'root'")
         _ensure_column(conn, "evaluations", "branch_id", "TEXT")
+        _ensure_column(conn, "evaluations", "hypothesis_revision", "INTEGER")
+        _ensure_column(conn, "evaluations", "materialization_file", "TEXT")
+        _ensure_column(conn, "submissions", "hypothesis_revision", "INTEGER")
+        _ensure_column(conn, "submissions", "materialization_file", "TEXT")
         _ensure_column(conn, "submissions", "submitted_at", "TEXT")
         _ensure_column(conn, "submissions", "kaggle_message", "TEXT")
         _ensure_column(conn, "submissions", "kaggle_response_json", "TEXT")
@@ -49,6 +56,20 @@ def migrate(db_path: Path) -> None:
         _ensure_column(conn, "submissions", "source_node_id", "TEXT")
         _ensure_column(conn, "submissions", "source_step", "INTEGER")
         _ensure_column(conn, "submissions", "source_profile_id", "TEXT")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS hypothesis_revisions (
+              hypothesis_id TEXT NOT NULL,
+              revision INTEGER NOT NULL,
+              path TEXT NOT NULL,
+              prefix TEXT,
+              created_at TEXT,
+              summary TEXT,
+              change_summary TEXT,
+              PRIMARY KEY (hypothesis_id, revision)
+            )
+            """
+        )
         conn.execute(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS idx_branches_mode_composition

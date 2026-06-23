@@ -1,0 +1,29 @@
+title: AIDE smooth spline SED interactions
+group_name: aide_smooth_spline_sed_interactions
+family: aide_smooth_basis
+summary: 'Add the AIDE spline-basis expansion over sky coordinates, magnitudes, redshift,
+  and color indices, plus compact tensor interactions between redshift and colors
+  and between adjacent color-shape bases.
+
+  '
+depends_on: []
+strategy: 'For alpha, delta, u, g, r, i, z, clipped redshift, and color indices u-g,
+  g-r, r-i, i-z, u-r, g-i, r-z, and u-z, create deterministic cubic spline basis features.
+  Use a periodic basis for alpha with about seven knots and non-periodic bases for
+  the other columns with about five knots, fitting basis boundaries from available
+  predictor values and auxiliary values when supplied. Then create compact tensor-product
+  interactions using the first low-order basis terms for redshift x u-g, redshift
+  x g-r, redshift x r-i, and g-r x r-i. Keep the transform group-only: no target labels,
+  no model training, and no runtime prediction artifacts.'
+expected_signal: Smooth basis expansions let tree models and linear split thresholds
+  see continuous nonlinear structure in sky position, spectral energy distribution
+  shape, and color-redshift interaction surfaces that were explicitly represented
+  in the AIDE top submissions.
+risk: Spline features can add many correlated columns and may be redundant with tree
+  splits on raw variables; tensor interactions can overfit if basis boundaries are
+  unstable or if too many basis columns are emitted.
+schema_version: 1
+hypothesis_id: '000026'
+enabled: true
+created_at: '2026-06-22T00:00:00+02:00'
+revision: 1

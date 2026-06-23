@@ -1,12 +1,15 @@
+hypothesis:
+  id: '000034'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: 8285e7a94cf902e48f045b061ea2a9c06dd77ffcff96d24aca86f39e014e1b1e
-    created_at: '2026-06-23T14:24:24'
-feature_group:
-  logical_name: blackbody_continuum_distance
-  version_id: blackbody_continuum_distance@000034
-  source_hypothesis_id: '000034'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 8285e7a94cf902e48f045b061ea2a9c06dd77ffcff96d24aca86f39e014e1b1e
+      created_at: '2026-06-23T14:24:24'

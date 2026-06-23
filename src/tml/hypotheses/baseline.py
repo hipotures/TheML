@@ -6,6 +6,7 @@ from pathlib import Path
 from tml.db.state import upsert_hypothesis, upsert_materialization
 from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml, write_yaml
+from .revisions import append_materialization, repair_manifest
 
 
 BASELINE_HYPOTHESIS_ID = "000000"
@@ -38,11 +39,18 @@ def ensure_root_baseline(project_dir: Path) -> Path:
 
 
 def _write_baseline_hypothesis(hdir: Path) -> None:
-    existing = read_yaml(hdir / "hypothesis.yaml")
+    legacy = hdir / "hypothesis.yaml"
+    revision_path = hdir / "01-hypothesis.yaml"
+    if legacy.exists() and not revision_path.exists():
+        legacy.replace(revision_path)
+    elif legacy.exists():
+        legacy.unlink()
+    existing = read_yaml(revision_path)
     created_at = existing.get("created_at") if isinstance(existing.get("created_at"), str) else None
     payload = {
         "schema_version": 1,
         "hypothesis_id": BASELINE_HYPOTHESIS_ID,
+        "revision": 1,
         "title": "Raw AutoGluon baseline",
         "group_name": "raw_autogluon_baseline",
         "family": "baseline",
@@ -54,30 +62,9 @@ def _write_baseline_hypothesis(hdir: Path) -> None:
         "enabled": True,
         "created_at": created_at or datetime.now().isoformat(timespec="seconds"),
     }
-    write_yaml(hdir / "hypothesis.yaml", payload)
+    write_yaml(revision_path, payload)
 
 
 def _write_baseline_manifest(hdir: Path, code_path: Path) -> None:
-    manifest_path = hdir / "manifest.yaml"
-    existing = read_yaml(manifest_path)
-    materializations = existing.get("materializations") if isinstance(existing.get("materializations"), dict) else {}
-    autogluon = materializations.get(BASELINE_MODE) if isinstance(materializations.get(BASELINE_MODE), dict) else {}
-    created_at = autogluon.get("created_at") if isinstance(autogluon.get("created_at"), str) else None
-    manifest = {
-        "materializations": {
-            BASELINE_MODE: {
-                "active": code_path.name,
-                "sha256": sha256_file(code_path),
-                "created_at": created_at or datetime.now().isoformat(timespec="seconds"),
-            }
-        },
-        "feature_group": {
-            "logical_name": "raw_autogluon_baseline",
-            "version_id": f"raw_autogluon_baseline@{BASELINE_HYPOTHESIS_ID}",
-            "source_hypothesis_id": BASELINE_HYPOTHESIS_ID,
-            "operation": "raw_autogluon_baseline",
-            "depends_on": [],
-            "code_artifact": code_path.name,
-        },
-    }
-    write_yaml(manifest_path, manifest)
+    repair_manifest(hdir.parents[1], hdir)
+    append_materialization(hdir, BASELINE_MODE, code_path, revision=1, active=True)

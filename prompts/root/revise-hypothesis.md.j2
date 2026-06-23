@@ -1,0 +1,57 @@
+Revise one existing ROOT feature-group hypothesis.
+
+{% include "blocks/task-context.md.j2" %}
+
+{% include "blocks/existing-root-hypotheses.md.j2" %}
+
+# Selected Hypothesis
+
+Hypothesis ID: {{ hypothesis_id }}
+
+Previous revisions:
+{% for revision in previous_revisions %}
+- rev {{ revision.get("revision") }}: {{ revision.get("title") }}
+  group_name={{ revision.get("group_name") }}
+  family={{ revision.get("family") }}
+  summary={{ revision.get("summary") }}
+  strategy={{ revision.get("strategy") }}
+  expected_signal={{ revision.get("expected_signal") }}
+  risk={{ revision.get("risk") }}
+{% endfor %}
+
+# Rules
+
+- Revise the same semantic feature-group idea.
+- Keep `group_name` exactly the same.
+- Keep `depends_on` compatible with previous revisions.
+- Prefer keeping `family` the same.
+- Change `strategy` only when there is a concrete deterministic improvement.
+- Do not output code.
+- If no safe useful revision exists, return `decision: "no_change"`.
+
+Return exactly one JSON object.
+
+For a revision:
+
+{
+  "operation": "revise_existing_root_hypothesis",
+  "decision": "revise",
+  "title": "short descriptive title",
+  "group_name": "same_group_name",
+  "family": "same_or_existing_family",
+  "summary": "one comprehensive sentence describing the revised semantic feature-group idea",
+  "depends_on": [],
+  "strategy": "concrete deterministic feature logic, formulas, bins, statistics, and edge handling",
+  "expected_signal": "why this revision may improve the metric",
+  "risk": "specific overfitting, leakage, cost, redundancy, or instability risk",
+  "change_summary": "what changed relative to previous revisions",
+  "semantic_goal_preserved": true
+}
+
+For no safe revision:
+
+{
+  "operation": "revise_existing_root_hypothesis",
+  "decision": "no_change",
+  "reason": "The current hypothesis already has coherent revisions; any likely change would duplicate another group, alter the semantic goal, or add unsafe complexity."
+}

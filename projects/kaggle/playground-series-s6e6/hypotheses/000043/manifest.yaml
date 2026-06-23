@@ -1,12 +1,19 @@
+hypothesis:
+  id: '000043'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-002.py
-    sha256: 61f1f67bf9689405126685957402bff7751f17777bfbada2f5fbb4210e4de904
-    created_at: '2026-06-23T15:51:38'
-feature_group:
-  logical_name: redshift_partitioned_sed_pca_residuals
-  version_id: redshift_partitioned_sed_pca_residuals@000043
-  source_hypothesis_id: '000043'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-002.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 8c48b453e9d18b35df1d71be4f7498810b93846009eb26a7f927c6871872818b
+      created_at: '2026-06-23T15:51:38'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: 61f1f67bf9689405126685957402bff7751f17777bfbada2f5fbb4210e4de904
+      created_at: '2026-06-23T15:51:38'

@@ -1,12 +1,19 @@
+hypothesis:
+  id: '000056'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-002.py
-    sha256: d00ca3203ec1b95fa6e9ff76db303c51f3329e304f4f3204eeb4deeddd3abb0b
-    created_at: '2026-06-23T15:52:11'
-feature_group:
-  logical_name: local_reddening_free_locus_offsets
-  version_id: local_reddening_free_locus_offsets@000056
-  source_hypothesis_id: '000056'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-002.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: e587ab1a9d0d2b1b644ca5fee4a1d499c55964f861672879b7650c2424787fb0
+      created_at: '2026-06-23T15:52:11'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: d00ca3203ec1b95fa6e9ff76db303c51f3329e304f4f3204eeb4deeddd3abb0b
+      created_at: '2026-06-23T15:52:11'

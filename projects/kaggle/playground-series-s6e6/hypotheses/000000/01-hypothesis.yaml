@@ -1,0 +1,16 @@
+schema_version: 1
+hypothesis_id: '000000'
+revision: 1
+title: Raw AutoGluon baseline
+group_name: raw_autogluon_baseline
+family: baseline
+summary: Train AutoGluon on the raw project columns without generated feature groups.
+depends_on: []
+strategy: Use the project train and test tables as-is. Do not create additional preprocessing
+  feature columns.
+expected_signal: Provides the reference score for AutoGluon before any generated feature
+  engineering is added.
+risk: This baseline may underperform generated features, but it should expose the
+  raw AutoGluon reference point.
+enabled: true
+created_at: '2026-06-22T16:54:00'

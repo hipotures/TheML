@@ -1,23 +1,19 @@
-schema_version: 1
-hypothesis_id: '000021'
-slug: aide_broadband_flux_ratios
+hypothesis:
+  id: '000021'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-002.py
-    sha256: 497a961e4cfea3c74b717f8c463706d1660c3b5b4a8c23b48d957fa6ed467ca8
-    created_at: '2026-06-22T21:38:54'
-origin:
-  run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
-  source_artifacts:
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py
-feature_group:
-  logical_name: aide_broadband_flux_ratios
-  version_id: aide_broadband_flux_ratios@000021
-  source_hypothesis_id: '000021'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-002.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: b516eb87023ab2d41976923b2a90019ef1933969c8905a23eaa06ad8de4c461d
+      created_at: '2026-06-22T21:38:54'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: 497a961e4cfea3c74b717f8c463706d1660c3b5b4a8c23b48d957fa6ed467ca8
+      created_at: '2026-06-22T21:38:54'

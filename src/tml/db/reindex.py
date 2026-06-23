@@ -7,6 +7,11 @@ from typing import Any
 from tml.branches.runtime_state import clear_branch_runtime_state
 from tml.core.config import load_project_config, repo_root_for_project
 from tml.hypotheses.baseline import ensure_root_baseline
+from tml.hypotheses.revisions import (
+    materialization_revision,
+    migrate_root_revisions,
+    revision_records,
+)
 from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml
 
@@ -18,6 +23,7 @@ from .submissions import build_submission_row, upsert_submission
 def reindex_project(project_dir: Path, db_path: Path) -> dict[str, int]:
     clear_branch_runtime_state()
     ensure_root_baseline(project_dir)
+    migrate_root_revisions(project_dir)
     migrate(db_path)
     config = load_project_config(project_dir)
     with connect(db_path) as conn:
@@ -25,6 +31,7 @@ def reindex_project(project_dir: Path, db_path: Path) -> dict[str, int]:
             "projects",
             "profiles",
             "hypotheses",
+            "hypothesis_revisions",
             "materializations",
             "branches",
             "branch_components",
@@ -69,11 +76,16 @@ def _index_profiles(conn, project_dir: Path) -> None:
 
 
 def _index_hypotheses(conn, project_dir: Path) -> None:
-    for path in sorted((project_dir / "hypotheses").glob("*/hypothesis.yaml")):
-        payload = read_yaml(path)
+    for hdir in sorted(path for path in (project_dir / "hypotheses").glob("*") if path.is_dir()):
+        records = revision_records(hdir)
+        if not records:
+            continue
+        latest = records[-1]
+        path = latest.path
+        payload = latest.payload
         hid = str(payload.get("hypothesis_id") or path.parent.name)
-        run_summary = _run_summary(path.parent / "01-hypothesis.request.json", path.parent / "01-hypothesis.response.json")
-        web_search = _web_search_summary(path.parent / "01-hypothesis.request.json", path.parent / "01-hypothesis.web_search.md")
+        run_summary = _run_summary(path.parent / f"{latest.prefix}.request.json", path.parent / f"{latest.prefix}.response.json")
+        web_search = _web_search_summary(path.parent / f"{latest.prefix}.request.json", path.parent / f"{latest.prefix}.web_search.md")
         conn.execute(
             """
             INSERT INTO hypotheses(
@@ -98,6 +110,24 @@ def _index_hypotheses(conn, project_dir: Path) -> None:
                 _project_path(project_dir, path),
             ),
         )
+        for record in records:
+            conn.execute(
+                """
+                INSERT INTO hypothesis_revisions(
+                  hypothesis_id, revision, path, prefix, created_at, summary, change_summary
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    hid,
+                    record.revision,
+                    _project_path(project_dir, record.path),
+                    record.prefix,
+                    record.payload.get("created_at"),
+                    record.payload.get("summary"),
+                    record.payload.get("change_summary"),
+                ),
+            )
         for code in sorted((path.parent / "materializations").glob("*.py")):
             mode = code.name.split("-", 1)[0]
             manifest = read_yaml(path.parent / "manifest.yaml")
@@ -105,20 +135,22 @@ def _index_hypotheses(conn, project_dir: Path) -> None:
             mode_manifest = materializations.get(mode) if isinstance(materializations.get(mode), dict) else {}
             active_file = mode_manifest.get("active") if isinstance(mode_manifest.get("active"), str) else None
             active = active_file is None or active_file == code.name
+            hypothesis_revision = materialization_revision(path.parent, mode, code.name)
             mat_summary = _run_summary(code.parent / f"{code.stem}.request.json", code.parent / f"{code.stem}.response.json")
             conn.execute(
                 """
                 INSERT INTO materializations(
-                  hypothesis_id, mode, file, code_hash, status, active, model,
+                  hypothesis_id, mode, file, code_hash, hypothesis_revision, status, active, model,
                   reasoning_tokens, total_tokens, generation_seconds
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     hid,
                     mode,
                     code.name,
                     sha256_file(code),
+                    hypothesis_revision,
                     "active" if active else "inactive",
                     1 if active else 0,
                     mat_summary.get("model"),
@@ -218,10 +250,11 @@ def _index_runs(conn, project_dir: Path) -> None:
             conn.execute(
                 """
                 INSERT INTO nodes(
-                  node_id, run_id, step, kind, hypothesis_id, branch_id, mode, profile_id, status,
+                  node_id, run_id, step, kind, hypothesis_id, hypothesis_revision,
+                  materialization_file, branch_id, mode, profile_id, status,
                   created_at, finished_at, run_seconds, path
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     node_id,
@@ -229,6 +262,8 @@ def _index_runs(conn, project_dir: Path) -> None:
                     start.get("step"),
                     start.get("kind") or "root",
                     start.get("hypothesis_id") or done.get("hypothesis_id") or failed.get("hypothesis_id"),
+                    start.get("hypothesis_revision") or done.get("hypothesis_revision") or failed.get("hypothesis_revision") or manifest.get("hypothesis_revision"),
+                    start.get("materialization_file") or done.get("materialization_file") or failed.get("materialization_file") or manifest.get("materialization_file"),
                     start.get("branch_id") or done.get("branch_id") or failed.get("branch_id"),
                     start.get("mode") or done.get("mode"),
                     start.get("profile_id") or done.get("profile_id"),
@@ -242,13 +277,18 @@ def _index_runs(conn, project_dir: Path) -> None:
             if manifest or done or failed:
                 conn.execute(
                     """
-                    INSERT INTO evaluations(node_id, kind, hypothesis_id, branch_id, mode, profile_id, code_hash, metric, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO evaluations(
+                      node_id, kind, hypothesis_id, hypothesis_revision, materialization_file,
+                      branch_id, mode, profile_id, code_hash, metric, status
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         node_id,
                         start.get("kind") or manifest.get("kind") or "root",
                         manifest.get("hypothesis_id") or start.get("hypothesis_id"),
+                        manifest.get("hypothesis_revision") or start.get("hypothesis_revision"),
+                        manifest.get("materialization_file") or start.get("materialization_file"),
                         manifest.get("branch_id") or start.get("branch_id"),
                         manifest.get("mode") or start.get("mode"),
                         manifest.get("profile_id") or start.get("profile_id"),

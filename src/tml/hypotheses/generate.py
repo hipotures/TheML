@@ -17,6 +17,7 @@ from tml.prompts.renderer import render_template
 from tml.utils.yaml_io import write_yaml
 
 from .baseline import ensure_root_baseline
+from .revisions import repair_manifest
 
 
 @dataclass(frozen=True)
@@ -136,11 +137,13 @@ def generate_missing_root_hypotheses(
             {
                 "schema_version": 1,
                 "hypothesis_id": hid,
+                "revision": 1,
                 "enabled": True,
                 "created_at": datetime.now().isoformat(timespec="seconds"),
             }
         )
-        write_yaml(hdir / "hypothesis.yaml", payload)
+        write_yaml(hdir / "01-hypothesis.yaml", payload)
+        repair_manifest(project_dir, hdir)
         upsert_hypothesis(project_dir, hdir)
         created.append(GeneratedHypothesis(hypothesis_id=hid, path=hdir))
     return created

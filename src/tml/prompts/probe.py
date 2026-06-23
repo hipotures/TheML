@@ -12,6 +12,7 @@ from tml.core.ids import run_id
 from tml.core.metadata import render_project_metadata_prompt
 from tml.features.validation import validate_group_code_source
 from tml.hypotheses.materialize import _parse_code
+from tml.hypotheses.revisions import latest_revision_record, migrate_hypothesis_dir
 from tml.hypotheses.wrapper_source import build_wrapped_materialization_source
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
@@ -155,11 +156,13 @@ def _unknown_prompt_target_message(target: str | None, stage: str | None) -> str
 
 def _hypothesis_for_target(project_dir: Path, target: str | None) -> tuple[dict[str, object], Path | None]:
     if target and target.isdigit():
-        path = project_dir / "hypotheses" / target.zfill(6) / "hypothesis.yaml"
-        if path.exists():
+        hdir = project_dir / "hypotheses" / target.zfill(6)
+        migrate_hypothesis_dir(project_dir, hdir)
+        if list(hdir.glob("??-hypothesis.yaml")):
             from tml.utils.yaml_io import read_yaml
 
-            return read_yaml(path), path
+            record = latest_revision_record(hdir)
+            return read_yaml(record.path), record.path
     return {"hypothesis_id": target or "next"}, None
 
 

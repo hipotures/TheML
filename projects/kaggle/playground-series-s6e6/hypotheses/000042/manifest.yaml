@@ -1,12 +1,19 @@
+hypothesis:
+  id: '000042'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-002.py
-    sha256: 88bbbe4f90a419bd2060da00581c1cfdcd29f9fd9dee9d414c25821450343160
-    created_at: '2026-06-23T15:38:01'
-feature_group:
-  logical_name: error_deconvolved_locus_tube_residuals
-  version_id: error_deconvolved_locus_tube_residuals@000042
-  source_hypothesis_id: '000042'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-002.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: fe763b6a103c51a6cff7f0ee870a1767e74399d9b80088e8e1526db0c50fec16
+      created_at: '2026-06-23T15:38:01'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: 88bbbe4f90a419bd2060da00581c1cfdcd29f9fd9dee9d414c25821450343160
+      created_at: '2026-06-23T15:38:01'

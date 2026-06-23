@@ -1,12 +1,19 @@
+hypothesis:
+  id: '000030'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-002.py
-    sha256: 0c081bc6bd1f54b768bb8b64c3158fefe941020e89e686b4e4f34bf3e3952078
-    created_at: '2026-06-23T15:37:33'
-feature_group:
-  logical_name: sdss_quasar_targeting_surface
-  version_id: sdss_quasar_targeting_surface@000030
-  source_hypothesis_id: '000030'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-002.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: d7f1539b419df22e389a9f635f538d2b481b5fb96cb9752313f1176f4e781e42
+      created_at: '2026-06-23T15:37:33'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: 0c081bc6bd1f54b768bb8b64c3158fefe941020e89e686b4e4f34bf3e3952078
+      created_at: '2026-06-23T15:37:33'

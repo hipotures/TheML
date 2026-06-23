@@ -1,0 +1,31 @@
+title: AIDE auxiliary reference distance
+group_name: aide_aux_reference_distribution_distance
+family: aide_auxiliary_reference
+summary: 'Compare each object to the auxiliary star_classification reference distribution
+  using robust per-column z-scores, empirical CDF positions, absolute median deltas,
+  joint L2 distance, and robust Mahalanobis distance.
+
+  '
+depends_on: []
+strategy: Load the provided auxiliary star_classification table when available and
+  use only predictor columns overlapping alpha, delta, u, g, r, i, z, and redshift.
+  Clean sentinel photometry values at or below -9000 and clip redshift to nonnegative
+  values. For each overlapping column, compute robust reference median, MAD-based
+  scale, empirical CDF rank, robust z-score, and absolute distance from the reference
+  median. Aggregate per-column robust z-scores into a joint L2 distance. On complete
+  auxiliary rows, estimate a robust centered/scaled covariance and use its pseudoinverse
+  to emit Mahalanobis squared distance, Mahalanobis distance, and an inlier-style
+  indicator. If auxiliary data is unavailable, emit neutral deterministic defaults.
+  Do not use target labels or fit a classifier.
+expected_signal: The AIDE top solutions used the auxiliary reference distribution
+  to identify objects that are close to or far from the external survey-like population;
+  this can help separate stars from galaxy/quasar-like outliers in joint photometric
+  and sky-coordinate space.
+risk: Auxiliary data may not match the competition distribution perfectly, and robust
+  covariance features can become unstable if too few complete auxiliary rows are available
+  or if sentinel values are not cleaned.
+schema_version: 1
+hypothesis_id: '000025'
+enabled: true
+created_at: '2026-06-22T00:00:00+02:00'
+revision: 1

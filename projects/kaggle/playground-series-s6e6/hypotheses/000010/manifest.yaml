@@ -1,12 +1,15 @@
+hypothesis:
+  id: '000010'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: e60e868088972cfa2e80e6e004372a0aae7d5ee2298000e053d3a22e355a2784
-    created_at: '2026-06-22T14:04:03'
-feature_group:
-  logical_name: rest_frame_filter_landmarks
-  version_id: rest_frame_filter_landmarks@000010
-  source_hypothesis_id: '000010'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: e60e868088972cfa2e80e6e004372a0aae7d5ee2298000e053d3a22e355a2784
+      created_at: '2026-06-22T14:04:03'

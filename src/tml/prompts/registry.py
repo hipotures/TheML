@@ -17,6 +17,7 @@ def template_text(project_dir: Path, template_id: str) -> tuple[str, str]:
 def _template_relpath(template_id: str) -> str:
     mapping = {
         "root.hypothesis": "root/hypothesis.md.j2",
+        "root.revise-hypothesis": "root/revise-hypothesis.md.j2",
         "root.bugfix": "root/bugfix.md.j2",
         "root.materialize-autogluon": "root/materialize-autogluon.md.j2",
         "root.materialize-legacy": "root/materialize-legacy.md.j2",

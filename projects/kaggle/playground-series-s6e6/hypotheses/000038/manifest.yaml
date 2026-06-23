@@ -1,12 +1,15 @@
+hypothesis:
+  id: 000038
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: 9bdb9b90ee36cc601c1dd8427e45e7b960ad93f95752b27747d100115aaf8241
-    created_at: '2026-06-23T14:48:27'
-feature_group:
-  logical_name: photoz_trajectory_geometry
-  version_id: photoz_trajectory_geometry@000038
-  source_hypothesis_id: 000038
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 9bdb9b90ee36cc601c1dd8427e45e7b960ad93f95752b27747d100115aaf8241
+      created_at: '2026-06-23T14:48:27'

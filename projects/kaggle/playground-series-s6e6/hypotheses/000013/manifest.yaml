@@ -1,12 +1,15 @@
+hypothesis:
+  id: '000013'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: bb2edafce8d551ff59d3d3bcfb8726f8f83f097e2f014edb639033ad23e55cc0
-    created_at: '2026-06-22T14:04:37'
-feature_group:
-  logical_name: emission_line_bandpass_resonance
-  version_id: emission_line_bandpass_resonance@000013
-  source_hypothesis_id: '000013'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: bb2edafce8d551ff59d3d3bcfb8726f8f83f097e2f014edb639033ad23e55cc0
+      created_at: '2026-06-22T14:04:37'

@@ -1,23 +1,23 @@
-schema_version: 1
-hypothesis_id: '000022'
-slug: aide_sky_cell_local_residuals
+hypothesis:
+  id: '000022'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-003.py
-    sha256: 3c37983ac9937bb846ff66404760f8b41dc908abd03598bd3a6ce99a4823b959
-    created_at: '2026-06-22T22:30:12'
-origin:
-  run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
-  source_artifacts:
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py
-feature_group:
-  logical_name: aide_sky_cell_local_residuals
-  version_id: aide_sky_cell_local_residuals@000022
-  source_hypothesis_id: '000022'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-003.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 613518c2a7c71f83823fb18f6b8009965038e95c80a530ee0054d5ff152c5282
+      created_at: '2026-06-22T22:30:12'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: 7acb1fcd0dbac51f40c215d9e54e9059779d53653280e646edd9f18d4291a589
+      created_at: '2026-06-22T22:30:12'
+    - file: autogluon-003.py
+      revision: 1
+      sha256: 3c37983ac9937bb846ff66404760f8b41dc908abd03598bd3a6ce99a4823b959
+      created_at: '2026-06-22T22:30:12'

@@ -1,0 +1,27 @@
+title: AIDE catalog rank-frequency context
+group_name: aide_catalog_rank_frequency_context
+family: aide_catalog_context
+summary: 'Add the AIDE catalog-frequency and distribution-rank context: category frequencies,
+  spectral-population cross frequency, global percentile ranks, quantile-bin frequencies,
+  and within-category numeric ranks.
+
+  '
+depends_on: []
+strategy: From spectral_type and galaxy_population, create normalized frequency encodings
+  for each category and for their crossed pair. For u, g, r, i, z, clipped redshift,
+  and log1p clipped redshift, compute global percentile rank, a 12-bin quantile index,
+  and the empirical frequency of that quantile bin. Also compute each numeric column's
+  percentile rank within spectral_type and within galaxy_population. Add compact summaries
+  across numeric ranks such as mean and standard deviation. All encodings are deterministic
+  statistics over the available predictor rows and must not read the target.
+expected_signal: Rare catalog tags, rare tag combinations, and unusual numeric ranks
+  within a catalog tag can distinguish minority classes and reproduce the AIDE solutions'
+  frequency/rank context without requiring model-level ensembling.
+risk: Frequency and rank features can be sensitive to whether they are estimated on
+  train only or combined train/test predictors, and they may duplicate signals already
+  learnable from raw categoricals in strong tree models.
+schema_version: 1
+hypothesis_id: '000024'
+enabled: true
+created_at: '2026-06-22T00:00:00+02:00'
+revision: 1

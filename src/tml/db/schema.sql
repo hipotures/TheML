@@ -30,11 +30,23 @@ CREATE TABLE IF NOT EXISTS hypotheses (
   path TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS hypothesis_revisions (
+  hypothesis_id TEXT NOT NULL,
+  revision INTEGER NOT NULL,
+  path TEXT NOT NULL,
+  prefix TEXT,
+  created_at TEXT,
+  summary TEXT,
+  change_summary TEXT,
+  PRIMARY KEY (hypothesis_id, revision)
+);
+
 CREATE TABLE IF NOT EXISTS materializations (
   hypothesis_id TEXT NOT NULL,
   mode TEXT NOT NULL,
   file TEXT NOT NULL,
   code_hash TEXT NOT NULL,
+  hypothesis_revision INTEGER,
   status TEXT NOT NULL DEFAULT 'active',
   active INTEGER NOT NULL DEFAULT 1,
   source_node_id TEXT,
@@ -98,6 +110,8 @@ CREATE TABLE IF NOT EXISTS nodes (
   step INTEGER,
   kind TEXT NOT NULL DEFAULT 'root',
   hypothesis_id TEXT,
+  hypothesis_revision INTEGER,
+  materialization_file TEXT,
   branch_id TEXT,
   mode TEXT,
   profile_id TEXT,
@@ -112,6 +126,8 @@ CREATE TABLE IF NOT EXISTS evaluations (
   node_id TEXT PRIMARY KEY,
   kind TEXT NOT NULL DEFAULT 'root',
   hypothesis_id TEXT,
+  hypothesis_revision INTEGER,
+  materialization_file TEXT,
   branch_id TEXT,
   mode TEXT,
   profile_id TEXT,
@@ -136,6 +152,8 @@ CREATE TABLE IF NOT EXISTS submissions (
   run_id TEXT,
   step INTEGER,
   hypothesis_id TEXT,
+  hypothesis_revision INTEGER,
+  materialization_file TEXT,
   mode TEXT,
   profile_id TEXT,
   kind TEXT NOT NULL,

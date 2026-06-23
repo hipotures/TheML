@@ -58,6 +58,7 @@ from tml.hypotheses.generate import (
 from tml.hypotheses.baseline import ensure_root_baseline
 from tml.hypotheses.bugfix import RootBugfixPlan, bugfix_failed_materializations, root_bugfix_plan
 from tml.hypotheses.materialize import RootMaterializationPlan, materialize_missing, root_materialization_plan
+from tml.hypotheses.revise import RootRevisePlan, revise_root_hypothesis, revision_status_rows, root_revise_plan
 from tml.hypotheses.run import RootRunPlan, root_run_plan, run_missing
 from tml.prompts.diff import diff_prompt
 from tml.prompts.probe import probe_prompt, render_prompt
@@ -364,6 +365,44 @@ def root_generate_cmd(ctx: typer.Context) -> None:
 
 
 @root_app.command(
+    "revise",
+    context_settings=EXTRA,
+    help=(
+        "Create ROOT hypothesis revisions or show revision status.\n\n"
+        "Accepted positional arguments:\n"
+        "  status            Print revision status.\n\n"
+        "Accepted key=value parameters:\n"
+        "  hypothesis=<id>    Hypothesis to revise.\n"
+        "  id=<id>            Alias for hypothesis=<id>.\n"
+        "  count=<N>          Maximum number of new revisions."
+    ),
+)
+def root_revise_cmd(ctx: typer.Context) -> None:
+    try:
+        ref = active_project_ref()
+        ensure_root_baseline(ref.path)
+        status_only = _command_status_requested(ctx.args, "tml root revise")
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"hypothesis", "id", "count", "mode"}, "tml root revise")
+        hypothesis_id = _optional_text(overrides.get("hypothesis") or overrides.get("id"))
+        if not hypothesis_id:
+            raise TmlError("Missing required parameter: id=<hypothesis>.")
+        config = load_project_config(ref.path)
+        mode = str(overrides.get("mode") or active_mode(config))
+        if status_only:
+            _print_root_revision_status(ref.path, hypothesis_id=hypothesis_id, mode=mode)
+            return
+        count = int(overrides.get("count") or 1)
+        plan = root_revise_plan(ref.path, hypothesis_id=hypothesis_id, count=count)
+        _print_root_revise_plan(ref.slug, plan)
+        created = revise_root_hypothesis(ref.path, hypothesis_id=hypothesis_id, count=count, progress=console.print)
+        console.print(f"Created ROOT revisions: {len(created)}")
+        _print_root_revision_status(ref.path, hypothesis_id=hypothesis_id, mode=mode)
+    except Exception as exc:
+        _abort(exc)
+
+
+@root_app.command(
     "materialize",
     context_settings=EXTRA,
     help=(
@@ -374,6 +413,8 @@ def root_generate_cmd(ctx: typer.Context) -> None:
         "  mode=<name>        Materialization mode; defaults to the active mode.\n"
         "  hypothesis=<id>    Materialize only one hypothesis.\n"
         "  id=<id>            Alias for hypothesis=<id>.\n"
+        "  revision=<N>       Materialize one hypothesis revision.\n"
+        "  rev=<N>            Alias for revision=<N>.\n"
         "  version=new        Create the next materialization version, e.g. autogluon-002.py.\n"
         "  version=<number>   Create a specific materialization version, e.g. version=2.\n"
         "  yes=true           Skip the confirmation prompt."
@@ -386,16 +427,17 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
         status_only = _command_status_requested(ctx.args, "tml root materialize")
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"mode", "hypothesis", "id", "version", "yes"}, "tml root materialize")
+        _validate_override_keys(overrides, {"mode", "hypothesis", "id", "revision", "rev", "version", "yes"}, "tml root materialize")
         mode = str(overrides.get("mode") or active_mode(config))
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         hypothesis_id_text = _optional_text(hypothesis_id)
+        revision = _revision_override(overrides)
         if status_only:
             _print_root_materializations(ref.path, mode=mode, created_count=None, hypothesis_id=hypothesis_id_text)
             return
         assume_yes = _bool(overrides.get("yes", False))
         version = _optional_text(overrides.get("version"))
-        plan = root_materialization_plan(ref.path, mode=mode, hypothesis_id=hypothesis_id_text, version=version)
+        plan = root_materialization_plan(ref.path, mode=mode, hypothesis_id=hypothesis_id_text, version=version, revision=revision)
         _print_root_materialization_plan(ref.slug, plan, hypothesis_id=hypothesis_id_text)
         if plan.iteration_count == 0:
             console.print("No ROOT materializations to create.")
@@ -409,6 +451,7 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
             mode=mode,
             hypothesis_id=hypothesis_id_text,
             version=version,
+            revision=revision,
         )
         _print_root_materializations(ref.path, mode=mode, created_count=created, hypothesis_id=hypothesis_id_text)
     except Exception as exc:
@@ -463,7 +506,7 @@ def root_bugfix_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | None, version: str | None = None) -> int:
+def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | None, version: str | None = None, revision: int | None = None) -> int:
     state: dict[str, object] = {
         "message": "Preparing materialization...",
         "timeout": 1,
@@ -486,6 +529,7 @@ def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: s
                 mode=mode,
                 hypothesis_id=hypothesis_id,
                 version=version,
+                revision=revision,
                 progress=report,
             )
             with lock:
@@ -598,6 +642,8 @@ def _bugfix_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | 
         "  mode=<name>        Run mode; defaults to the active mode.\n"
         "  hypothesis=<id>    Run only one hypothesis.\n"
         "  id=<id>            Alias for hypothesis=<id>.\n"
+        "  revision=<N>       Run one hypothesis revision.\n"
+        "  rev=<N>            Alias for revision=<N>.\n"
         "  yes=true           Skip the confirmation prompt.\n"
         "Profile override parameters are accepted for the active mode."
     ),
@@ -611,10 +657,11 @@ def root_run_cmd(ctx: typer.Context) -> None:
         mode = str(overrides["mode"]) if "mode" in overrides else None
         config = load_project_config(ref.path)
         active_run_mode = mode or active_mode(config)
-        allowed = {"mode", "hypothesis", "id", "yes"} | _profile_override_keys(ref.path, active_run_mode)
+        allowed = {"mode", "hypothesis", "id", "revision", "rev", "yes"} | _profile_override_keys(ref.path, active_run_mode)
         _validate_override_keys(overrides, allowed, "tml root run")
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         hypothesis_id_text = _optional_text(hypothesis_id)
+        revision = _revision_override(overrides)
         if status_only:
             _print_root_run_request_status(ref.path, mode=active_run_mode, hypothesis_id=hypothesis_id_text)
             _print_root_run_summary(
@@ -626,11 +673,12 @@ def root_run_cmd(ctx: typer.Context) -> None:
             )
             return
         assume_yes = _bool(overrides.get("yes", False))
-        run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "hypothesis", "id", "yes"}}
+        run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "hypothesis", "id", "revision", "rev", "yes"}}
         plan = root_run_plan(
             ref.path,
             mode=mode,
             hypothesis_id=hypothesis_id_text,
+            revision=revision,
             profile_overrides=run_overrides,
         )
         _print_root_run_plan(ref.slug, plan, hypothesis_id=hypothesis_id_text)
@@ -652,6 +700,7 @@ def root_run_cmd(ctx: typer.Context) -> None:
             ref.path,
             mode=mode,
             hypothesis_id=hypothesis_id_text,
+            revision=revision,
             profile_overrides=run_overrides,
             progress=console.print,
         )
@@ -1373,6 +1422,21 @@ def _optional_text(value: object) -> str | None:
     return None if value is None else str(value)
 
 
+def _revision_override(overrides: dict[str, object]) -> int | None:
+    raw = overrides.get("revision", overrides.get("rev"))
+    if raw is None:
+        return None
+    if str(raw).strip().lower() == "pending":
+        raise TmlError("revision=pending is not supported; use a numeric revision.")
+    try:
+        revision = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise TmlError(f"Invalid revision: {raw}. Use a numeric revision.") from exc
+    if revision < 1:
+        raise TmlError("Revision must be >= 1.")
+    return revision
+
+
 def _reject_positional(args: list[str], command: str) -> None:
     positional = _positional(args)
     if positional:
@@ -1561,6 +1625,25 @@ def _print_root_generation_plan(project_slug: str, plan: RootGenerationPlan) -> 
     console.print(table)
 
 
+def _print_root_revise_plan(project_slug: str, plan: RootRevisePlan) -> None:
+    table = Table(title="ROOT revise plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Hypothesis", plan.hypothesis_id)
+    table.add_row("Role", plan.role)
+    table.add_row("Model", plan.model)
+    table.add_row("Provider", plan.provider)
+    table.add_row("Provider kind", str(plan.provider_kind or "n/a"))
+    table.add_row("Resolved model", str(plan.resolved_model or "n/a"))
+    table.add_row("Reasoning effort", str(plan.reasoning_effort or "default"))
+    table.add_row("Timeout seconds", str(plan.timeout_seconds or "n/a"))
+    table.add_row("Sandbox", plan.sandbox)
+    table.add_row("Next revision", str(plan.next_revision))
+    table.add_row("Max revisions to create", str(plan.count))
+    console.print(table)
+
+
 def _print_root_materialization_plan(
     project_slug: str,
     plan: RootMaterializationPlan,
@@ -1598,6 +1681,8 @@ def _print_root_materialization_plan(
     table.add_row("Iterations to run", str(plan.iteration_count))
     table.add_row("Target file", target_text)
     table.add_row("Hypothesis IDs", id_text)
+    if plan.revisions:
+        table.add_row("Revisions", ", ".join(str(value) for value in plan.revisions[:8]))
     console.print(table)
 
 
@@ -1931,6 +2016,7 @@ def _print_root_materializations(
     title = "ROOT materializations" if created_count is None else f"ROOT materializations (created: {created_count})"
     table = Table(title=title, box=box.SIMPLE_HEAVY)
     table.add_column("ID", style="bold", no_wrap=True)
+    table.add_column("Rev", justify="right", no_wrap=True)
     table.add_column("S", justify="center", no_wrap=True, width=1)
     table.add_column("File", no_wrap=True)
     table.add_column("Model", no_wrap=True)
@@ -1951,11 +2037,55 @@ def _print_root_materializations(
         _print_failed_materialization_summary(rows)
 
 
+def _print_root_revision_status(project_dir: Path, *, hypothesis_id: str, mode: str) -> None:
+    config = load_project_config(project_dir)
+    profile_id = active_profile_id(config, mode)
+    rows = revision_status_rows(project_dir, hypothesis_id=hypothesis_id, mode=mode, profile_id=profile_id)
+    table = Table(title=f"ROOT revisions {str(hypothesis_id).zfill(6)}", box=box.SIMPLE_HEAVY)
+    table.add_column("Revision", justify="right", no_wrap=True)
+    table.add_column("S", justify="center", no_wrap=True)
+    table.add_column("Hypothesis file", no_wrap=True)
+    table.add_column("Mat file", no_wrap=True)
+    table.add_column("Mat state", no_wrap=True)
+    table.add_column("Score", justify="right", no_wrap=True)
+    table.add_column("Change", overflow="fold", min_width=24, ratio=1)
+    for row in rows:
+        materialization_file = str(row.get("materialization_file") or "none")
+        mat_state = _revision_materialization_state(row)
+        table.add_row(
+            str(row.get("revision") or ""),
+            _revision_status_icon(row),
+            Path(str(row.get("hypothesis_file") or "")).name,
+            materialization_file,
+            mat_state,
+            _format_score(row.get("metric")) or "-",
+            str(row.get("change_summary") or ("initial" if int(row.get("revision") or 0) == 1 else "")),
+        )
+    console.print(table)
+
+
+def _revision_status_icon(row: dict[str, object]) -> Text:
+    if bool(row.get("active")):
+        return Text("★", style="green")
+    if row.get("metric") is not None:
+        return Text("·", style="dim")
+    return Text("?", style="yellow")
+
+
+def _revision_materialization_state(row: dict[str, object]) -> str:
+    if not row.get("materialization_file"):
+        return "missing"
+    if bool(row.get("active")):
+        return "active"
+    return str(row.get("materialization_status") or "present")
+
+
 def _root_materialization_row(db_row: dict[str, object]) -> list[object]:
     active = bool(db_row.get("active"))
     status = str(db_row.get("status") or "")
     return [
         str(db_row.get("hypothesis_id") or ""),
+        str(db_row.get("hypothesis_revision") or ""),
         _materialization_status_icon(status, active=active),
         str(db_row.get("file") or ""),
         str(db_row.get("model") or ""),
@@ -2006,6 +2136,7 @@ def _print_root_run_summary(
     title = "ROOT run" if count is None else f"ROOT run (executed: {count})"
     table = Table(title=title, box=box.SIMPLE_HEAVY)
     table.add_column("ID", style="bold", no_wrap=True)
+    table.add_column("Rev", justify="right", no_wrap=True)
     table.add_column("S", justify="center", no_wrap=True)
     table.add_column("Created", no_wrap=True)
     table.add_column("Model", no_wrap=True)
@@ -2022,7 +2153,8 @@ def _print_root_run_summary(
     for db_row in root_run_rows(project_dir, mode=mode, profile_id=profile_id, hypothesis_id=target_id):
         row = _root_run_row(db_row, summary_limit=summary_limit)
         hypothesis_id_value = str(db_row.get("hypothesis_id") or "")
-        if hypothesis_id_value in executed_ids:
+        revision_key = f"{hypothesis_id_value}:{db_row.get('hypothesis_revision') or 1}"
+        if revision_key in executed_ids or hypothesis_id_value in executed_ids:
             new_rows.append(row)
         else:
             old_rows.append(row)
@@ -2567,6 +2699,7 @@ def _root_run_row(
         run_duration = ""
     return [
         str(db_row.get("hypothesis_id") or ""),
+        str(db_row.get("hypothesis_revision") or ""),
         status,
         _short_datetime(db_row.get("created_at")),
         str(db_row.get("model") or ""),

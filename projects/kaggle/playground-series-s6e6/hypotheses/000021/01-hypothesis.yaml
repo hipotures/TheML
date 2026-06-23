@@ -1,0 +1,31 @@
+title: AIDE broadband flux ratios
+group_name: aide_broadband_flux_ratios
+family: aide_photometry
+summary: 'Add the non-duplicate broadband transforms used by the top AIDE submissions:
+  safe band ratios, absolute color gaps, pseudo-flux encodings, selected curvature
+  terms, and low-order redshift transforms.
+
+  '
+depends_on: []
+strategy: Using only raw ugriz magnitudes and redshift, derive deterministic features
+  matching the extra photometric preprocessing present in the AIDE top-5 code while
+  avoiding duplication of the existing broadband_color_shape hypothesis where possible.
+  For adjacent and long-baseline band pairs such as u/g, g/r, r/i, i/z, u/i, u/r,
+  g/z, and r/z, create safe magnitude ratios with an epsilon denominator and absolute
+  color-gap magnitudes. Convert each magnitude into pseudo-flux style encodings using
+  both the linear log-flux scale -0.4*ln(10)*mag and a clipped exp(-0.4*ln(10)*mag)
+  transform. Add AIDE curvature terms u - 2*r + i and g - 2*i + z, plus clipped nonnegative
+  redshift, log1p redshift, redshift squared, and redshift cubed. Do not use target
+  labels, row labels, model predictions, or any fitted model.
+expected_signal: Magnitude ratios and pseudo-flux transforms can expose scale and
+  nonlinear brightness relationships that tree ensembles may not recover cleanly from
+  raw magnitudes alone, while redshift powers and curvature terms provide compact
+  interactions that helped the AIDE top solutions.
+risk: Some transforms are algebraically close to raw magnitudes and existing color
+  features, so they may add redundancy or overemphasize noisy extreme magnitudes if
+  clipping and safe denominators are not handled carefully.
+schema_version: 1
+hypothesis_id: '000021'
+enabled: true
+created_at: '2026-06-22T00:00:00+02:00'
+revision: 1

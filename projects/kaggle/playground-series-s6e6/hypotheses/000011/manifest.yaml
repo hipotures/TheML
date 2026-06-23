@@ -1,12 +1,15 @@
+hypothesis:
+  id: '000011'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: 32fa31194adb04da67bb5ecab2eeaa166b78b1bb8c454217b4a0c00a138f81a1
-    created_at: '2026-06-22T14:04:08'
-feature_group:
-  logical_name: lrg_target_cut_margins
-  version_id: lrg_target_cut_margins@000011
-  source_hypothesis_id: '000011'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 32fa31194adb04da67bb5ecab2eeaa166b78b1bb8c454217b4a0c00a138f81a1
+      created_at: '2026-06-22T14:04:08'

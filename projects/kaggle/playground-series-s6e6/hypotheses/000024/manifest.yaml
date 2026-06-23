@@ -1,23 +1,19 @@
-schema_version: 1
-hypothesis_id: '000024'
-slug: aide_catalog_rank_frequency_context
+hypothesis:
+  id: '000024'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-002.py
-    sha256: 002343048ce6d2ed3cfac8a0d008fdb81144cbce583a560a4b58dfbe6e8a565a
-    created_at: '2026-06-22T21:40:21'
-origin:
-  run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
-  source_artifacts:
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py
-feature_group:
-  logical_name: aide_catalog_rank_frequency_context
-  version_id: aide_catalog_rank_frequency_context@000024
-  source_hypothesis_id: '000024'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-002.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: baa2cca7daec5a1bc8b463a0c76e60f7fa17bf2afb803693b45e12a96c8646df
+      created_at: '2026-06-22T21:40:21'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: 002343048ce6d2ed3cfac8a0d008fdb81144cbce583a560a4b58dfbe6e8a565a
+      created_at: '2026-06-22T21:40:21'

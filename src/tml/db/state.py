@@ -7,6 +7,12 @@ from typing import Any
 
 from tml.utils.hashing import sha256_file, sha256_text
 from tml.utils.yaml_io import read_yaml
+from tml.hypotheses.revisions import (
+    latest_revision_record,
+    load_revision,
+    materialization_revision,
+    migrate_hypothesis_dir,
+)
 
 from .connect import connect
 from .migrate import migrate
@@ -42,10 +48,12 @@ def upsert_project(project_dir: Path) -> None:
 
 def upsert_hypothesis(project_dir: Path, hdir: Path) -> None:
     db_path = ensure_project_db(project_dir)
-    payload = read_yaml(hdir / "hypothesis.yaml")
+    migrate_hypothesis_dir(project_dir, hdir)
+    latest = latest_revision_record(hdir)
+    payload = latest.payload
     hid = str(payload.get("hypothesis_id") or hdir.name)
-    summary = _run_summary(hdir / "01-hypothesis.request.json", hdir / "01-hypothesis.response.json")
-    web_search = _web_search_summary(hdir / "01-hypothesis.request.json", hdir / "01-hypothesis.web_search.md")
+    summary = _run_summary(hdir / f"{latest.prefix}.request.json", hdir / f"{latest.prefix}.response.json")
+    web_search = _web_search_summary(hdir / f"{latest.prefix}.request.json", hdir / f"{latest.prefix}.web_search.md")
     with connect(db_path) as conn:
         conn.execute(
             """
@@ -80,7 +88,39 @@ def upsert_hypothesis(project_dir: Path, hdir: Path) -> None:
                 1 if web_search["enabled"] else 0,
                 1 if web_search["has_results"] else 0,
                 1 if payload.get("enabled", True) else 0,
-                _project_path(project_dir, hdir / "hypothesis.yaml"),
+                _project_path(project_dir, latest.path),
+            ),
+        )
+        conn.commit()
+    upsert_hypothesis_revision(project_dir, hdir, latest.revision)
+
+
+def upsert_hypothesis_revision(project_dir: Path, hdir: Path, revision: int) -> None:
+    db_path = ensure_project_db(project_dir)
+    record = load_revision(hdir, revision)
+    payload = record.payload
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO hypothesis_revisions(
+              hypothesis_id, revision, path, prefix, created_at, summary, change_summary
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(hypothesis_id, revision) DO UPDATE SET
+              path=excluded.path,
+              prefix=excluded.prefix,
+              created_at=excluded.created_at,
+              summary=excluded.summary,
+              change_summary=excluded.change_summary
+            """,
+            (
+                hdir.name,
+                revision,
+                _project_path(project_dir, record.path),
+                record.prefix,
+                payload.get("created_at"),
+                payload.get("summary"),
+                payload.get("change_summary"),
             ),
         )
         conn.commit()
@@ -97,9 +137,11 @@ def upsert_materialization(
     source_node_id: str | None = None,
     fixed_from_file: str | None = None,
     fixed_from_code_hash: str | None = None,
+    hypothesis_revision: int | None = None,
 ) -> None:
     db_path = ensure_project_db(project_dir)
     hid = hdir.name
+    revision = int(hypothesis_revision or materialization_revision(hdir, mode, code_path.name))
     summary = _run_summary(
         code_path.parent / f"{code_path.stem}.request.json",
         code_path.parent / f"{code_path.stem}.response.json",
@@ -126,13 +168,14 @@ def upsert_materialization(
         conn.execute(
             """
             INSERT INTO materializations(
-              hypothesis_id, mode, file, code_hash, status, active, source_node_id,
+              hypothesis_id, mode, file, code_hash, hypothesis_revision, status, active, source_node_id,
               fixed_from_file, fixed_from_code_hash, model, reasoning_tokens,
               total_tokens, generation_seconds
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(hypothesis_id, mode, file) DO UPDATE SET
               code_hash=excluded.code_hash,
+              hypothesis_revision=excluded.hypothesis_revision,
               status=excluded.status,
               active=excluded.active,
               source_node_id=excluded.source_node_id,
@@ -148,6 +191,7 @@ def upsert_materialization(
                 mode,
                 code_path.name,
                 sha256_file(code_path),
+                revision,
                 status,
                 1 if active else 0,
                 source_node_id,
@@ -181,13 +225,14 @@ def upsert_failed_materialization(
         conn.execute(
             """
             INSERT INTO materializations(
-              hypothesis_id, mode, file, code_hash, status, active, source_node_id,
+              hypothesis_id, mode, file, code_hash, hypothesis_revision, status, active, source_node_id,
               fixed_from_file, fixed_from_code_hash, model, reasoning_tokens,
               total_tokens, generation_seconds
             )
-            VALUES (?, ?, ?, ?, 'failed', 0, NULL, NULL, NULL, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, 'failed', 0, NULL, NULL, NULL, ?, ?, ?, ?)
             ON CONFLICT(hypothesis_id, mode, file) DO UPDATE SET
               code_hash=excluded.code_hash,
+              hypothesis_revision=excluded.hypothesis_revision,
               status='failed',
               active=0,
               source_node_id=NULL,
@@ -203,6 +248,7 @@ def upsert_failed_materialization(
                 mode,
                 file_name,
                 sha256_text(code_text),
+                materialization_revision(hdir, mode, file_name),
                 summary.get("model"),
                 summary.get("reasoning_tokens"),
                 summary.get("total_tokens"),
@@ -524,9 +570,12 @@ def root_materialization_by_code_hash(
     with connect(db_path) as conn:
         row = conn.execute(
             """
-            SELECT h.hypothesis_id, h.path AS hypothesis_path, m.mode, m.file, m.code_hash
+            SELECT h.hypothesis_id, r.path AS hypothesis_path, m.mode, m.file, m.code_hash
             FROM hypotheses h
             JOIN materializations m ON m.hypothesis_id=h.hypothesis_id
+            LEFT JOIN hypothesis_revisions r
+              ON r.hypothesis_id=m.hypothesis_id
+             AND r.revision=m.hypothesis_revision
             WHERE h.hypothesis_id=? AND m.mode=? AND m.code_hash=?
             ORDER BY m.active DESC, m.file
             LIMIT 1
@@ -655,13 +704,18 @@ def upsert_node_start(project_dir: Path, node_dir: Path, payload: dict[str, Any]
     with connect(db_path) as conn:
         conn.execute(
             """
-            INSERT INTO nodes(node_id, run_id, step, kind, hypothesis_id, branch_id, mode, profile_id, status, created_at, path)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO nodes(
+              node_id, run_id, step, kind, hypothesis_id, hypothesis_revision,
+              materialization_file, branch_id, mode, profile_id, status, created_at, path
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(node_id) DO UPDATE SET
               run_id=excluded.run_id,
               step=excluded.step,
               kind=excluded.kind,
               hypothesis_id=excluded.hypothesis_id,
+              hypothesis_revision=excluded.hypothesis_revision,
+              materialization_file=excluded.materialization_file,
               branch_id=excluded.branch_id,
               mode=excluded.mode,
               profile_id=excluded.profile_id,
@@ -675,6 +729,8 @@ def upsert_node_start(project_dir: Path, node_dir: Path, payload: dict[str, Any]
                 payload.get("step"),
                 payload.get("kind") or "root",
                 payload.get("hypothesis_id"),
+                payload.get("hypothesis_revision"),
+                payload.get("materialization_file"),
                 payload.get("branch_id"),
                 payload.get("mode"),
                 payload.get("profile_id"),
@@ -713,11 +769,16 @@ def upsert_node_result(
         )
         conn.execute(
             """
-            INSERT INTO evaluations(node_id, kind, hypothesis_id, branch_id, mode, profile_id, code_hash, metric, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO evaluations(
+              node_id, kind, hypothesis_id, hypothesis_revision, materialization_file,
+              branch_id, mode, profile_id, code_hash, metric, status
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(node_id) DO UPDATE SET
               kind=excluded.kind,
               hypothesis_id=excluded.hypothesis_id,
+              hypothesis_revision=excluded.hypothesis_revision,
+              materialization_file=excluded.materialization_file,
               branch_id=excluded.branch_id,
               mode=excluded.mode,
               profile_id=excluded.profile_id,
@@ -729,6 +790,8 @@ def upsert_node_result(
                 node_dir.name,
                 start.get("kind") or "root",
                 start.get("hypothesis_id"),
+                start.get("hypothesis_revision") or manifest.get("hypothesis_revision"),
+                start.get("materialization_file") or manifest.get("materialization_file"),
                 start.get("branch_id"),
                 start.get("mode"),
                 start.get("profile_id"),
@@ -847,19 +910,25 @@ def materialization_candidates(project_dir: Path, hypothesis_id: str | None = No
     return [dict(row) for row in rows]
 
 
-def run_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = None) -> list[dict[str, Any]]:
+def run_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = None, revision: int | None = None) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
     sql = """
-        SELECT h.hypothesis_id, h.path, m.file, m.code_hash
+        SELECT h.hypothesis_id, h.path, m.file, m.code_hash, m.hypothesis_revision
         FROM hypotheses h
         JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
-          AND m.active=1
+          AND m.status NOT IN ('failed', 'bug', 'superseded')
     """
     params: list[Any] = [mode]
+    conditions: list[str] = []
     if hypothesis_id:
-        sql += " WHERE h.hypothesis_id=?"
+        conditions.append("h.hypothesis_id=?")
         params.append(hypothesis_id.zfill(6))
-    sql += " ORDER BY h.hypothesis_id, m.active DESC, m.file"
+    if revision is not None:
+        conditions.append("m.hypothesis_revision=?")
+        params.append(int(revision))
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += " ORDER BY h.hypothesis_id, m.hypothesis_revision, m.file"
     with connect(db_path) as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
@@ -1372,7 +1441,7 @@ def materialization_rows(project_dir: Path, *, mode: str, hypothesis_id: str | N
     db_path = ensure_project_db(project_dir)
     sql = """
         SELECT h.hypothesis_id, h.summary, m.mode, m.file, m.status, m.active,
-               m.model, m.reasoning_tokens, m.total_tokens, m.generation_seconds
+               m.hypothesis_revision, m.model, m.reasoning_tokens, m.total_tokens, m.generation_seconds
         FROM materializations m
         JOIN hypotheses h ON h.hypothesis_id=m.hypothesis_id
         WHERE m.mode=?
@@ -1399,22 +1468,63 @@ def root_run_rows(
         SELECT
           h.hypothesis_id, h.summary, h.created_at, h.model, h.reasoning_tokens,
           h.total_tokens, h.generation_seconds, h.enabled,
-          m.code_hash, m.status AS materialization_status,
+          m.file AS materialization_file, m.hypothesis_revision, m.code_hash, m.status AS materialization_status,
           n.node_id, n.status AS node_status, n.run_seconds,
           e.metric
         FROM hypotheses h
-        LEFT JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=? AND m.active=1
+        LEFT JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
         LEFT JOIN evaluations e ON e.hypothesis_id=h.hypothesis_id
           AND e.mode=? AND e.profile_id=? AND e.code_hash=m.code_hash
+          AND COALESCE(e.materialization_file, m.file)=m.file
         LEFT JOIN nodes n ON n.node_id=e.node_id
     """
     params: list[Any] = [mode, mode, profile_id]
     if hypothesis_id:
         sql += " WHERE h.hypothesis_id=?"
         params.append(hypothesis_id.zfill(6))
-    sql += " ORDER BY h.hypothesis_id"
+    sql += " ORDER BY h.hypothesis_id, m.hypothesis_revision, m.file"
     with connect(db_path) as conn:
         rows = conn.execute(sql, params).fetchall()
+    return [dict(row) for row in rows]
+
+
+def revision_status_rows(
+    project_dir: Path,
+    *,
+    hypothesis_id: str,
+    mode: str,
+    profile_id: str,
+) -> list[dict[str, Any]]:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT
+              r.hypothesis_id,
+              r.revision,
+              r.path AS hypothesis_file,
+              r.change_summary,
+              m.file AS materialization_file,
+              m.active,
+              m.status AS materialization_status,
+              e.metric,
+              e.status AS evaluation_status
+            FROM hypothesis_revisions r
+            LEFT JOIN materializations m
+              ON m.hypothesis_id=r.hypothesis_id
+             AND m.hypothesis_revision=r.revision
+             AND m.mode=?
+            LEFT JOIN evaluations e
+              ON e.hypothesis_id=r.hypothesis_id
+             AND e.hypothesis_revision=r.revision
+             AND e.mode=?
+             AND e.profile_id=?
+             AND COALESCE(e.materialization_file, m.file)=m.file
+            WHERE r.hypothesis_id=?
+            ORDER BY r.revision, m.file
+            """,
+            (mode, mode, profile_id, hypothesis_id.zfill(6)),
+        ).fetchall()
     return [dict(row) for row in rows]
 
 

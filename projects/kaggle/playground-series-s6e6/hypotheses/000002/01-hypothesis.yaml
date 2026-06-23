@@ -1,0 +1,27 @@
+title: Redshift-Regime Catalog Consistency
+group_name: redshift_regime_catalog_consistency
+family: astrophysical_consistency
+summary: Create redshift-regime features and cross them with the provided catalog
+  tags to capture whether an object looks locally stellar, galactic, or quasar-like.
+depends_on: []
+strategy: 'Use only `redshift`, `spectral_type`, and `galaxy_population`. First compute
+  `abs_redshift = abs(redshift)` and `signed_log_redshift = sign(redshift) * log1p(abs_redshift)`.
+  Add `negative_redshift_flag = 1[redshift < 0]`. Bin `abs_redshift` into four deterministic
+  astrophysical regimes: `near_zero` for abs_redshift < 0.003, `low` for 0.003 <=
+  abs_redshift < 0.08, `mid` for 0.08 <= abs_redshift < 0.8, and `high` for abs_redshift
+  >= 0.8. Output the regime itself as a categorical feature, plus two crossed categorical
+  features: `spectral_type x redshift_regime` and `galaxy_population x redshift_regime`.
+  Edge handling: values exactly on a threshold go to the upper bin except 0.003 belongs
+  to `low`; keep all rows, with no clipping beyond the `log1p` transform.'
+expected_signal: Balanced accuracy may improve because `redshift` is a strong class
+  separator, while crossing it with `spectral_type` and `galaxy_population` helps
+  distinguish ambiguous low-redshift galaxies from stars and high-redshift QSOs from
+  ordinary blue objects.
+risk: The thresholds are survey-specific and may hard-code class structure too aggressively,
+  so small calibration shifts in redshift or different class priors could make the
+  bins brittle and partly redundant with any raw redshift feature.
+schema_version: 1
+hypothesis_id: '000002'
+enabled: true
+created_at: '2026-06-22T00:20:13'
+revision: 1
