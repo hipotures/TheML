@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from tml.core.config import active_mode, active_profile_id, load_project_config
+from tml.core.config import active_mode, active_profile_id, load_project_config, repo_root_for_project
 from tml.core.ids import node_id
 from tml.core.profiles import profile_hash
 from tml.db.state import (
@@ -149,6 +149,7 @@ def run_missing_branches(
             node_dir / "02-code.py",
             node_dir / "work",
             timeout_seconds=_execution_timeout_seconds(profile_overrides),
+            cwd=repo_root_for_project(project_dir) if mode == "autogluon" else None,
         )
         write_attempt_result(node_dir, result)
         finished_at = datetime.now().isoformat(timespec="seconds")

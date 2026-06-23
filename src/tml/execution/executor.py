@@ -66,8 +66,15 @@ def run_legacy_group_materialization(
     )
 
 
-def run_python_script(script: Path, work_dir: Path, timeout_seconds: int = 900) -> ExecutionResult:
+def run_python_script(
+    script: Path,
+    work_dir: Path,
+    timeout_seconds: int = 900,
+    *,
+    cwd: Path | None = None,
+) -> ExecutionResult:
     work_dir.mkdir(parents=True, exist_ok=True)
+    process_cwd = cwd or work_dir
     started_at = time.monotonic()
     stdout_parts: list[str] = []
     stderr_parts: list[str] = []
@@ -81,13 +88,13 @@ def run_python_script(script: Path, work_dir: Path, timeout_seconds: int = 900) 
             output_queue.put((name, None))
 
     print(
-        f"TML_EXEC|event=start|script={script}|work_dir={work_dir}|timeout_s={timeout_seconds}",
+        f"TML_EXEC|event=start|script={script}|work_dir={work_dir}|cwd={process_cwd}|timeout_s={timeout_seconds}",
         flush=True,
     )
     try:
         process = subprocess.Popen(
             [sys.executable, str(script)],
-            cwd=work_dir,
+            cwd=process_cwd,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

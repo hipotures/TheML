@@ -170,6 +170,7 @@ def rerun_submission(
         node_dir / "02-code.py",
         node_dir / "work",
         timeout_seconds=plan.execution_timeout_seconds,
+        cwd=repo_root_for_project(project_dir) if plan.mode == "autogluon" else None,
     )
     write_attempt_result(node_dir, result)
     finished_at = datetime.now().isoformat(timespec="seconds")
