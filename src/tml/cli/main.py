@@ -1541,7 +1541,6 @@ def _print_branch_algorithm_summary(project_slug: str, project_dir: Path, result
     item_table.add_column("Source", no_wrap=True)
     item_table.add_column("Parent score", justify="right")
     item_table.add_column("Source score", justify="right")
-    item_table.add_column("Children", justify="right")
     item_table.add_column("Hash", no_wrap=True)
     item_table.add_column("File", overflow="fold")
     for item in result.items:
@@ -1551,7 +1550,6 @@ def _print_branch_algorithm_summary(project_slug: str, project_dir: Path, result
             item.source_ref,
             _format_score(item.parent_score),
             _format_score(item.source_score),
-            str(item.parent_child_count),
             item.composition_hash[:12],
             "" if item.materialization_path is None else _repo_relative(project_dir, item.materialization_path),
         )

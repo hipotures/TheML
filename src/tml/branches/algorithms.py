@@ -33,7 +33,6 @@ class BranchAlgorithmItem:
     source_ref: str
     parent_score: float | None
     source_score: float | None
-    parent_child_count: int
     composition_hash: str
     materialization_path: Path | None
 
@@ -136,7 +135,6 @@ def branch_add_algorithmic(
                     source_ref=str(candidate["source_ref"]),
                     parent_score=_optional_float(candidate.get("parent_score")),
                     source_score=_optional_float(candidate.get("source_score")),
-                    parent_child_count=parent_child_count,
                     composition_hash=composition.composition_hash,
                     materialization_path=materialization_path,
                 )
