@@ -381,8 +381,14 @@ def _component_records(project_dir: Path, *, parent: BranchSource, source: Branc
         source_components = [{**component, "role": "source"} for component in components]
     else:
         source_components = [_component_record(source, role="source")]
+    by_logical_component: dict[tuple[str, str, str], dict[str, Any]] = {}
     unique: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
     for component in [*parent_components, *source_components]:
+        logical_key = _component_logical_key(component)
+        previous = by_logical_component.get(logical_key)
+        if previous is not None and _component_version_key(previous) != _component_version_key(component):
+            continue
+        by_logical_component[logical_key] = component
         key = (
             str(component["source_type"]),
             str(component["source_id"]),
@@ -404,6 +410,21 @@ def _component_record(source: BranchSource, *, role: str) -> dict[str, Any]:
         "code_hash": source.code_hash,
         "path": source.path,
     }
+
+
+def _component_logical_key(component: dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        str(component.get("source_type") or ""),
+        str(component.get("source_id") or ""),
+        str(component.get("mode") or ""),
+    )
+
+
+def _component_version_key(component: dict[str, Any]) -> tuple[str, str]:
+    return (
+        str(component.get("file") or ""),
+        str(component.get("code_hash") or ""),
+    )
 
 
 def _source_manifest(source: BranchSource) -> dict[str, str]:

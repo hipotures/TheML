@@ -27,7 +27,7 @@ from tml.features.validation import validate_group_code_source
 from tml.hypotheses.run import _execution_timeout_seconds
 from tml.hypotheses.wrapper_source import build_wrapped_materialization_source
 from tml.utils.atomic import atomic_write_text
-from tml.utils.yaml_io import write_yaml
+from tml.utils.yaml_io import read_yaml, write_yaml
 
 
 @dataclass(frozen=True)
@@ -184,6 +184,8 @@ def _run_branch_record(
 ) -> BranchRunItem:
     bid = str(record["branch_id"])
     branch_dir = project_dir / str(record["path"]).rsplit("/", 1)[0]
+    branch_payload = read_yaml(branch_dir / "branch.yaml")
+    component_version_notices = _branch_component_version_notices(project_dir, branch_payload)
     materialization = branch_dir / "materializations" / str(record["file"])
     code_hash = str(record["code_hash"])
     nid = node_id(next_step)
@@ -200,9 +202,22 @@ def _run_branch_record(
         "profile_id": profile_id,
         "created_at": datetime.now().isoformat(timespec="seconds"),
     }
+    if component_version_notices:
+        start_payload["component_version_notices"] = component_version_notices
     write_yaml(node_dir / "node.start.yaml", start_payload)
     upsert_node_start(project_dir, node_dir, start_payload)
     shutil.copy2(branch_dir / "branch.yaml", node_dir / "01-branch.yaml")
+    if component_version_notices:
+        write_yaml(
+            node_dir / "component-version-notices.yaml",
+            {
+                "schema_version": 1,
+                "node_id": nid,
+                "branch_id": bid,
+                "mode": mode,
+                "notices": component_version_notices,
+            },
+        )
     group_code = materialization.read_text(encoding="utf-8")
     validate_group_code_source(group_code)
     atomic_write_text(
@@ -275,6 +290,83 @@ def _run_branch_record(
         node_id=nid,
         run_seconds=int(run_seconds_value) if isinstance(run_seconds_value, int) else None,
     )
+
+
+def _branch_component_version_notices(project_dir: Path, branch_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    components = branch_payload.get("components")
+    if not isinstance(components, list):
+        return []
+
+    notices: list[dict[str, Any]] = []
+    frozen_versions: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for component in components:
+        if not isinstance(component, dict):
+            continue
+        if str(component.get("source_type") or "") != "hypothesis":
+            continue
+        source_id = str(component.get("source_id") or "")
+        mode = str(component.get("mode") or "")
+        if not source_id or not mode:
+            continue
+
+        normalized_source_id = source_id.zfill(6)
+        frozen_versions.setdefault((normalized_source_id, mode), []).append(component)
+        manifest_path = project_dir / "hypotheses" / normalized_source_id / "manifest.yaml"
+        if not manifest_path.exists():
+            continue
+
+        manifest = read_yaml(manifest_path)
+        mats = manifest.get("materializations") if isinstance(manifest.get("materializations"), dict) else {}
+        mat = mats.get(mode) if isinstance(mats.get(mode), dict) else {}
+        active_file = str(mat.get("active") or "")
+        active_hash = str(mat.get("sha256") or "")
+        frozen_file = str(component.get("file") or "")
+        frozen_hash = str(component.get("code_hash") or "")
+        if active_file and (active_file != frozen_file or (active_hash and active_hash != frozen_hash)):
+            notices.append(
+                {
+                    "kind": "new_active_materialization_available",
+                    "source_type": "hypothesis",
+                    "source_id": normalized_source_id,
+                    "mode": mode,
+                    "role": component.get("role"),
+                    "frozen_file": frozen_file,
+                    "frozen_code_hash": frozen_hash,
+                    "active_file": active_file,
+                    "active_code_hash": active_hash,
+                    "message": (
+                        "This branch node uses the frozen component version; "
+                        "the hypothesis manifest has a newer active materialization."
+                    ),
+                }
+            )
+
+    for (source_id, mode), version_components in frozen_versions.items():
+        version_keys = {
+            (str(component.get("file") or ""), str(component.get("code_hash") or ""))
+            for component in version_components
+        }
+        if len(version_keys) <= 1:
+            continue
+        notices.append(
+            {
+                "kind": "multiple_frozen_materializations_in_branch",
+                "source_type": "hypothesis",
+                "source_id": source_id,
+                "mode": mode,
+                "versions": [
+                    {
+                        "role": component.get("role"),
+                        "file": component.get("file"),
+                        "code_hash": component.get("code_hash"),
+                    }
+                    for component in version_components
+                ],
+                "message": "This branch already contains multiple frozen materializations for the same hypothesis.",
+            }
+        )
+
+    return notices
 
 
 def _write_success_markers(node_dir: Path, node_id_value: str, branch_id: str, mode: str, profile_id: str, code_hash: str, result) -> None:
