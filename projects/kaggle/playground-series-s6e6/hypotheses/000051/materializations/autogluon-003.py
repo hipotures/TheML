@@ -1,11 +1,6 @@
 import numpy as np
 import pandas as pd
 
-try:
-    from sklearn.linear_model import HuberRegressor
-except Exception:
-    HuberRegressor = None
-
 _EPS = 1e-9
 _BANDS = ("u", "g", "r", "i", "z")
 _COLOR_TERMS = {
@@ -110,6 +105,11 @@ def _fit_coefficients(z, color, y, reference, min_points):
     X = _poly_design(z, color)
     coef = None
 
+    try:
+        from sklearn.linear_model import HuberRegressor
+    except Exception:
+        HuberRegressor = None
+
     if HuberRegressor is not None:
         try:
             model = HuberRegressor(
@@ -182,7 +182,19 @@ def _bin_codes(values, edges):
     values = np.asarray(values, dtype=float)
     if edges is None or len(edges) < 2:
         return np.full(values.shape, -1, dtype=np.int64)
-    return pd.cut(values, bins=edges, include_lowest=True, labels=False).to_numpy(dtype=np.int64)
+    raw = pd.cut(values, bins=edges, include_lowest=True, labels=False)
+
+    if hasattr(raw, "codes"):
+        codes = np.asarray(raw.codes)
+    elif hasattr(raw, "to_numpy"):
+        codes = raw.to_numpy()
+    else:
+        codes = np.asarray(raw)
+
+    codes = np.asarray(codes)
+    if np.issubdtype(codes.dtype, np.floating):
+        return np.where(np.isfinite(codes), codes.astype(np.int64), -1)
+    return codes.astype(np.int64)
 
 
 def _compute_regime_local_residuals(values, redshift, color, regime):

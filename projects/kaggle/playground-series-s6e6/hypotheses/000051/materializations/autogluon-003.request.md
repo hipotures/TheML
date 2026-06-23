@@ -1,10 +1,145 @@
+Fix one failed hypothesis materialization.
+
+Return a corrected version of the same feature-group module. Do not invent a
+new hypothesis or change the feature family. Keep the fix narrow: address the
+observed failure while preserving the intended preprocessing behavior.
+
+You are repairing Python preprocessing code for one stored hypothesis. The
+existing file is a feature-group module imported by a fixed runtime wrapper.
+Generate only the corrected module.
+
+# Data Overview
+
+-> test.csv has 247435 rows and 11 columns.
+Here is some information about the columns:
+id (int64) has range: 577347.00 - 824781.00, 0 nan values
+alpha (float64) has range: 0.01 - 360.00, 0 nan values
+delta (float64) has range: -17.96 - 79.17, 0 nan values
+u (float64) has range: 13.90 - 27.84, 0 nan values
+g (float64) has range: 13.37 - 27.17, 0 nan values
+r (float64) has range: 10.39 - 25.29, 0 nan values
+i (float64) has range: 10.03 - 24.57, 0 nan values
+z (float64) has range: 10.63 - 25.70, 0 nan values
+redshift (float64) has range: -0.01 - 7.01, 0 nan values
+spectral_type (object) has 4 unique values: ['G/K', 'M', 'O/B', 'A/F'], 0 nan values
+galaxy_population (object) has 2 unique values: ['Red_Sequence', 'Blue_Cloud'], 0 nan values
+
+-> train.csv has 577347 rows and 12 columns.
+Here is some information about the columns:
+id (int64) has range: 0.00 - 577346.00, 0 nan values
+alpha (float64) has range: 0.01 - 360.00, 0 nan values
+delta (float64) has range: -17.97 - 79.16, 0 nan values
+u (float64) has range: -0.14 - 28.25, 0 nan values
+g (float64) has range: 13.54 - 27.62, 0 nan values
+r (float64) has range: 12.58 - 25.25, 0 nan values
+i (float64) has range: 11.96 - 27.91, 0 nan values
+z (float64) has range: 11.68 - 26.83, 0 nan values
+redshift (float64) has range: -0.01 - 7.01, 0 nan values
+spectral_type (object) has 4 unique values: ['M', 'O/B', 'G/K', 'A/F'], 0 nan values
+galaxy_population (object) has 2 unique values: ['Red_Sequence', 'Blue_Cloud'], 0 nan values
+
+# External Data Description for star_classification.csv
+
+Original SDSS17 Stellar Classification Dataset.
+
+This is the original real-world dataset that inspired the synthetic Playground
+Series S6E6 competition data. It can be used as raw auxiliary data, but it is
+not automatically merged with train.csv or test.csv.
+
+Common columns with the competition data:
+alpha, delta, u, g, r, i, z, redshift, class.
+
+Columns present in this original dataset but not in the competition files:
+obj_ID, run_ID, rerun_ID, cam_col, field_ID, spec_obj_ID, plate, MJD, fiber_ID.
+
+Competition columns not present in this original dataset:
+id, spectral_type, galaxy_population.
+
+Generated code should decide whether and how to use this file. Any merge,
+filtering, cleaning of sentinel magnitudes, or column mapping must be done
+explicitly by the generated solution code.
+
+# Task
+
+## Goal
+Predict the stellar class for each test-set object.
+
+## Evaluation
+Submissions are evaluated using balanced accuracy between predicted class labels and the true class. Submission file must contain `id,class` with one label per test row, where `class` is one of GALAXY, STAR, or QSO.
+
+## Data description
+`train.csv` contains 577347 rows with 10 feature columns plus `id`, `galaxy_population`, `spectral_type`, and the target `class`. `test.csv` contains the same predictors without the target across 247435 rows. `sample_submission.csv` shows the required submission columns `id` and `class`. The target is a 3-class stellar classification problem with labels GALAXY, QSO, and STAR.
+
+# Project Target
+- ID column: id
+- Target column: class
+- Problem type: multiclass
+- Evaluation metric: balanced_accuracy
+
+# Failed Materialization
+
+- Mode: autogluon
+- Hypothesis ID: 000051
+- Source file: autogluon-002.py
+- Failed node: 20260623T165333-5670e3e5-222
+- Run: 20260622T034843-eca160d1
+
+# Execution Error
+
+```text
+failed.yaml error:
+Process exited with 1
+
+stderr.log:
+Traceback (most recent call last):
+  File "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/runs/20260622T034843-eca160d1/artifacts/20260623T165333-5670e3e5-222/02-code.py", line 943, in main
+    transformed = run_feature_groups(
+                  ^^^^^^^^^^^^^^^^^^^
+  File "/home/xai/DEV/TheML/src/tml/features/groups.py", line 59, in run_feature_groups
+    block = group["fn"](raw.copy(), {key: value.copy() for key, value in deps.items()}, aux.copy())
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/runs/20260622T034843-eca160d1/artifacts/20260623T165333-5670e3e5-222/02-code.py", line 420, in add_k_correction_residual_manifold
+    resid, zscore, low_support = _compute_regime_local_residuals(kcorr, z_raw, c, regime)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/runs/20260622T034843-eca160d1/artifacts/20260623T165333-5670e3e5-222/02-code.py", line 224, in _compute_regime_local_residuals
+    z_code = _bin_codes(z, z_edges)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/runs/20260622T034843-eca160d1/artifacts/20260623T165333-5670e3e5-222/02-code.py", line 188, in _bin_codes
+    return pd.cut(values, bins=edges, include_lowest=True, labels=False).to_numpy(dtype=np.int64)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'numpy.ndarray' object has no attribute 'to_numpy'
+Traceback (most recent call last):
+  File "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/runs/20260622T034843-eca160d1/artifacts/20260623T165333-5670e3e5-222/02-code.py", line 1067, in <module>
+    main()
+  File "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/runs/20260622T034843-eca160d1/artifacts/20260623T165333-5670e3e5-222/02-code.py", line 943, in main
+    transformed = run_feature_groups(
+                  ^^^^^^^^^^^^^^^^^^^
+  File "/home/xai/DEV/TheML/src/tml/features/groups.py", line 59, in run_feature_groups
+    block = group["fn"](raw.copy(), {key: value.copy() for key, value in deps.items()}, aux.copy())
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/runs/20260622T034843-eca160d1/artifacts/20260623T165333-5670e3e5-222/02-code.py", line 420, in add_k_correction_residual_manifold
+    resid, zscore, low_support = _compute_regime_local_residuals(kcorr, z_raw, c, regime)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/runs/20260622T034843-eca160d1/artifacts/20260623T165333-5670e3e5-222/02-code.py", line 224, in _compute_regime_local_residuals
+    z_code = _bin_codes(z, z_edges)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/runs/20260622T034843-eca160d1/artifacts/20260623T165333-5670e3e5-222/02-code.py", line 188, in _bin_codes
+    return pd.cut(values, bins=edges, include_lowest=True, labels=False).to_numpy(dtype=np.int64)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'numpy.ndarray' object has no attribute 'to_numpy'
+
+stdout.log:
+AutoGluon materialization: loaded aux file /home/xai/DEV/aideml/workspaces/2-liberal-celadon-panther/input/star_classification.csv rows=100000 cols=18 passed_to_groups=True
+AutoGluon materialization: starting feature groups
+TheML feature group: start name=k_correction_residual_manifold
+TheML feature group: failed name=k_correction_residual_manifold elapsed_s=50.721 rows=824782 cols=0
+```
+
+# Previous Code
+
+```python
 import numpy as np
 import pandas as pd
-
-try:
-    from sklearn.linear_model import HuberRegressor
-except Exception:
-    HuberRegressor = None
 
 _EPS = 1e-9
 _BANDS = ("u", "g", "r", "i", "z")
@@ -22,7 +157,6 @@ _REGIME_RESID_SUPPORT = 24
 _Z_BINS = 6
 _C_BINS = 8
 
-
 def _as_float_frame(df, cols):
     if not isinstance(df, pd.DataFrame):
         return pd.DataFrame(columns=cols)
@@ -32,7 +166,6 @@ def _as_float_frame(df, cols):
             return pd.DataFrame(columns=cols)
         data[col] = pd.to_numeric(df[col], errors="coerce")
     return pd.DataFrame(data, index=df.index)
-
 
 def _assign_regime(redshift):
     z = np.asarray(redshift, dtype=float)
@@ -46,7 +179,6 @@ def _assign_regime(redshift):
         ).astype(np.int8)
     return regime
 
-
 def _compute_colors(frame):
     colors = {}
     for band, (left, right) in _COLOR_TERMS.items():
@@ -54,7 +186,6 @@ def _compute_colors(frame):
             return {}
         colors[band] = (frame[left] - frame[right]).to_numpy(dtype=float)
     return colors
-
 
 def _poly_design(z, color):
     z = np.asarray(z, dtype=float)
@@ -71,10 +202,8 @@ def _poly_design(z, color):
         )
     )
 
-
 def _poly_predict(coeffs, z, color):
     return _poly_design(z, color) @ np.asarray(coeffs, dtype=float)
-
 
 def _mad(values):
     arr = np.asarray(values, dtype=float)
@@ -83,7 +212,6 @@ def _mad(values):
         return np.nan
     med = np.nanmedian(arr)
     return float(np.nanmedian(np.abs(arr - med)))
-
 
 def _fit_coefficients(z, color, y, reference, min_points):
     z = np.asarray(z, dtype=float)
@@ -109,6 +237,11 @@ def _fit_coefficients(z, color, y, reference, min_points):
 
     X = _poly_design(z, color)
     coef = None
+
+    try:
+        from sklearn.linear_model import HuberRegressor
+    except Exception:
+        HuberRegressor = None
 
     if HuberRegressor is not None:
         try:
@@ -149,7 +282,6 @@ def _fit_coefficients(z, color, y, reference, min_points):
 
     return coef
 
-
 def _safe_edges(values, bins):
     arr = np.asarray(values, dtype=float)
     arr = arr[np.isfinite(arr)]
@@ -177,13 +309,11 @@ def _safe_edges(values, bins):
     edges[-1] += eps
     return edges
 
-
 def _bin_codes(values, edges):
     values = np.asarray(values, dtype=float)
     if edges is None or len(edges) < 2:
         return np.full(values.shape, -1, dtype=np.int64)
     return pd.cut(values, bins=edges, include_lowest=True, labels=False).to_numpy(dtype=np.int64)
-
 
 def _compute_regime_local_residuals(values, redshift, color, regime):
     n = len(values)
@@ -265,7 +395,6 @@ def _compute_regime_local_residuals(values, redshift, color, regime):
 
     return resid, zscore, low_support
 
-
 def _build_fit_frame(raw, aux):
     base = _as_float_frame(raw, ("redshift", "u", "g", "r", "i", "z"))
     if base.empty:
@@ -288,7 +417,6 @@ def _build_fit_frame(raw, aux):
     finite &= fit["redshift"].between(-1.0, 12.0)
 
     return fit.loc[finite].copy()
-
 
 def add_k_correction_residual_manifold(raw, deps, aux):
     raw_df = _as_float_frame(raw, ("redshift", "u", "g", "r", "i", "z"))
@@ -448,7 +576,6 @@ def add_k_correction_residual_manifold(raw, deps, aux):
 
     return out
 
-
 FEATURE_GROUPS = [
     {
         "name": "k_correction_residual_manifold",
@@ -457,3 +584,61 @@ FEATURE_GROUPS = [
         "description": "Fits redshift- and color-dependent K-correction residual surfaces per regime and emits regime-hardened corrected-magnitude residual diagnostics.",
     }
 ]
+```
+
+# Group Code Contract
+
+Return only Python code. Do not use markdown fences.
+
+Define semantic feature-group functions and `FEATURE_GROUPS`.
+
+Generate only the feature-group module: Python definitions for feature-group
+preprocessing. A separate fixed runtime wrapper imports this module and is
+responsible for logging, timing, dependency ordering, output-column renaming,
+final DataFrame assembly, and all non-preprocessing work.
+
+Each feature function must use this signature:
+
+```python
+def add_group_name(raw, deps, aux):
+    ...
+    return new_features
+```
+
+Rules:
+- `raw` is the raw/base train+test covariate frame without target labels. It includes ID columns.
+- `deps` is a dict of dependency outputs by logical group name. Use it only when this group declares dependencies.
+- `aux` is an auxiliary DataFrame when available, otherwise empty.
+- Return a pandas DataFrame containing only new local feature columns with `index=raw.index`.
+- Preserve row count, row order, and index exactly.
+- Do not return raw/input columns.
+- Do not mutate `raw`, `deps`, or `aux` in place.
+- Use clear local feature names. The executor will rename returned columns after the function finishes.
+- Outputs may be numeric, boolean, categorical, or string scalar columns. Do not return nested lists, dicts, tuples, or sets.
+- You may compute covariate-only train+test statistics from `raw`; do not use target labels, validation labels, model outputs, or leaderboard feedback.
+- Do not read project data files, write files, train models, create `main()`, concatenate final blocks, or implement orchestration.
+- Do not implement timing decorators or logging wrappers. The group executor logs every group call and duration.
+- Top-level code may contain only imports, function definitions, literal constants, and `FEATURE_GROUPS`.
+- Do not call functions in top-level assignments. For example, do not write `EDGES = np.array(...)`, `CUTS = pd.IntervalIndex(...)`, or any other assignment whose right-hand side calls a function or constructor.
+- If a constant needs conversion to a NumPy/Pandas object, store it as a literal tuple/list at module level and convert it inside the feature function.
+
+Register groups like this:
+
+```python
+FEATURE_GROUPS = [
+    {
+        "name": "group_name",
+        "fn": add_group_name,
+        "depends_on": [],
+        "description": "One sentence describing this feature group.",
+    }
+]
+```
+
+Mode-specific boundary:
+- Do not train AutoGluon.
+- Do not import or instantiate `TabularPredictor`.
+- Do not call `.fit()`, `.predict()`, `.predict_proba()`, or `.leaderboard()`.
+- Do not define `main()`.
+- Do not read project data files.
+- The fixed wrapper handles all non-preprocessing work.
