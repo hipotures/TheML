@@ -2065,19 +2065,27 @@ def _print_root_revision_status(project_dir: Path, *, hypothesis_id: str, mode: 
 
 
 def _revision_status_icon(row: dict[str, object]) -> Text:
-    if bool(row.get("active")):
-        return Text("★", style="green")
-    if row.get("metric") is not None:
-        return Text("·", style="dim")
-    return Text("?", style="yellow")
+    evaluation_status = str(row.get("evaluation_status") or "")
+    if evaluation_status:
+        return _run_status_text(evaluation_status)
+    if row.get("materialization_file"):
+        materialization_status = str(row.get("materialization_status") or "")
+        return Text("⌘", style="bold yellow" if materialization_status == "fixed" else "cyan")
+    return Text("◇", style="dim")
 
 
 def _revision_materialization_state(row: dict[str, object]) -> str:
     if not row.get("materialization_file"):
         return "missing"
+    evaluation_status = str(row.get("evaluation_status") or "")
+    if evaluation_status:
+        return evaluation_status
+    materialization_status = str(row.get("materialization_status") or "")
+    if materialization_status in {"bug", "failed", "fixed"}:
+        return materialization_status
     if bool(row.get("active")):
         return "active"
-    return str(row.get("materialization_status") or "present")
+    return "-"
 
 
 def _root_materialization_row(db_row: dict[str, object]) -> list[object]:
