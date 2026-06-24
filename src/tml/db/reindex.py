@@ -137,23 +137,14 @@ def _index_hypotheses(conn, project_dir: Path) -> None:
             active_file = mode_manifest.get("active") if isinstance(mode_manifest.get("active"), str) else None
             active = active_file is None or active_file == code.name
             hypothesis_revision = materialization_revision(path.parent, mode, code.name)
-            manifest_files = mode_manifest.get("files") if isinstance(mode_manifest.get("files"), list) else []
-            manifest_entry = next(
-                (
-                    item
-                    for item in manifest_files
-                    if isinstance(item, dict) and item.get("file") == code.name
-                ),
-                {},
-            )
             mat_summary = _run_summary(code.parent / f"{code.stem}.request.json", code.parent / f"{code.stem}.response.json")
             conn.execute(
                 """
                 INSERT INTO materializations(
-                  hypothesis_id, mode, file, code_hash, hypothesis_revision, created_at, status, active, model,
+                  hypothesis_id, mode, file, code_hash, hypothesis_revision, status, active, model,
                   reasoning_tokens, total_tokens, generation_seconds
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     hid,
@@ -161,7 +152,6 @@ def _index_hypotheses(conn, project_dir: Path) -> None:
                     code.name,
                     sha256_file(code),
                     hypothesis_revision,
-                    str(manifest_entry.get("created_at") or ""),
                     "active" if active else "inactive",
                     1 if active else 0,
                     mat_summary.get("model"),

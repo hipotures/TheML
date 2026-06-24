@@ -47,7 +47,6 @@ CREATE TABLE IF NOT EXISTS materializations (
   file TEXT NOT NULL,
   code_hash TEXT NOT NULL,
   hypothesis_revision INTEGER,
-  created_at TEXT,
   status TEXT NOT NULL DEFAULT 'active',
   active INTEGER NOT NULL DEFAULT 1,
   source_node_id TEXT,

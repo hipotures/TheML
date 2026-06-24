@@ -10,7 +10,6 @@ from tml.utils.yaml_io import read_yaml
 from tml.hypotheses.revisions import (
     latest_revision_record,
     load_revision,
-    materialization_entries,
     materialization_revision,
     migrate_hypothesis_dir,
 )
@@ -28,13 +27,6 @@ def ensure_project_db(project_dir: Path) -> Path:
     db_path = project_db_path(project_dir)
     migrate(db_path)
     return db_path
-
-
-def _materialization_created_at(hdir: Path, mode: str, file_name: str) -> str:
-    for entry in materialization_entries(hdir, mode):
-        if entry.get("file") == file_name and entry.get("created_at"):
-            return str(entry["created_at"])
-    return datetime.now().isoformat(timespec="seconds")
 
 
 def upsert_project(project_dir: Path) -> None:
@@ -154,7 +146,6 @@ def upsert_materialization(
         code_path.parent / f"{code_path.stem}.request.json",
         code_path.parent / f"{code_path.stem}.response.json",
     )
-    created_at = _materialization_created_at(hdir, mode, code_path.name)
     with connect(db_path) as conn:
         if active:
             conn.execute(
@@ -177,15 +168,14 @@ def upsert_materialization(
         conn.execute(
             """
             INSERT INTO materializations(
-              hypothesis_id, mode, file, code_hash, hypothesis_revision, created_at, status, active, source_node_id,
+              hypothesis_id, mode, file, code_hash, hypothesis_revision, status, active, source_node_id,
               fixed_from_file, fixed_from_code_hash, model, reasoning_tokens,
               total_tokens, generation_seconds
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(hypothesis_id, mode, file) DO UPDATE SET
               code_hash=excluded.code_hash,
               hypothesis_revision=excluded.hypothesis_revision,
-              created_at=COALESCE(materializations.created_at, excluded.created_at),
               status=excluded.status,
               active=excluded.active,
               source_node_id=excluded.source_node_id,
@@ -202,7 +192,6 @@ def upsert_materialization(
                 code_path.name,
                 sha256_file(code_path),
                 revision,
-                created_at,
                 status,
                 1 if active else 0,
                 source_node_id,
@@ -232,20 +221,18 @@ def upsert_failed_materialization(
         hdir / "materializations" / f"{stem}.request.json",
         hdir / "materializations" / f"{stem}.response.json",
     )
-    created_at = _materialization_created_at(hdir, mode, file_name)
     with connect(db_path) as conn:
         conn.execute(
             """
             INSERT INTO materializations(
-              hypothesis_id, mode, file, code_hash, hypothesis_revision, created_at, status, active, source_node_id,
+              hypothesis_id, mode, file, code_hash, hypothesis_revision, status, active, source_node_id,
               fixed_from_file, fixed_from_code_hash, model, reasoning_tokens,
               total_tokens, generation_seconds
             )
-            VALUES (?, ?, ?, ?, ?, ?, 'failed', 0, NULL, NULL, NULL, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, 'failed', 0, NULL, NULL, NULL, ?, ?, ?, ?)
             ON CONFLICT(hypothesis_id, mode, file) DO UPDATE SET
               code_hash=excluded.code_hash,
               hypothesis_revision=excluded.hypothesis_revision,
-              created_at=COALESCE(materializations.created_at, excluded.created_at),
               status='failed',
               active=0,
               source_node_id=NULL,
@@ -262,7 +249,6 @@ def upsert_failed_materialization(
                 file_name,
                 sha256_text(code_text),
                 materialization_revision(hdir, mode, file_name),
-                created_at,
                 summary.get("model"),
                 summary.get("reasoning_tokens"),
                 summary.get("total_tokens"),
@@ -1607,7 +1593,6 @@ def revision_status_rows(
               r.revision,
               r.path AS hypothesis_file,
               m.file AS materialization_file,
-              m.created_at AS materialization_created_at,
               m.active,
               m.status AS materialization_status,
               e.metric,

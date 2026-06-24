@@ -2046,7 +2046,7 @@ def _print_root_revision_status(project_dir: Path, *, hypothesis_id: str, mode: 
     table.add_column("S", justify="center", no_wrap=True)
     table.add_column("Hypothesis file", no_wrap=True)
     table.add_column("Mat file", no_wrap=True)
-    table.add_column("Created", no_wrap=True)
+    table.add_column("Generated", no_wrap=True)
     table.add_column("Score", justify="right", no_wrap=True)
     for row in rows:
         materialization_file = str(row.get("materialization_file") or "none")
@@ -2055,10 +2055,29 @@ def _print_root_revision_status(project_dir: Path, *, hypothesis_id: str, mode: 
             _revision_status_icon(row),
             Path(str(row.get("hypothesis_file") or "")).name,
             materialization_file,
-            _short_datetime(row.get("materialization_created_at")) or "-",
+            _materialization_generated_at(project_dir, str(hypothesis_id), materialization_file),
             _format_score(row.get("metric")) or "-",
         )
     console.print(table)
+
+
+def _materialization_generated_at(project_dir: Path, hypothesis_id: str, materialization_file: str) -> str:
+    if materialization_file == "none":
+        return "-"
+    request_path = (
+        project_dir
+        / "hypotheses"
+        / str(hypothesis_id).zfill(6)
+        / "materializations"
+        / f"{Path(materialization_file).stem}.request.json"
+    )
+    if not request_path.exists():
+        return "-"
+    try:
+        payload = json.loads(request_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return "-"
+    return _short_datetime(payload.get("created_at")) or "-"
 
 
 def _revision_status_icon(row: dict[str, object]) -> Text:
