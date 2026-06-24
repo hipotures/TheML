@@ -2000,16 +2000,12 @@ def _print_branch_rebase_plan(project_slug: str, plan: BranchRebasePlan) -> None
     change_table.add_column("Role", no_wrap=True)
     change_table.add_column("Old", no_wrap=True)
     change_table.add_column("New", no_wrap=True)
-    change_table.add_column("Old score", justify="right", no_wrap=True)
-    change_table.add_column("New score", justify="right", no_wrap=True)
     for change in plan.changed_components:
         change_table.add_row(
             change.source_id,
             change.role,
             change.old_file,
             change.new_file,
-            _format_score(change.old_score) or "n/a",
-            _format_score(change.new_score) or "n/a",
         )
     console.print(change_table)
 
