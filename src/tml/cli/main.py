@@ -448,12 +448,19 @@ def root_revise_cmd(ctx: typer.Context) -> None:
                 _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id)
             return
         if promote_requested:
-            promoted = _promote_root_revisions(ref.path, mode=mode, profile_id=profile_id, hypothesis_id=hid)
-            if not promoted:
+            targets = root_revision_promote_targets(ref.path, mode=mode, profile_id=profile_id)
+            if hid:
+                targets = [row for row in targets if str(row.get("hypothesis_id") or "") == hid]
+            if not targets:
                 console.print("No ROOT revision active pointers to promote.")
-            else:
-                console.print(f"Promoted ROOT active materializations: {len(promoted)}")
-                _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={row['hypothesis_id'] for row in promoted})
+                return
+            _print_root_revision_promote_plan(targets)
+            if not _bool(overrides.get("yes")) and not Confirm.ask("Promote ROOT revisions?", default=False):
+                console.print("No ROOT revisions promoted.")
+                return
+            promoted = _promote_root_revisions(ref.path, mode=mode, targets=targets)
+            console.print(f"Promoted ROOT active materializations: {len(promoted)}")
+            _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={row["hypothesis_id"] for row in promoted})
             return
         if delete_requested:
             if not hid:
@@ -2263,18 +2270,35 @@ def _revision_overview_icon(row: dict[str, object]) -> Text:
     return Text("·", style="dim")
 
 
+def _print_root_revision_promote_plan(rows: list[dict[str, object]]) -> None:
+    table = Table(title="ROOT revision promotion plan", box=box.SIMPLE_HEAVY)
+    table.add_column("ID", style="bold", no_wrap=True)
+    table.add_column("To rev", justify="right", no_wrap=True)
+    table.add_column("To file", no_wrap=True)
+    table.add_column("Score", justify="right", no_wrap=True)
+    table.add_column("From rev", justify="right", no_wrap=True)
+    table.add_column("From file", no_wrap=True)
+    for index, row in enumerate(rows):
+        table.add_row(
+            str(row.get("hypothesis_id") or ""),
+            str(row.get("revision") or ""),
+            str(row.get("materialization_file") or ""),
+            _format_score(row.get("metric")) or "-",
+            str(row.get("active_revision") or "-"),
+            str(row.get("active_file") or "-"),
+            style=_zebra_style(index),
+        )
+    console.print(table)
+
+
 def _promote_root_revisions(
     project_dir: Path,
     *,
     mode: str,
-    profile_id: str,
-    hypothesis_id: str | None,
+    targets: list[dict[str, object]],
 ) -> list[dict[str, object]]:
-    rows = root_revision_promote_targets(project_dir, mode=mode, profile_id=profile_id)
-    if hypothesis_id:
-        rows = [row for row in rows if str(row.get("hypothesis_id") or "") == hypothesis_id]
     promoted: list[dict[str, object]] = []
-    for row in rows:
+    for row in targets:
         hid = str(row.get("hypothesis_id") or "")
         file_name = str(row.get("materialization_file") or "")
         if not hid or not file_name:
