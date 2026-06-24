@@ -1118,13 +1118,6 @@ def branch_grow_cmd(
             progress=console.print,
         )
         _print_branch_grow_summary(result)
-        _print_branch_status(
-            ref.path,
-            mode=active_run_mode,
-            branch_id=None,
-            executed_ids={item.branch_id for item in result.items},
-            executed_count=result.processed_steps,
-        )
     except Exception as exc:
         _abort(exc)
 
