@@ -1597,6 +1597,7 @@ def revision_status_rows(
               m.status AS materialization_status,
               e.metric,
               e.status AS evaluation_status,
+              en.created_at AS evaluation_created_at,
               (
                 SELECT GROUP_CONCAT(status)
                 FROM (
@@ -1643,6 +1644,28 @@ def revision_status_rows(
                 LIMIT 1
               ) AS component_status,
               (
+                SELECT n.created_at
+                FROM run_components rc
+                JOIN nodes n ON n.node_id=rc.node_id
+                WHERE rc.source_type='hypothesis'
+                  AND rc.source_id=r.hypothesis_id
+                  AND rc.mode=m.mode
+                  AND rc.file=m.file
+                  AND rc.code_hash=m.code_hash
+                  AND n.profile_id=?
+                ORDER BY
+                  CASE n.status
+                    WHEN 'failed' THEN 0
+                    WHEN 'execution_interrupted' THEN 1
+                    WHEN 'started' THEN 2
+                    WHEN 'missing_code' THEN 3
+                    WHEN 'complete' THEN 4
+                    ELSE 5
+                  END,
+                  n.created_at DESC
+                LIMIT 1
+              ) AS component_created_at,
+              (
                 SELECT n.node_id
                 FROM run_components rc
                 JOIN nodes n ON n.node_id=rc.node_id
@@ -1675,10 +1698,11 @@ def revision_status_rows(
              AND e.mode=?
              AND e.profile_id=?
              AND COALESCE(e.materialization_file, m.file)=m.file
+            LEFT JOIN nodes en ON en.node_id=e.node_id
             WHERE r.hypothesis_id=?
             ORDER BY r.revision, m.file
             """,
-            (profile_id, profile_id, profile_id, mode, mode, profile_id, hypothesis_id.zfill(6)),
+            (profile_id, profile_id, profile_id, profile_id, mode, mode, profile_id, hypothesis_id.zfill(6)),
         ).fetchall()
     return [dict(row) for row in rows]
 

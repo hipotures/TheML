@@ -2047,6 +2047,7 @@ def _print_root_revision_status(project_dir: Path, *, hypothesis_id: str, mode: 
     table.add_column("Hypothesis file", no_wrap=True)
     table.add_column("Mat file", no_wrap=True)
     table.add_column("Generated", no_wrap=True)
+    table.add_column("Run", no_wrap=True)
     table.add_column("Score", justify="right", no_wrap=True)
     for row in rows:
         materialization_file = str(row.get("materialization_file") or "none")
@@ -2056,6 +2057,7 @@ def _print_root_revision_status(project_dir: Path, *, hypothesis_id: str, mode: 
             Path(str(row.get("hypothesis_file") or "")).name,
             materialization_file,
             _materialization_generated_at(project_dir, str(hypothesis_id), materialization_file),
+            _short_datetime(row.get("evaluation_created_at") or row.get("component_created_at")) or "-",
             _format_score(row.get("metric")) or "-",
         )
     console.print(table)
