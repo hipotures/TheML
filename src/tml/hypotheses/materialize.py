@@ -296,7 +296,7 @@ def _materialization_target(project_dir: Path, hdir: Path, mode: str, *, version
         if text.startswith(f"{mode}-") and text.removeprefix(f"{mode}-").isdigit():
             return hdir / "materializations" / f"{text}.py"
         raise ValueError("version must be 'new', a number like 2, or a file like autogluon-002.py")
-    return hdir / "materializations" / f"{mode}-001.py"
+    return _new_materialization_target(project_dir, hdir, mode)
 
 
 def _new_materialization_target(project_dir: Path, hdir: Path, mode: str) -> Path:
