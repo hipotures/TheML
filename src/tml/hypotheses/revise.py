@@ -116,11 +116,6 @@ def revise_root_hypothesis(
             response_prefix=f"{next_revision:02d}-hypothesis",
         )
         payload = _parse_revision_response(response.text)
-        decision = str(payload.get("decision") or "").strip()
-        if decision == "no_change":
-            break
-        if decision != "revise":
-            raise ValueError(f"Unknown revise decision for hypothesis {hid}: {decision!r}")
         revision_payload = _revision_payload_from_response(payload, latest)
         validate_root_hypothesis(revision_payload)
         _validate_revision_compatibility(previous[-1].payload, revision_payload)
@@ -156,7 +151,6 @@ def _revision_payload_from_response(payload: dict[str, Any], latest: dict[str, A
         "strategy",
         "expected_signal",
         "risk",
-        "change_summary",
     )
     revision_payload = {key: payload[key] for key in allowed if key in payload}
     revision_payload.setdefault("group_name", latest.get("group_name"))

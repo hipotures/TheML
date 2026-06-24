@@ -15,14 +15,11 @@ Input:
 - one selected ROOT hypothesis, identified by `Hypothesis ID`;
 - all previous numbered versions of that same hypothesis.
 
-Then do exactly one of these:
-
-1. Return `decision: "revise"` with a next version of the same hypothesis. Keep
-   the same `group_name` and semantic goal, but make the hypothesis more useful
-   by changing its content. Focus on making `strategy` more concrete,
-   deterministic, robust, or better aligned with the project metric.
-2. Return `decision: "no_change"` if there is no concrete useful improvement
-   that keeps the same `group_name` and semantic goal.
+Return the next version of the same hypothesis using the exact same JSON schema
+as a newly generated hypothesis. Keep the same `group_name` and semantic goal,
+but make the hypothesis more useful by changing its content. Focus on making
+`strategy` more concrete, deterministic, robust, or better aligned with the
+project metric.
 
 The next version should answer: "How should this same feature group be defined
 better than the previous version?"
@@ -51,31 +48,18 @@ Previous versions:
 - Prefer keeping `family` the same.
 - Change `strategy` only when there is a concrete deterministic improvement.
 - Do not output code.
-- If no safe useful revision exists, return `decision: "no_change"`.
 
-Return exactly one JSON object.
+{% include "blocks/output-contract.md.j2" %}
 
-For a revision:
+Return exactly this JSON object:
 
 {
-  "operation": "revise_existing_root_hypothesis",
-  "decision": "revise",
   "title": "short descriptive title",
-  "group_name": "same_group_name",
-  "family": "same_or_existing_family",
-  "summary": "one comprehensive sentence describing the revised semantic feature-group idea",
+  "group_name": "same concise_snake_case_group_name as the previous version",
+  "family": "compact feature-family label",
+  "summary": "one comprehensive sentence describing the semantic feature-set idea; do not list formulas, exact feature names, or implementation details here",
   "depends_on": [],
   "strategy": "concrete deterministic feature logic, formulas, bins, statistics, and edge handling",
-  "expected_signal": "why this revision may improve the metric",
-  "risk": "specific overfitting, leakage, cost, redundancy, or instability risk",
-  "change_summary": "what changed relative to previous revisions",
-  "semantic_goal_preserved": true
-}
-
-For no safe revision:
-
-{
-  "operation": "revise_existing_root_hypothesis",
-  "decision": "no_change",
-  "reason": "The current hypothesis already has coherent revisions; any likely change would duplicate another group, alter the semantic goal, or add unsafe complexity."
+  "expected_signal": "why this group may improve or clarify the metric",
+  "risk": "specific overfitting, leakage, cost, redundancy, or instability risk"
 }
