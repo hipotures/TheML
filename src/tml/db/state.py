@@ -1906,14 +1906,25 @@ def branch_rows(
           b.branch_id, b.parent_ref, b.source_ref, b.mode, b.status AS branch_status,
           b.created_at, b.materialization_file, b.code_hash, b.composition_hash, b.summary,
           n.node_id, n.status AS node_status, n.run_seconds,
-          e.metric
+          e.metric AS metric,
+          (
+            SELECT e_source.metric
+            FROM evaluations e_source
+            WHERE e_source.kind='branch'
+              AND e_source.branch_id = b.source_ref
+              AND e_source.profile_id=?
+              AND e_source.status='complete'
+              AND e_source.metric IS NOT NULL
+            ORDER BY e_source.metric DESC, e_source.node_id DESC
+            LIMIT 1
+          ) AS source_metric
         FROM branches b
         LEFT JOIN evaluations e ON e.kind='branch'
           AND e.branch_id=b.branch_id AND e.mode=b.mode AND e.profile_id=? AND e.code_hash=b.code_hash
         LEFT JOIN nodes n ON n.node_id=e.node_id
         WHERE b.mode=?
     """
-    params: list[Any] = [profile_id, mode]
+    params: list[Any] = [profile_id, profile_id, mode]
     if branch_id:
         sql += " AND b.branch_id=?"
         params.append(_normalize_branch_id(branch_id))

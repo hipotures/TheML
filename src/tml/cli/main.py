@@ -2544,6 +2544,7 @@ def _print_root_run_summary(
     table.add_column("Gen", no_wrap=True)
     table.add_column("Run", justify="right", no_wrap=True)
     table.add_column("Score", justify="right", no_wrap=True)
+    table.add_column("Source score", justify="right", no_wrap=True)
     table.add_column("Node", no_wrap=True)
     table.add_column("Summary", overflow="fold", min_width=36, ratio=1)
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
@@ -2623,11 +2624,13 @@ def _branch_status_row(db_row: dict[str, object], *, summary_limit: int) -> list
     elif str(db_row.get("branch_status") or "") == "materialized":
         status = Text("⌘", style="cyan")
         score = ""
+        source_score = ""
         node = ""
         run_duration = ""
     else:
         status = Text("◇", style="dim")
         score = ""
+        source_score = ""
         node = ""
         run_duration = ""
     return [
@@ -2638,6 +2641,7 @@ def _branch_status_row(db_row: dict[str, object], *, summary_limit: int) -> list
         str(db_row.get("materialization_file") or ""),
         run_duration,
         score,
+        _format_score(db_row.get("source_metric")) or "",
         node,
         _short_text(str(db_row.get("summary") or ""), summary_limit),
     ]
