@@ -1070,6 +1070,14 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
               AND ce.status='complete'
               AND COALESCE(ce.hypothesis_revision, m.hypothesis_revision, 1)=COALESCE(m.hypothesis_revision, 1)
           )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM materializations ready
+            WHERE ready.hypothesis_id=h.hypothesis_id
+              AND ready.mode=m.mode
+              AND ready.status IN ('active', 'fixed')
+              AND COALESCE(ready.hypothesis_revision, 1)=COALESCE(m.hypothesis_revision, 1)
+          )
         )
         WHERE rn=1
     """
