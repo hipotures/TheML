@@ -1523,113 +1523,33 @@ def root_run_rows(
           h.hypothesis_id, COALESCE(r.summary, h.summary) AS summary,
           COALESCE(r.created_at, h.created_at) AS created_at,
           m.model, m.reasoning_tokens, m.total_tokens, m.generation_seconds, h.enabled,
-          m.file AS materialization_file, m.hypothesis_revision, m.code_hash, m.status AS materialization_status,
+          m.file AS materialization_file,
+          COALESCE(n.hypothesis_revision, e.hypothesis_revision, m.hypothesis_revision, 1) AS hypothesis_revision,
+          COALESCE(e.code_hash, m.code_hash) AS code_hash,
+          m.status AS materialization_status,
           n.node_id, n.status AS node_status, n.run_seconds,
           e.metric,
-          (
-            SELECT GROUP_CONCAT(status)
-            FROM (
-              SELECT DISTINCT cn.status AS status
-              FROM run_components rc
-              JOIN nodes cn ON cn.node_id=rc.node_id
-              WHERE rc.source_type='hypothesis'
-                AND rc.source_id=h.hypothesis_id
-                AND rc.mode=m.mode
-                AND rc.file=m.file
-                AND rc.code_hash=m.code_hash
-                AND cn.profile_id=?
-              ORDER BY
-                CASE cn.status
-                  WHEN 'failed' THEN 0
-                  WHEN 'execution_interrupted' THEN 1
-                  WHEN 'started' THEN 2
-                  WHEN 'missing_code' THEN 3
-                  WHEN 'complete' THEN 4
-                  ELSE 5
-                END
-            )
-          ) AS component_statuses,
-          (
-            SELECT cn.status
-            FROM run_components rc
-            JOIN nodes cn ON cn.node_id=rc.node_id
-            WHERE rc.source_type='hypothesis'
-              AND rc.source_id=h.hypothesis_id
-              AND rc.mode=m.mode
-              AND rc.file=m.file
-              AND rc.code_hash=m.code_hash
-              AND cn.profile_id=?
-            ORDER BY
-              CASE cn.status
-                WHEN 'failed' THEN 0
-                WHEN 'execution_interrupted' THEN 1
-                WHEN 'started' THEN 2
-                WHEN 'missing_code' THEN 3
-                WHEN 'complete' THEN 4
-                ELSE 5
-              END,
-              cn.created_at DESC
-            LIMIT 1
-          ) AS component_status,
-          (
-            SELECT cn.node_id
-            FROM run_components rc
-            JOIN nodes cn ON cn.node_id=rc.node_id
-            WHERE rc.source_type='hypothesis'
-              AND rc.source_id=h.hypothesis_id
-              AND rc.mode=m.mode
-              AND rc.file=m.file
-              AND rc.code_hash=m.code_hash
-              AND cn.profile_id=?
-            ORDER BY
-              CASE cn.status
-                WHEN 'failed' THEN 0
-                WHEN 'execution_interrupted' THEN 1
-                WHEN 'started' THEN 2
-                WHEN 'missing_code' THEN 3
-                WHEN 'complete' THEN 4
-                ELSE 5
-              END,
-              cn.created_at DESC
-            LIMIT 1
-          ) AS component_node_id,
-          (
-            SELECT cn.run_seconds
-            FROM run_components rc
-            JOIN nodes cn ON cn.node_id=rc.node_id
-            WHERE rc.source_type='hypothesis'
-              AND rc.source_id=h.hypothesis_id
-              AND rc.mode=m.mode
-              AND rc.file=m.file
-              AND rc.code_hash=m.code_hash
-              AND cn.profile_id=?
-            ORDER BY
-              CASE cn.status
-                WHEN 'failed' THEN 0
-                WHEN 'execution_interrupted' THEN 1
-                WHEN 'started' THEN 2
-                WHEN 'missing_code' THEN 3
-                WHEN 'complete' THEN 4
-                ELSE 5
-              END,
-              cn.created_at DESC
-            LIMIT 1
-          ) AS component_run_seconds
-        FROM hypotheses h
-        LEFT JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
+          NULL AS component_statuses,
+          NULL AS component_status,
+          NULL AS component_node_id,
+          NULL AS component_run_seconds
+        FROM nodes n
+        JOIN hypotheses h ON h.hypothesis_id=n.hypothesis_id
+        LEFT JOIN evaluations e ON e.node_id=n.node_id
+        LEFT JOIN materializations m
+          ON m.hypothesis_id=n.hypothesis_id
+         AND m.mode=n.mode
+         AND m.file=n.materialization_file
         LEFT JOIN hypothesis_revisions r
           ON r.hypothesis_id=h.hypothesis_id
-         AND r.revision=COALESCE(m.hypothesis_revision, 1)
-        LEFT JOIN evaluations e ON e.hypothesis_id=h.hypothesis_id
-          AND e.mode=? AND e.profile_id=? AND e.code_hash=m.code_hash
-          AND COALESCE(e.materialization_file, m.file)=m.file
-        LEFT JOIN nodes n ON n.node_id=e.node_id
+         AND r.revision=COALESCE(n.hypothesis_revision, e.hypothesis_revision, m.hypothesis_revision, 1)
+        WHERE n.kind='root' AND n.mode=? AND n.profile_id=?
     """
-    params: list[Any] = [profile_id, profile_id, profile_id, profile_id, mode, mode, profile_id]
+    params: list[Any] = [mode, profile_id]
     if hypothesis_id:
-        sql += " WHERE h.hypothesis_id=?"
+        sql += " AND h.hypothesis_id=?"
         params.append(hypothesis_id.zfill(6))
-    sql += " ORDER BY h.hypothesis_id, m.hypothesis_revision, m.file"
+    sql += " ORDER BY h.hypothesis_id, hypothesis_revision, n.created_at, n.step, n.node_id"
     with connect(db_path) as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
