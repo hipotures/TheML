@@ -122,15 +122,18 @@ def bugfix_failed_materializations(
             if progress is not None:
                 progress(f"{prefix}: {message}", timeout_seconds)
 
+        source_code = _source_materialization_code(mat_dir, source.name)
+        error_text = _failure_context(project_dir, record)
         bugfix_context = {
             "mode": mode,
             "hypothesis_id": hid,
             "source_file": source.name,
             "target_file": target.name,
-            "source_code": _source_materialization_code(mat_dir, source.name),
+            "source_code": source_code,
             "node_id": str(record.get("node_id") or ""),
             "run_id": str(record.get("run_id") or ""),
-            "error_text": _failure_context(project_dir, record),
+            "error_text": error_text,
+            "repair_notes": _repair_notes(error_text),
         }
         rendered = render_template(
             project_dir,
@@ -243,6 +246,32 @@ def _source_materialization_code(mat_dir: Path, file_name: str) -> str:
     if response.exists():
         return _parse_code(response.read_text(encoding="utf-8"))
     raise ValueError(f"Cannot find source materialization code or response text for {file_name}")
+
+
+def _repair_notes(error_text: str) -> str:
+    notes: list[str] = []
+    if "must not call functions in top-level assignments" in error_text:
+        notes.append(
+            "The validator rejected a module-level assignment whose right-hand side calls a function, constructor, "
+            "generator, or comprehension. Keep only literal constants at module level. Move calls such as "
+            "`np.array(...)`, `tuple(...)`, `range(...)`, `pd.IntervalIndex(...)`, `np.linspace(...)`, and "
+            "comprehensions into the feature function or a helper that is called from the feature function. "
+            "For example, replace `_Q12_LEVELS = tuple(i / 12 for i in range(13))` with an explicit literal tuple, "
+            "or construct it inside the function."
+        )
+    if "must not execute top-level code outside imports, definitions, and registry assignments" in error_text:
+        notes.append(
+            "The validator rejected executable module-level code. Do not use top-level `try`, `if`, loops, "
+            "function calls, or computed assignments. Plain imports, function/class definitions, literal constants, "
+            "and the final `FEATURE_GROUPS` registry are allowed. Move optional imports or fallback logic inside "
+            "the feature function or a helper function."
+        )
+    if "SyntaxError" in error_text or "was never closed" in error_text:
+        notes.append(
+            "The generated module is syntactically invalid. Fix the exact syntax error first, then ensure the "
+            "module still obeys the feature-group contract."
+        )
+    return "\n".join(f"- {note}" for note in notes)
 
 
 def _failure_context(project_dir: Path, record: dict[str, object]) -> str:
