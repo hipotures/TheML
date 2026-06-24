@@ -1592,7 +1592,6 @@ def revision_status_rows(
               r.hypothesis_id,
               r.revision,
               r.path AS hypothesis_file,
-              r.change_summary,
               m.file AS materialization_file,
               m.active,
               m.status AS materialization_status,
