@@ -1727,6 +1727,170 @@ def revision_status_rows(
     return [dict(row) for row in rows]
 
 
+def root_revision_overview_rows(project_dir: Path, *, mode: str, profile_id: str) -> list[dict[str, Any]]:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            WITH scored_revisions AS (
+              SELECT *
+              FROM (
+                SELECT
+                  e.hypothesis_id,
+                  COALESCE(e.hypothesis_revision, 1) AS revision,
+                  e.materialization_file,
+                  e.code_hash,
+                  e.metric,
+                  e.node_id,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY e.hypothesis_id, COALESCE(e.hypothesis_revision, 1)
+                    ORDER BY e.metric DESC, e.node_id DESC
+                  ) AS rn
+                FROM evaluations e
+                WHERE e.kind='root'
+                  AND e.mode=?
+                  AND e.profile_id=?
+                  AND e.status='complete'
+                  AND e.metric IS NOT NULL
+              )
+              WHERE rn=1
+            ),
+            best_hypothesis AS (
+              SELECT *
+              FROM (
+                SELECT
+                  sr.*,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY sr.hypothesis_id
+                    ORDER BY sr.metric DESC, sr.node_id DESC
+                  ) AS rn_best
+                FROM scored_revisions sr
+              )
+              WHERE rn_best=1
+            ),
+            active_materializations AS (
+              SELECT
+                hypothesis_id,
+                hypothesis_revision AS revision,
+                file,
+                code_hash,
+                status
+              FROM materializations
+              WHERE mode=?
+                AND active=1
+            ),
+            row_keys AS (
+              SELECT hypothesis_id, revision FROM hypothesis_revisions
+              UNION
+              SELECT hypothesis_id, revision FROM scored_revisions
+              UNION
+              SELECT hypothesis_id, revision FROM active_materializations
+            )
+            SELECT
+              k.hypothesis_id,
+              k.revision,
+              sr.materialization_file AS best_revision_file,
+              sr.code_hash AS best_revision_code_hash,
+              sr.metric AS revision_score,
+              sr.node_id AS revision_node_id,
+              bh.revision AS best_hypothesis_revision,
+              bh.materialization_file AS best_hypothesis_file,
+              bh.metric AS best_hypothesis_score,
+              am.file AS active_file,
+              am.code_hash AS active_code_hash,
+              am.status AS active_status,
+              CASE
+                WHEN am.file IS NOT NULL THEN 1
+                ELSE 0
+              END AS is_active_revision,
+              CASE
+                WHEN am.file IS NOT NULL AND sr.materialization_file=am.file AND sr.code_hash=am.code_hash THEN 1
+                ELSE 0
+              END AS is_active_revision_best_file,
+              CASE
+                WHEN bh.revision=k.revision THEN 1
+                ELSE 0
+              END AS is_best_revision
+            FROM row_keys k
+            LEFT JOIN scored_revisions sr
+              ON sr.hypothesis_id=k.hypothesis_id
+             AND sr.revision=k.revision
+            LEFT JOIN best_hypothesis bh
+              ON bh.hypothesis_id=k.hypothesis_id
+            LEFT JOIN active_materializations am
+              ON am.hypothesis_id=k.hypothesis_id
+             AND am.revision=k.revision
+            WHERE k.hypothesis_id<>'000000'
+            ORDER BY k.hypothesis_id, k.revision
+            """,
+            (mode, profile_id, mode),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def root_revision_promote_targets(project_dir: Path, *, mode: str, profile_id: str) -> list[dict[str, Any]]:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            WITH best_eval AS (
+              SELECT *
+              FROM (
+                SELECT
+                  e.hypothesis_id,
+                  COALESCE(e.hypothesis_revision, 1) AS revision,
+                  e.materialization_file,
+                  e.code_hash,
+                  e.metric,
+                  e.node_id,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY e.hypothesis_id
+                    ORDER BY e.metric DESC, e.node_id DESC
+                  ) AS rn
+                FROM evaluations e
+                WHERE e.kind='root'
+                  AND e.mode=?
+                  AND e.profile_id=?
+                  AND e.status='complete'
+                  AND e.metric IS NOT NULL
+              )
+              WHERE rn=1
+            ),
+            active_materializations AS (
+              SELECT
+                hypothesis_id,
+                hypothesis_revision AS active_revision,
+                file AS active_file,
+                code_hash AS active_code_hash
+              FROM materializations
+              WHERE mode=?
+                AND active=1
+            )
+            SELECT
+              b.hypothesis_id,
+              b.revision,
+              b.materialization_file,
+              b.code_hash,
+              b.metric,
+              a.active_revision,
+              a.active_file,
+              a.active_code_hash
+            FROM best_eval b
+            LEFT JOIN active_materializations a
+              ON a.hypothesis_id=b.hypothesis_id
+            WHERE b.hypothesis_id<>'000000'
+              AND (
+                a.active_file IS NULL
+                OR a.active_file<>b.materialization_file
+                OR a.active_code_hash<>b.code_hash
+              )
+            ORDER BY b.hypothesis_id
+            """,
+            (mode, profile_id, mode),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def branch_rows(
     project_dir: Path,
     *,

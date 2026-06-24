@@ -43,6 +43,8 @@ from tml.db.state import (
     revision_status_rows as db_revision_status_rows,
     root_counts,
     root_hypothesis_rows,
+    root_revision_overview_rows,
+    root_revision_promote_targets,
     root_run_rows,
     run_request_status,
     solution_tree_branch_rows,
@@ -51,6 +53,7 @@ from tml.db.state import (
     submission_rows,
     sync_submission_remote_rows,
     upsert_hypothesis,
+    upsert_materialization,
 )
 from tml.hypotheses.generate import (
     GeneratedHypothesis,
@@ -62,7 +65,7 @@ from tml.hypotheses.baseline import ensure_root_baseline
 from tml.hypotheses.bugfix import RootBugfixPlan, bugfix_failed_materializations, root_bugfix_plan
 from tml.hypotheses.materialize import RootMaterializationPlan, materialize_missing, root_materialization_plan
 from tml.hypotheses.revise import RootRevisePlan, revise_root_hypothesis, root_revise_plan
-from tml.hypotheses.revisions import delete_revision, normalize_hypothesis_id
+from tml.hypotheses.revisions import delete_revision, normalize_hypothesis_id, set_active_materialization
 from tml.hypotheses.run import RootRunPlan, root_run_plan, run_missing
 from tml.prompts.diff import diff_prompt
 from tml.prompts.probe import probe_prompt, render_prompt
@@ -411,7 +414,8 @@ def root_generate_cmd(ctx: typer.Context) -> None:
     help=(
         "Create ROOT hypothesis revisions or show revision status.\n\n"
         "Accepted positional arguments:\n"
-        "  status            Print revision status.\n\n"
+        "  status            Print revision status. Without id, print all scored revisions.\n\n"
+        "  promote|prom      Promote active materializations to best scored revisions.\n\n"
         "  delete|del        Delete one unmaterialized revision.\n\n"
         "Accepted key=value parameters:\n"
         "  hypothesis=<id>    Hypothesis to revise.\n"
@@ -428,19 +432,32 @@ def root_revise_cmd(ctx: typer.Context) -> None:
         ensure_root_baseline(ref.path)
         positional = _positional(ctx.args)
         delete_requested = positional in (["delete"], ["del"])
-        status_only = False if delete_requested else _command_status_requested(ctx.args, "tml root revise")
+        promote_requested = positional in (["promote"], ["prom"])
+        status_only = False if delete_requested or promote_requested else _command_status_requested(ctx.args, "tml root revise")
         overrides = _overrides(ctx.args)
         _validate_override_keys(overrides, {"hypothesis", "id", "count", "mode", "revision", "rev", "yes"}, "tml root revise")
         hypothesis_id = _optional_text(overrides.get("hypothesis") or overrides.get("id"))
-        if not hypothesis_id:
-            raise TmlError("Missing required parameter: id=<hypothesis>.")
-        hid = normalize_hypothesis_id(hypothesis_id)
+        hid = normalize_hypothesis_id(hypothesis_id) if hypothesis_id else None
         config = load_project_config(ref.path)
         mode = str(overrides.get("mode") or active_mode(config))
+        profile_id = active_profile_id(config, mode)
         if status_only:
-            _print_root_revision_status(ref.path, hypothesis_id=hid, mode=mode)
+            if hid:
+                _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={hid})
+            else:
+                _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id)
+            return
+        if promote_requested:
+            promoted = _promote_root_revisions(ref.path, mode=mode, profile_id=profile_id, hypothesis_id=hid)
+            if not promoted:
+                console.print("No ROOT revision active pointers to promote.")
+            else:
+                console.print(f"Promoted ROOT active materializations: {len(promoted)}")
+                _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={row['hypothesis_id'] for row in promoted})
             return
         if delete_requested:
+            if not hid:
+                raise TmlError("Missing required parameter: id=<hypothesis>.")
             revision = _revision_override(overrides)
             if revision is None:
                 raise TmlError("Missing required parameter: rev=<revision>.")
@@ -449,8 +466,10 @@ def root_revise_cmd(ctx: typer.Context) -> None:
             delete_hypothesis_revision(ref.path, hypothesis_id=hid, revision=revision)
             upsert_hypothesis(ref.path, hdir)
             console.print(f"Deleted ROOT hypothesis {hid} revision {revision}: {len(deleted)} files")
-            _print_root_revision_status(ref.path, hypothesis_id=hid, mode=mode)
+            _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={hid})
             return
+        if not hid:
+            raise TmlError("Missing required parameter: id=<hypothesis>.")
         if "count" not in overrides:
             plan = root_revise_plan(ref.path, hypothesis_id=hid, count=0)
             _print_root_revise_plan(ref.slug, plan)
@@ -463,7 +482,7 @@ def root_revise_cmd(ctx: typer.Context) -> None:
         _print_root_revise_plan(ref.slug, plan)
         created = revise_root_hypothesis(ref.path, hypothesis_id=hid, count=count, progress=console.print)
         console.print(f"Created ROOT revisions: {len(created)}")
-        _print_root_revision_status(ref.path, hypothesis_id=hid, mode=mode)
+        _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={hid})
     except Exception as exc:
         _abort(exc)
 
@@ -2198,6 +2217,77 @@ def _print_root_revision_status(project_dir: Path, *, hypothesis_id: str, mode: 
             _format_score(row.get("metric")) or "-",
         )
     console.print(table)
+
+
+def _print_root_revision_overview(
+    project_dir: Path,
+    *,
+    mode: str,
+    profile_id: str,
+    hypothesis_ids: set[str] | None = None,
+) -> None:
+    rows = root_revision_overview_rows(project_dir, mode=mode, profile_id=profile_id)
+    if hypothesis_ids is not None:
+        rows = [row for row in rows if str(row.get("hypothesis_id") or "") in hypothesis_ids]
+    table = Table(title="ROOT revision status", box=box.SIMPLE_HEAVY)
+    table.add_column("ID", style="bold", no_wrap=True)
+    table.add_column("Rev", justify="right", no_wrap=True)
+    table.add_column("S", justify="center", no_wrap=True)
+    table.add_column("Score", justify="right", no_wrap=True)
+    previous_hypothesis_id: str | None = None
+    group_index = -1
+    for row in rows:
+        hypothesis_id = str(row.get("hypothesis_id") or "")
+        if hypothesis_id != previous_hypothesis_id:
+            group_index += 1
+            previous_hypothesis_id = hypothesis_id
+        table.add_row(
+            hypothesis_id,
+            str(row.get("revision") or ""),
+            _revision_overview_icon(row),
+            _format_score(row.get("revision_score")) or "-",
+            style=_zebra_style(group_index),
+        )
+    console.print(table)
+
+
+def _revision_overview_icon(row: dict[str, object]) -> Text:
+    active = bool(row.get("is_active_revision"))
+    best = bool(row.get("is_best_revision"))
+    if active and best:
+        return Text("★", style="bold green")
+    if active:
+        return Text("!", style="bold red")
+    if best:
+        return Text("▶", style="green")
+    return Text("·", style="dim")
+
+
+def _promote_root_revisions(
+    project_dir: Path,
+    *,
+    mode: str,
+    profile_id: str,
+    hypothesis_id: str | None,
+) -> list[dict[str, object]]:
+    rows = root_revision_promote_targets(project_dir, mode=mode, profile_id=profile_id)
+    if hypothesis_id:
+        rows = [row for row in rows if str(row.get("hypothesis_id") or "") == hypothesis_id]
+    promoted: list[dict[str, object]] = []
+    for row in rows:
+        hid = str(row.get("hypothesis_id") or "")
+        file_name = str(row.get("materialization_file") or "")
+        if not hid or not file_name:
+            continue
+        revision = int(row.get("revision") or 1)
+        hdir = project_dir / "hypotheses" / hid
+        code_path = hdir / "materializations" / file_name
+        if not code_path.exists():
+            raise TmlError(f"Cannot promote missing materialization file: {code_path}")
+        set_active_materialization(hdir, mode, file_name)
+        upsert_materialization(project_dir, hdir, mode, code_path, active=True, hypothesis_revision=revision)
+        promoted.append(dict(row))
+    return promoted
 
 
 def _revision_status_icon(row: dict[str, object]) -> Text:
