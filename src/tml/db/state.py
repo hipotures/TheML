@@ -126,6 +126,16 @@ def upsert_hypothesis_revision(project_dir: Path, hdir: Path, revision: int) -> 
         conn.commit()
 
 
+def delete_hypothesis_revision(project_dir: Path, *, hypothesis_id: str, revision: int) -> None:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        conn.execute(
+            "DELETE FROM hypothesis_revisions WHERE hypothesis_id=? AND revision=?",
+            (hypothesis_id, int(revision)),
+        )
+        conn.commit()
+
+
 def upsert_materialization(
     project_dir: Path,
     hdir: Path,

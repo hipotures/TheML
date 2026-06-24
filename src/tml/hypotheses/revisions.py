@@ -140,6 +140,30 @@ def write_revision(hdir: Path, revision: int, payload: dict[str, Any]) -> Path:
     return out
 
 
+def delete_revision(project_dir: Path, hdir: Path, revision: int) -> list[Path]:
+    if revision <= 1:
+        raise ValueError("Revision 1 cannot be deleted.")
+    prefix = revision_prefix(revision)
+    revision_path = hdir / revision_file_name(revision)
+    if not revision_path.exists():
+        raise FileNotFoundError(f"Missing hypothesis revision: {revision_path}")
+    manifest = read_yaml(hdir / "manifest.yaml")
+    mats = manifest.get("materializations") if isinstance(manifest.get("materializations"), dict) else {}
+    for mode_entry in mats.values():
+        if not isinstance(mode_entry, dict):
+            continue
+        for item in mode_entry.get("files") or []:
+            if isinstance(item, dict) and _int_or_default(item.get("revision"), 1) == revision:
+                raise ValueError(f"Revision {revision} has materializations; refusing to delete it.")
+    deleted: list[Path] = []
+    for path in sorted(hdir.glob(f"{prefix}*")):
+        if path.is_file():
+            path.unlink()
+            deleted.append(path)
+    repair_manifest(project_dir, hdir)
+    return deleted
+
+
 def repair_manifest(project_dir: Path, hdir: Path) -> None:
     records = revision_records(hdir)
     latest = records[-1].revision if records else 0

@@ -37,6 +37,7 @@ from tml.db.reindex import reindex_project
 from tml.db.state import (
     best_score,
     branch_rows,
+    delete_hypothesis_revision,
     materialization_rows,
     mark_submission_submitted,
     revision_status_rows as db_revision_status_rows,
@@ -49,6 +50,7 @@ from tml.db.state import (
     submission_by_sha_prefix,
     submission_rows,
     sync_submission_remote_rows,
+    upsert_hypothesis,
 )
 from tml.hypotheses.generate import (
     GeneratedHypothesis,
@@ -60,6 +62,7 @@ from tml.hypotheses.baseline import ensure_root_baseline
 from tml.hypotheses.bugfix import RootBugfixPlan, bugfix_failed_materializations, root_bugfix_plan
 from tml.hypotheses.materialize import RootMaterializationPlan, materialize_missing, root_materialization_plan
 from tml.hypotheses.revise import RootRevisePlan, revise_root_hypothesis, root_revise_plan
+from tml.hypotheses.revisions import delete_revision, normalize_hypothesis_id
 from tml.hypotheses.run import RootRunPlan, root_run_plan, run_missing
 from tml.prompts.diff import diff_prompt
 from tml.prompts.probe import probe_prompt, render_prompt
@@ -372,40 +375,57 @@ def root_generate_cmd(ctx: typer.Context) -> None:
         "Create ROOT hypothesis revisions or show revision status.\n\n"
         "Accepted positional arguments:\n"
         "  status            Print revision status.\n\n"
+        "  delete|del        Delete one unmaterialized revision.\n\n"
         "Accepted key=value parameters:\n"
         "  hypothesis=<id>    Hypothesis to revise.\n"
         "  id=<id>            Alias for hypothesis=<id>.\n"
-        "  count=<N>          Maximum number of new revisions."
+        "  count=<N>          Maximum number of new revisions.\n"
+        "  rev=<N>            Revision to delete.\n"
+        "  revision=<N>       Alias for rev=<N>."
     ),
 )
 def root_revise_cmd(ctx: typer.Context) -> None:
     try:
         ref = active_project_ref()
         ensure_root_baseline(ref.path)
-        status_only = _command_status_requested(ctx.args, "tml root revise")
+        positional = _positional(ctx.args)
+        delete_requested = positional in (["delete"], ["del"])
+        status_only = False if delete_requested else _command_status_requested(ctx.args, "tml root revise")
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"hypothesis", "id", "count", "mode"}, "tml root revise")
+        _validate_override_keys(overrides, {"hypothesis", "id", "count", "mode", "revision", "rev"}, "tml root revise")
         hypothesis_id = _optional_text(overrides.get("hypothesis") or overrides.get("id"))
         if not hypothesis_id:
             raise TmlError("Missing required parameter: id=<hypothesis>.")
+        hid = normalize_hypothesis_id(hypothesis_id)
         config = load_project_config(ref.path)
         mode = str(overrides.get("mode") or active_mode(config))
         if status_only:
-            _print_root_revision_status(ref.path, hypothesis_id=hypothesis_id, mode=mode)
+            _print_root_revision_status(ref.path, hypothesis_id=hid, mode=mode)
+            return
+        if delete_requested:
+            revision = _revision_override(overrides)
+            if revision is None:
+                raise TmlError("Missing required parameter: rev=<revision>.")
+            hdir = ref.path / "hypotheses" / hid
+            deleted = delete_revision(ref.path, hdir, revision)
+            delete_hypothesis_revision(ref.path, hypothesis_id=hid, revision=revision)
+            upsert_hypothesis(ref.path, hdir)
+            console.print(f"Deleted ROOT hypothesis {hid} revision {revision}: {len(deleted)} files")
+            _print_root_revision_status(ref.path, hypothesis_id=hid, mode=mode)
             return
         if "count" not in overrides:
-            plan = root_revise_plan(ref.path, hypothesis_id=hypothesis_id, count=0)
+            plan = root_revise_plan(ref.path, hypothesis_id=hid, count=0)
             _print_root_revise_plan(ref.slug, plan)
             console.print("No revision created. Pass count=<N> to create revisions.")
             return
         count = int(overrides.get("count") or 0)
         if count < 1:
             raise TmlError("count=<N> must be greater than 0.")
-        plan = root_revise_plan(ref.path, hypothesis_id=hypothesis_id, count=count)
+        plan = root_revise_plan(ref.path, hypothesis_id=hid, count=count)
         _print_root_revise_plan(ref.slug, plan)
-        created = revise_root_hypothesis(ref.path, hypothesis_id=hypothesis_id, count=count, progress=console.print)
+        created = revise_root_hypothesis(ref.path, hypothesis_id=hid, count=count, progress=console.print)
         console.print(f"Created ROOT revisions: {len(created)}")
-        _print_root_revision_status(ref.path, hypothesis_id=hypothesis_id, mode=mode)
+        _print_root_revision_status(ref.path, hypothesis_id=hid, mode=mode)
     except Exception as exc:
         _abort(exc)
 
