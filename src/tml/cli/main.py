@@ -23,7 +23,17 @@ from rich.tree import Tree
 from typer.core import TyperGroup
 
 from tml.branches.algorithms import BranchAlgorithmResult, branch_add_algorithmic
-from tml.branches.compose import BranchDeletePlan, CreatedBranch, add_branch, branch_delete_plan, delete_branch
+from tml.branches.compose import (
+    BranchDeletePlan,
+    BranchRebaseTarget,
+    CreatedBranch,
+    RebasedBranch,
+    add_branch,
+    branch_delete_plan,
+    branch_rebase_targets,
+    delete_branch,
+    rebase_branch,
+)
 from tml.branches.grow import BranchGrowPlan, BranchGrowResult, branch_grow, branch_grow_plan
 from tml.branches.runtime_state import read_branch_runtime_state
 from tml.branches.run import BranchRunPlan, branch_run_plan, run_missing_branches
@@ -1211,6 +1221,33 @@ def branch_run_cmd(
         _abort(exc)
 
 
+@branch_app.command("rebase", context_settings=EXTRA, help="Create a new BRANCH using active materializations from an existing BRANCH.")
+def branch_rebase_cmd(ctx: typer.Context) -> None:
+    try:
+        ref = active_project_ref()
+        _reject_positional(ctx.args, "tml branch rebase")
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"id", "node", "step"}, "tml branch rebase")
+        raw_id = _optional_text(overrides.get("id"))
+        raw_node = _optional_text(overrides.get("node"))
+        raw_step = _optional_text(overrides.get("step"))
+        if sum(value is not None for value in (raw_id, raw_node, raw_step)) != 1:
+            raise TmlError("Specify exactly one of id=<branch>, node=<node_id>, or step=<n>.")
+        step = _parse_int(raw_step, "step") if raw_step is not None else None
+        targets = branch_rebase_targets(ref.path, branch_id=raw_id, node_id=raw_node, step=step)
+        if not targets:
+            console.print("No matching BRANCH found.")
+            return
+        if len(targets) > 1:
+            _print_branch_rebase_ambiguous_targets(targets)
+            return
+        rebased = rebase_branch(ref.path, branch_id=targets[0].branch_id)
+        _print_branch_rebase_summary(ref.slug, targets[0], rebased)
+        _print_branch_status(ref.path, mode=rebased.mode, branch_id=rebased.branch_id, executed_ids=set(), executed_count=None)
+    except Exception as exc:
+        _abort(exc)
+
+
 @branch_app.command("delete", context_settings=EXTRA, help="Delete a BRANCH and optionally its run nodes.")
 def branch_delete_cmd(ctx: typer.Context) -> None:
     try:
@@ -1553,6 +1590,13 @@ def _validate_override_keys(overrides: dict[str, object], allowed: set[str], com
 
 def _optional_text(value: object) -> str | None:
     return None if value is None else str(value)
+
+
+def _parse_int(value: object, name: str) -> int:
+    try:
+        return int(str(value))
+    except (TypeError, ValueError) as exc:
+        raise TmlError(f"Invalid {name}: {value!r}. Use an integer.") from exc
 
 
 def _revision_override(overrides: dict[str, object]) -> int | None:
@@ -1898,6 +1942,45 @@ def _print_branch_add_summary(project_slug: str, created: CreatedBranch) -> None
     table.add_row("File", _repo_relative(created.branch_path.parent.parent, created.materialization_path))
     table.add_row("Composition hash", created.composition_hash[:12])
     console.print(table)
+
+
+def _print_branch_rebase_summary(project_slug: str, target: BranchRebaseTarget, rebased: RebasedBranch) -> None:
+    title = "BRANCH rebase existing" if rebased.existing else "BRANCH rebased"
+    table = Table(title=title, box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Source branch", rebased.source_branch_id)
+    if target.node_id:
+        table.add_row("Source node", target.node_id)
+    if target.step is not None:
+        table.add_row("Source step", str(target.step))
+    table.add_row("Branch", rebased.branch_id)
+    table.add_row("Mode", rebased.mode)
+    table.add_row("File", _repo_relative(rebased.branch_path.parent.parent, rebased.materialization_path))
+    table.add_row("Composition hash", rebased.composition_hash[:12])
+    table.add_row("Components", str(rebased.total_components))
+    table.add_row("Changed components", str(rebased.changed_components))
+    console.print(table)
+
+
+def _print_branch_rebase_ambiguous_targets(targets: list[BranchRebaseTarget]) -> None:
+    table = Table(title="Ambiguous BRANCH rebase target", box=box.SIMPLE_HEAVY)
+    table.add_column("Branch", no_wrap=True)
+    table.add_column("Step", justify="right", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Score", justify="right", no_wrap=True)
+    table.add_column("Node", no_wrap=True)
+    for target in targets:
+        table.add_row(
+            target.branch_id,
+            "" if target.step is None else str(target.step),
+            target.status or "",
+            _format_score(target.metric),
+            target.node_id or "",
+        )
+    console.print(table)
+    console.print("No branch was created. Use id=<branch> or node=<node_id> to select one target.")
 
 
 def _print_branch_algorithm_summary(project_slug: str, project_dir: Path, result: BranchAlgorithmResult) -> None:
