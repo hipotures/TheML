@@ -1,12 +1,22 @@
+hypothesis:
+  id: '000014'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: 0bb0b83d682f8c8bccd21bb347290ffc33da0b401549b8af508403e9dbc405ec
-    created_at: '2026-06-22T14:04:52'
-feature_group:
-  logical_name: photoz_color_consistency
-  version_id: photoz_color_consistency@000014
-  source_hypothesis_id: '000014'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 0bb0b83d682f8c8bccd21bb347290ffc33da0b401549b8af508403e9dbc405ec
+      created_at: '2026-06-22T14:04:52'
+    - file: autogluon-002.py
+      revision: 2
+      sha256: b1f68fbbfaa47b0a9c55a769222d5f522a4b797ad274414ad96fbbe62f25b58c
+      created_at: '2026-06-24T04:55:34'

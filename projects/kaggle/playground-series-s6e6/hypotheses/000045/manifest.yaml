@@ -1,12 +1,26 @@
+hypothesis:
+  id: '000045'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
-    active: autogluon-002.py
-    sha256: 9ba18b97c915f723b7b7b6042d428f52a39d7ed5eb7b50700c2d72bf76e23991
-    created_at: '2026-06-23T15:51:46'
-feature_group:
-  logical_name: pairwise_color_lattice_residuals
-  version_id: pairwise_color_lattice_residuals@000045
-  source_hypothesis_id: '000045'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-002.py
+    active: autogluon-003.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 4c5760b6c67db1c518fe945ace8a0caa83b1dfe1657d05fbc0ee666052c01830
+      created_at: '2026-06-23T15:51:46'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: 9ba18b97c915f723b7b7b6042d428f52a39d7ed5eb7b50700c2d72bf76e23991
+      created_at: '2026-06-23T15:51:46'
+    - file: autogluon-003.py
+      revision: 2
+      sha256: 02029b0b3529942758120ace0c88448db575a924ecafab1d99a5ac788f95fc63
+      created_at: '2026-06-24T05:11:04'

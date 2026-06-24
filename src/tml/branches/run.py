@@ -319,7 +319,7 @@ def _branch_component_version_notices(project_dir: Path, branch_payload: dict[st
         mats = manifest.get("materializations") if isinstance(manifest.get("materializations"), dict) else {}
         mat = mats.get(mode) if isinstance(mats.get(mode), dict) else {}
         active_file = str(mat.get("active") or "")
-        active_hash = str(mat.get("sha256") or "")
+        active_hash = _manifest_file_sha(mat, active_file)
         frozen_file = str(component.get("file") or "")
         frozen_hash = str(component.get("code_hash") or "")
         if active_file and (active_file != frozen_file or (active_hash and active_hash != frozen_hash)):
@@ -367,6 +367,14 @@ def _branch_component_version_notices(project_dir: Path, branch_payload: dict[st
         )
 
     return notices
+
+
+def _manifest_file_sha(mode_manifest: dict[str, Any], file_name: str) -> str:
+    files = mode_manifest.get("files") if isinstance(mode_manifest.get("files"), list) else []
+    for item in files:
+        if isinstance(item, dict) and item.get("file") == file_name:
+            return str(item.get("sha256") or "")
+    return ""
 
 
 def _write_success_markers(node_dir: Path, node_id_value: str, branch_id: str, mode: str, profile_id: str, code_hash: str, result) -> None:

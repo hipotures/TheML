@@ -50,6 +50,8 @@ def build_submission_row(
         "run_id": start.get("run_id"),
         "step": start.get("step"),
         "hypothesis_id": start.get("hypothesis_id") or manifest.get("hypothesis_id"),
+        "hypothesis_revision": start.get("hypothesis_revision") or manifest.get("hypothesis_revision"),
+        "materialization_file": start.get("materialization_file") or manifest.get("materialization_file"),
         "mode": start.get("mode") or manifest.get("mode"),
         "profile_id": start.get("profile_id") or manifest.get("profile_id"),
         "kind": str(manifest.get("kind") or "source"),
@@ -82,14 +84,14 @@ def upsert_submission(conn, row: dict[str, Any] | None) -> None:
         """
         INSERT INTO submissions(
           node_id, submission_path, submission_sha256, submission_size, submission_mtime_ns,
-          run_id, step, hypothesis_id, mode, profile_id, kind, status, submit_status,
+          run_id, step, hypothesis_id, hypothesis_revision, materialization_file, mode, profile_id, kind, status, submit_status,
           local_score, public_score, public_rank, metric, code_hash, run_seconds,
           created_at, finished_at, artifact_dir, source_submission_sha256, source_run_id,
           source_node_id, source_step, source_profile_id
         )
         VALUES (
           :node_id, :submission_path, :submission_sha256, :submission_size, :submission_mtime_ns,
-          :run_id, :step, :hypothesis_id, :mode, :profile_id, :kind, :status, :submit_status,
+          :run_id, :step, :hypothesis_id, :hypothesis_revision, :materialization_file, :mode, :profile_id, :kind, :status, :submit_status,
           :local_score, :public_score, :public_rank, :metric, :code_hash, :run_seconds,
           :created_at, :finished_at, :artifact_dir, :source_submission_sha256, :source_run_id,
           :source_node_id, :source_step, :source_profile_id
@@ -101,6 +103,8 @@ def upsert_submission(conn, row: dict[str, Any] | None) -> None:
           run_id=excluded.run_id,
           step=excluded.step,
           hypothesis_id=excluded.hypothesis_id,
+          hypothesis_revision=excluded.hypothesis_revision,
+          materialization_file=excluded.materialization_file,
           mode=excluded.mode,
           profile_id=excluded.profile_id,
           kind=excluded.kind,

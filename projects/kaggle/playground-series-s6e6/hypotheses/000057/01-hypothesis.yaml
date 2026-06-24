@@ -1,0 +1,41 @@
+title: Quasar-Star Locus Outlier and Degeneracy Geometry
+group_name: quasar_stellar_locus_conflict
+family: locus_conflict_geometry
+summary: "Model each object\u2019s color-space geometry against the SDSS stellar manifold\
+  \ using two three-band color cubes while adding redshift-linked quasar-inclusion\
+  \ corridors and ambiguity-buffer penalties, so the classifier sees both strong quasar\
+  \ outlier evidence and the known redshift regions where quasar and stellar populations\
+  \ become confounded."
+depends_on: []
+strategy: 'Compute c_ug=u-g, c_gr=g-r, c_ri=r-i, c_iz=i-z for every row. Form two
+  3D color vectors v1=(c_ug,c_gr,c_ri) and v2=(c_gr,c_ri,c_iz). Fit a robust mean
+  and covariance for each vector set on the full available set (train+test), then
+  extract the first principal axis for each cube; define orthogonal residual vectors
+  by subtracting the axis component for each row and compute Mahalanobis orthogonal
+  distances d1,d2 using residual covariance with a color floor added per component
+  (equivalent to adding 0.03^2 in each color term). Create soft outlier scores s1=max(d1-4,0)
+  and s2=max(d2-4,0), and also keep standardized versions d1/z_scale and d2/z_scale.
+  Add three regime features: (a) UV-like regime score favoring very blue c_ug in a
+  bright point-source band, (b) a mid-z bridge score that peaks inside 0.65<c_ug<1.5
+  and 0<c_gr<0.2 and decays smoothly outside, and (c) a high-z regime score keyed
+  by strong c_ug redness, outlierness in v2, and i-magnitude gating near i<20.2. Add
+  suppressor penalties for known quasar-mimicking contaminant strips defined by white-dwarf/A-star-like
+  color windows from the SDSS target-selection tables, then combine by subtraction
+  so these regions reduce effective quasar support. All scores are clipped to [0,1],
+  all denominators are clamped to avoid divide-by-zero, and invalid rows are deterministically
+  filled with 0.0.'
+expected_signal: "Separates many quasars that are true color outliers from the thin\
+  \ stellar manifold while explicitly preserving and down-weighting overlap zones\
+  \ where quasars near z\u22482.7\u20132.8 and known contamination strips resemble\
+  \ stars, which should improve minority-class recall without collapsing balanced\
+  \ accuracy into the dominant class boundary."
+risk: "Relies on SDSS-era, color-threshold logic that may be mismatched to this dataset\u2019\
+  s calibration and label definitions; fixed inclusion/exclusion heuristics can over-penalize\
+  \ legitimate rare quasars near boundaries and may be redundant with existing manifold/locus\
+  \ groups, so incremental gain can be modest if those groups already capture the\
+  \ same geometry."
+schema_version: 1
+hypothesis_id: '000057'
+enabled: true
+created_at: '2026-06-23T14:54:49'
+revision: 1

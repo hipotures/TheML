@@ -8,7 +8,8 @@
     }
   ],
   "metadata": {
-    "mode": "autogluon"
+    "mode": "autogluon",
+    "hypothesis_revision": 1
   },
   "model": "codex:gpt-5.3-codex-spark:xhigh",
   "output_schema": null,

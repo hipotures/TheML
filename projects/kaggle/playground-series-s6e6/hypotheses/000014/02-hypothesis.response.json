@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Residual-to-local-color redshift consistency\",\n  \"group_name\": \"photoz_color_consistency\",\n  \"family\": \"photometric_redshift\",\n  \"summary\": \"Characterize how plausible each object's measured redshift is relative to the local redshift expectation of its color-magnitude neighborhood so class boundaries are exposed by systematic departures from the normal photometric redshift manifold.\",\n  \"depends_on\": [],\n  \"strategy\": \"Construct color features from ugriz as c_ug=u-g, c_gr=g-r, c_ri=r-i, c_iz=i-z. Fit color and redshift clipping limits only on the training set (0.1 and 99.9 percentiles) and clamp colors and redshift to those limits before bin assignment. Build deterministic quantile-binned lookup tables from training rows only: primary table on (c_gr, c_ri, r) using 9, 9, and 10 equal-frequency bins respectively; accept a primary cell only if it has at least 40 rows and store z_med, q25, q75 (for IQR), MAD, and n. Build three fallback tables on (c_gr, c_ri), (c_ug, c_gr), and (c_ri, c_iz), each with 10x10 equal-frequency bins and minimum n=60, storing the same statistics. For each row, retrieve expectation statistics by first attempting its exact primary cell, then its immediate primary-neighbor cells by Chebyshev radius 1 then 2 with n>=40, then exact fallback cells in the same three orderings, then each fallback\u2019s radius-1/2 expansion with n>=60; if none apply, use global training z_med and global IQR. Generate deterministic features from the chosen table: residual z_res=z-z_med, |z_res|, calibrated residual z_res/max(IQR,1e-3), local_log_count=log1p(n), local_IQR=IQR, local_MAD, ambiguity=IQR/(global_IQR+1e-6), and a small integer source_code indicating resolution level (exact primary, expanded primary, exact fallback, expanded fallback, global). For validation, construct tables only on each training fold and transform held-out fold rows with fold-specific tables to avoid self-reference artifacts.\",\n  \"expected_signal\": \"Stars and quasars often violate the dominant galaxy-like color-redshift trend in different ways: stars can have low true redshift with misleading colors, while quasars can generate large or multimodal local residuals at high redshift, so residual magnitude, scale-adjusted residual, and local ambiguity are expected to sharpen balanced separation beyond raw features alone.\",\n  \"risk\": \"The hierarchy can overfit if cell definitions are too fine or if too many expansions collapse to global behavior, and sparse tail color regions may still be noisy; despite leakage protections, the signals can be redundant with direct redshift-color interactions and add dimensionality/cost, so aggressive regularization or feature pruning may be required.\"\n}",
+  "usage": {
+    "threadId": "019ef77f-fb18-7ea1-8a48-13631a2f2abe",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 10108,
+        "outputTokens": 3526,
+        "reasoningOutputTokens": 2897,
+        "totalTokens": 13634
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 10108,
+        "outputTokens": 3526,
+        "reasoningOutputTokens": 2897,
+        "totalTokens": 13634
+      }
+    },
+    "turnId": "019ef77f-fb27-7f43-939f-685daa2e97be"
+  },
+  "wall_ms": 4878,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

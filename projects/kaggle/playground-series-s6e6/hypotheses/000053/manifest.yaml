@@ -1,12 +1,22 @@
+hypothesis:
+  id: '000053'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: 7da55365af45aa3c70dc2b2cc58b31630b7e78c259177cf38962bf500be3bbde
-    created_at: '2026-06-23T15:01:21'
-feature_group:
-  logical_name: dual_restframe_break_alignment
-  version_id: dual_restframe_break_alignment@000053
-  source_hypothesis_id: '000053'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 7da55365af45aa3c70dc2b2cc58b31630b7e78c259177cf38962bf500be3bbde
+      created_at: '2026-06-23T15:01:21'
+    - file: autogluon-002.py
+      revision: 2
+      sha256: 17e4222ab009d4d11021eab2f236553d9b62df6f53d8069f61217ad784ec7822
+      created_at: '2026-06-24T05:15:47'

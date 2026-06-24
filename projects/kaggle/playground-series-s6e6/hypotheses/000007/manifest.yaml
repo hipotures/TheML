@@ -1,12 +1,22 @@
+hypothesis:
+  id: '000007'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: faf846a6c68e4c87cd1928ac030dd18091abf0d5ba53efb204e783935db8b53f
-    created_at: '2026-06-22T13:57:27'
-feature_group:
-  logical_name: band_order_topology
-  version_id: band_order_topology@000007
-  source_hypothesis_id: '000007'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: faf846a6c68e4c87cd1928ac030dd18091abf0d5ba53efb204e783935db8b53f
+      created_at: '2026-06-22T13:57:27'
+    - file: autogluon-002.py
+      revision: 2
+      sha256: edb1e21e2d5a4a957b5d65e863c9e5cf74f592bb8096a38b51f7f66ba777443e
+      created_at: '2026-06-24T04:53:12'

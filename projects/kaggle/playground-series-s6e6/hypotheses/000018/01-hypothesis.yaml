@@ -1,0 +1,37 @@
+title: Catalog Tag Color Concordance
+group_name: catalog_tag_color_concordance
+family: tag_photometry_consistency
+summary: Measure whether each object's broadband color temperature agrees with the
+  semantic ordering implied by its provided spectral-type and galaxy-population catalog
+  tags, treating contradictions as informative astrophysical ambiguity.
+depends_on: []
+strategy: 'Compute adjacent SDSS colors u-g, g-r, r-i, and i-z, then form a deterministic
+  observed redness score as the mean of clipped color components: clip((u-g+0.5)/3.5,0,1),
+  clip((g-r+0.5)/2.0,0,1), clip((r-i+0.5)/1.5,0,1), and clip((i-z+0.5)/1.5,0,1). Map
+  spectral_type along the hot-to-cool stellar sequence O/B=0.00, A/F=0.33, G/K=0.67,
+  M=1.00, and map galaxy_population as Blue_Cloud=0.00 and Red_Sequence=1.00. Derive
+  signed and absolute differences between observed redness and each mapped expectation,
+  the difference between the two tag expectations, coarse redness bins [0,0.33), [0.33,0.67),
+  [0.67,1], and binary contradiction indicators for hot-tag-red-color, cool-tag-blue-color,
+  red-sequence-blue-color, and blue-cloud-red-color. Clip all color-derived values
+  before scoring; if an unexpected category appears, use neutral 0.5 for its expectation
+  and leave contradiction indicators off. Background used: SDSS documents that ugriz
+  colors are used for stellar and quasar photometric transformations and classification
+  context (https://classic.sdss.org/dr5/algorithms/sdssUBVRITransform.php, https://www.sdss3.org/dr10/algorithms/redshifts.php),
+  while astronomy references describe O/B/A/F/G/K/M as a temperature-color sequence
+  and galaxies as red-sequence versus blue-cloud populations (https://lweb.cfa.harvard.edu/~pberlind/atlas/htmls/note.html,
+  https://academic.oup.com/mnras/article/481/1/1183/5078380).'
+expected_signal: The categorical tags are likely strong but noisy summaries; converting
+  them into agreement and contradiction geometry can help separate ordinary stars
+  and galaxies from QSOs or mislabeled-borderline objects whose colors conflict with
+  the simple stellar-temperature or galaxy-population expectation, improving balanced
+  accuracy on minority and ambiguous classes.
+risk: This may be partly redundant with raw categorical features and existing color-derived
+  groups, and fixed color cutoffs could be brittle for unusual redshifted objects
+  whose observed colors violate local stellar or galaxy expectations for legitimate
+  physical reasons.
+schema_version: 1
+hypothesis_id: 000018
+enabled: true
+created_at: '2026-06-22T14:45:43'
+revision: 1

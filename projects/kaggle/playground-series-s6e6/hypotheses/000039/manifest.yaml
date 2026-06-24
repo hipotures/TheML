@@ -1,12 +1,34 @@
+hypothesis:
+  id: 000039
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
     active: autogluon-003.py
-    sha256: da91985c4a574d06eed71e5b21e3c05c14c0a5cbe6bb3645dbe9069b7e25ad32
-    created_at: '2026-06-23T16:34:23'
-feature_group:
-  logical_name: local_principal_color_residuals
-  version_id: local_principal_color_residuals@000039
-  source_hypothesis_id: 000039
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-003.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: a8583a4b9c73b2f79ee10115396ac4dcce736a61ce58991087d7a4e70ae677eb
+      created_at: '2026-06-23T16:34:23'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: 21e3643c9d1d7e4c124cffa4db68101a044d75c35c123b6a75486573a1ab6495
+      created_at: '2026-06-23T16:34:23'
+    - file: autogluon-003.py
+      revision: 1
+      sha256: da91985c4a574d06eed71e5b21e3c05c14c0a5cbe6bb3645dbe9069b7e25ad32
+      created_at: '2026-06-23T16:34:23'
+    - file: autogluon-004.py
+      revision: 2
+      sha256: d29e64ff6a75c991aebb64446900ab34629167942154e278cc5a02e2f8b85367
+      created_at: '2026-06-24T05:07:10'
+    - file: autogluon-005.py
+      revision: 2
+      sha256: 1ea7846535cc0b940de528d290c39b8215f4b337d023bd418d8555779b843b30
+      created_at: '2026-06-24T08:54:58'

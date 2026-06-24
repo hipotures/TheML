@@ -1,12 +1,15 @@
+hypothesis:
+  id: '000000'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: 96edff8408132ec587da2f3220b5e0dd93379de19dbb050cf75bfb5b5c7eff5f
-    created_at: '2026-06-22T16:54:00'
-feature_group:
-  logical_name: raw_autogluon_baseline
-  version_id: raw_autogluon_baseline@000000
-  source_hypothesis_id: '000000'
-  operation: raw_autogluon_baseline
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 96edff8408132ec587da2f3220b5e0dd93379de19dbb050cf75bfb5b5c7eff5f
+      created_at: '2026-06-24T14:35:50'

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Rest-frame-aware Flux Allocation and Concentration\",\n  \"group_name\": \"flux_allocation_entropy\",\n  \"family\": \"spectral_energy_allocation\",\n  \"summary\": \"Represent each object as a normalized five-band energy-share profile and summarize how compact, uneven, and wavelength-biased that profile is, with and without approximate rest-frame correction, to capture class-specific SED shape signatures that are insensitive to total brightness scale.\",\n  \"depends_on\": [],\n  \"strategy\": \"For each row, start from magnitudes m_u,m_g,m_r,m_i,m_z and build a stable share vector p by log-domain softmax: l_k=-0.4*m_k, l_k:=l_k-max(l), q_k=exp(ln(10)*l_k), and p_k=(q_k+\u03b1)/(\u03a3 q_j+5\u03b1) with \u03b1=1e-12. If any row contains non-finite values or if \u03a3 q_k<=0, force p=[0.2,0.2,0.2,0.2,0.2] and set an invalid-share flag for downstream audit. Sortability, concentration, and contrast features are then computed from p only: entropy H=-\u03a3 p_k ln p_k, normalized entropy Hn=H/ln(5), Simpson concentration Sc=\u03a3 p_k^2, Gini-style concentration G=1-Sc, effective band count Neff=1/(Sc+1e-12), largest-share ratio R12=p_(1)/ (p_(2)+1e-12), top-share gap p_(1)-p_(2), cumulative buckets B=p_u+p_g, M=p_g+p_r, R=p_i+p_z, and differences \u0394BR=B-R, \u0394UI=p_u-p_i, \u0394GR=p_g-p_r, \u0394ZI=p_z-p_g. Add wavelength-distribution shape statistics using canonical SDSS centers \u03bb=[355.1,468.6,616.5,748.1,893.1] nm and x=ln \u03bb: \u03bc=\u03a3 p_k x_k, v=\u03a3 p_k (x_k-\u03bc)^2, \u03c3=max(\u221av,1e-12), skew=\u03a3 p_k (x_k-\u03bc)^3/\u03c3^3, kurtosis=kurt=\u03a3 p_k (x_k-\u03bc)^4/\u03c3^4-3, plus centroid ratio \u03bc/\u03bc_max_band and scale ratio v/( (max(x)-min(x))^2 ). For redshift-aware descriptors, compute \u03bb_rf_k=\u03bb_k/(1+z_clamp), x_rf=ln \u03bb_rf_k with z_clamp=clip(z,-0.99,20), then \u03bc_rf,v_rf,skew_rf,kurt_rf analogously, and include \u0394\u03bc=\u03bc-\u03bc_rf and \u0394v=v-v_rf. Replace any NaN/inf from arithmetic with 0 and clip skew and kurtosis to [-8,8] before use.\",\n  \"expected_signal\": \"A flux-share formulation removes overall magnitude scaling while preserving the relative spectral-shape distribution, which can distinguish galaxy/star/QSO populations that overlap in raw magnitudes but differ in how optical energy is concentrated across bands; coupling these concentration/asymmetry descriptors with coarse rest-frame shift-aware moments adds discriminatory structure where redshifted features blur absolute-color rules and therefore should improve balanced accuracy.\",\n  \"risk\": \"These engineered descriptors are likely correlated with existing color and slope-based groups, can become unstable in extreme low-SNR or near-degenerate-band regimes despite the numeric guards, and the rest-frame moment terms can partially encode redshift-class priors, so overfitting and weak generalization are possible without validation controls.\"\n}",
+  "usage": {
+    "threadId": "019ef785-1e89-7492-a890-343e06d6b112",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 20455,
+        "outputTokens": 6879,
+        "reasoningOutputTokens": 6107,
+        "totalTokens": 27334
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 20455,
+        "outputTokens": 6879,
+        "reasoningOutputTokens": 6107,
+        "totalTokens": 27334
+      }
+    },
+    "turnId": "019ef785-1e96-7a81-b1bc-ec32e79793bf"
+  },
+  "wall_ms": 11875,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

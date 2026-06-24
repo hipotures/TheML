@@ -1,0 +1,48 @@
+title: Rest-frame anchored SED slope and break profile
+group_name: restframe_anchor_sed_shape
+family: restframe_shape
+summary: "Create rest-frame, interpolation-based descriptors of the broadband spectral\
+  \ shape at fixed physical wavelengths so class-specific continuum slope, curvature,\
+  \ and 3650 \xC5-break behavior are compared on a common spectral grid rather than\
+  \ in observed-frame filter space."
+depends_on: []
+strategy: "For each object, use ugriz magnitudes m_b and effective wavelengths \u03BB\
+  u=3551, \u03BBg=4686, \u03BBr=6165, \u03BBi=7481, \u03BBz=8931 \xC5. Set den= max(1+z,\
+  \ 1.0e-3) to avoid division-by-near-zero for the rare negative-redshift tail and\
+  \ compute rest wavelengths \u03BB\u2032b = \u03BBb/den. Convert each magnitude to\
+  \ a log-flux surrogate y_b = -0.4\xB7m_b (absolute scale irrelevant for shape);\
+  \ set x_b = log10(\u03BB\u2032b). Sort the five (x_b, y_b) pairs by x_b and build\
+  \ piecewise-linear interpolation y(x). Define fixed anchors A={1500,2200,2900,3650,4500,6200,7600}\
+  \ \xC5 with xa=log10(a). For each anchor, if xa is inside [min(x_b), max(x_b)] evaluate\
+  \ y_a = y(xa), else set y_a=NaN; also create anchor_mask_a\u2208{0,1}, n_anchor\
+  \ and frac_anchor as coverage indicators. Compute segment slopes only from adjacent\
+  \ defined anchors: s_i = \u0394y/\u0394x for the six possible adjacent anchor intervals,\
+  \ and carry per-segment masks. Define curvature deltas with available slopes as\
+  \ \u0394s_uv=(s2200-2900)-(s1500-2200) and \u0394s_opt=(s3650-4500)-(s2900-3650),\
+  \ setting NaN if any endpoint is missing. Compute a 3650-\xC5 break residual b4000\
+  \ = y(3650)\u2212\u0177 where \u0177 is linear interpolation of y at 3650 from defined\
+  \ anchors at 2900 and 4500; if either bracketing anchor is missing set b4000=NaN.\
+  \ Fit a global OLS line y = a_g x + b_g over all defined anchors (require n_anchor\u2265\
+  2), then output a_g, b_g, RMSE_global and mean absolute residual over defined anchors.\
+  \ Split anchors at xa=3650: UV side x\u22643650 and optical side x>3650. Fit separate\
+  \ OLS lines when each side has at least 2 points; output a_blue, b_blue, RMSE_blue,\
+  \ a_red, b_red, RMSE_red, and a break-sharpness metric b_break = \u0177_blue(3650)\u2212\
+  \u0177_red(3650); set all side metrics to NaN if prerequisites fail. Add stability\
+  \ features as mean and max of |y_a\u2212\u0177_global(xa)| over defined anchors\
+  \ and a no-data flag (n_anchor<2) to keep downstream handling explicit."
+expected_signal: "With anchors anchored in physical wavelength, slope and curvature\
+  \ descriptors become directly comparable across redshift, allowing the model to\
+  \ capture the stronger rest-frame 3650 \xC5-break curvature typical of galaxies,\
+  \ the smoother broken power-law-like continua of quasars, and the smoother, weaker-curvature\
+  \ profile of stars despite the wide z span in the sample."
+risk: "Anchor-wise interpolation can become unstable when only 2\u20133 ugriz points\
+  \ are valid in rest-frame at extreme redshift, and side-specific breaks may collapse\
+  \ into missing values, increasing sparsity; if class is partially confounded with\
+  \ redshift sampling, rest-frame shape features can absorb redshift-correlated artifacts\
+  \ instead of intrinsic spectral differences, and they may be redundant with existing\
+  \ color/redshift features unless downstream regularization handles correlation."
+schema_version: 1
+hypothesis_id: '000054'
+revision: 2
+enabled: true
+created_at: '2026-06-24T04:47:34'

@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.venv
 .venv/
 .env
 tmp/
@@ -15,6 +16,7 @@ tml.db-wal
 tml.db-shm
 *.tmp
 *.partial
+*.old
 
 # Local worktrees
 .worktrees/

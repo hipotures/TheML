@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n_BAND_COLUMNS = (\"u\", \"g\", \"r\", \"i\", \"z\")\n_PIVOT_WAVELENGTHS_ANGSTROM = (3543.0, 4770.0, 6231.0, 7625.0, 9134.0)\n_TRAIN_QUANTILE_LOW = 0.001\n_TRAIN_QUANTILE_HIGH = 0.999\n_FALLBACK_MAG_MIN = -1.0\n_FALLBACK_MAG_MAX = 35.0\n_XTX_COND_LIMIT = 1.0e12\n\n\ndef _sanitize_band(raw_series):\n    values = pd.to_numeric(raw_series, errors=\"coerce\").to_numpy(dtype=np.float64, copy=True)\n\n    finite_mask = np.isfinite(values)\n    finite_values = values[finite_mask]\n\n    if finite_values.size == 0:\n        lower, upper = _FALLBACK_MAG_MIN, _FALLBACK_MAG_MAX\n        median = 0.5 * (lower + upper)\n    else:\n        finite_series = pd.Series(finite_values)\n        median = float(finite_series.median())\n        lower = float(finite_series.quantile(_TRAIN_QUANTILE_LOW))\n        upper = float(finite_series.quantile(_TRAIN_QUANTILE_HIGH))\n        if not np.isfinite(lower) or not np.isfinite(upper):\n            lower, upper = _FALLBACK_MAG_MIN, _FALLBACK_MAG_MAX\n        if lower > upper:\n            lower, upper = _FALLBACK_MAG_MIN, _FALLBACK_MAG_MAX\n        if not np.isfinite(median):\n            median = 0.5 * (lower + upper)\n\n    values[~finite_mask] = median\n    return np.clip(values, lower, upper)\n\n\ndef add_observed_sed_continuum_moments(raw, deps, aux):\n    index = raw.index\n    n_rows = len(raw)\n\n    slope = np.zeros(n_rows, dtype=np.float64)\n    curvature = np.zeros(n_rows, dtype=np.float64)\n    residual_rms = np.zeros(n_rows, dtype=np.float64)\n    residual_mae = np.zeros(n_rows, dtype=np.float64)\n    residual_max_abs = np.zeros(n_rows, dtype=np.float64)\n    residual_u = np.zeros(n_rows, dtype=np.float64)\n    residual_z = np.zeros(n_rows, dtype=np.float64)\n    blue_red_break_delta = np.zeros(n_rows, dtype=np.float64)\n\n    if n_rows == 0:\n        return pd.DataFrame(\n            {\n                \"sed_slope_quad\": slope,\n                \"sed_curvature_quad\": curvature,\n                \"sed_resid_rms\": residual_rms,\n                \"sed_resid_mae\": residual_mae,\n                \"sed_resid_max_abs\": residual_max_abs,\n                \"sed_resid_u\": residual_u,\n                \"sed_resid_z\": residual_z,\n                \"sed_break_delta_blue_minus_red\": blue_red_break_delta,\n            },\n            index=index,\n        )\n\n    band_matrix = np.column_stack([\n        _sanitize_band(raw[column]) for column in _BAND_COLUMNS\n    ])\n\n    log_flux = -0.4 * band_matrix\n    centered_flux = log_flux - log_flux.mean(axis=1, keepdims=True)\n\n    pivots = np.array(_PIVOT_WAVELENGTHS_ANGSTROM, dtype=np.float64)\n    t = np.log10(pivots)\n    t = t - t.mean()\n    t2 = t * t\n\n    xTx = np.array([\n        [5.0, np.sum(t), np.sum(t2)],\n        [np.sum(t), np.sum(t2), np.sum(t * t2)],\n        [np.sum(t2), np.sum(t * t2), np.sum(t2 * t2)],\n    ], dtype=np.float64)\n\n    cond_xTx = np.linalg.cond(xTx)\n    if not np.isfinite(cond_xTx) or cond_xTx > _XTX_COND_LIMIT:\n        return pd.DataFrame(\n            {\n                \"sed_slope_quad\": slope,\n                \"sed_curvature_quad\": curvature,\n                \"sed_resid_rms\": residual_rms,\n                \"sed_resid_mae\": residual_mae,\n                \"sed_resid_max_abs\": residual_max_abs,\n                \"sed_resid_u\": residual_u,\n                \"sed_resid_z\": residual_z,\n                \"sed_break_delta_blue_minus_red\": blue_red_break_delta,\n            },\n            index=index,\n        )\n\n    inv_xTx = np.linalg.inv(xTx)\n\n    moments0 = np.sum(centered_flux, axis=1)\n    moments1 = centered_flux.dot(t)\n    moments2 = centered_flux.dot(t2)\n    rhs = np.column_stack((moments0, moments1, moments2))\n\n    coef = rhs.dot(inv_xTx.T)\n    beta0 = coef[:, 0]\n    beta1 = coef[:, 1]\n    beta2 = coef[:, 2]\n\n    fit = beta0[:, None] + beta1[:, None] * t + beta2[:, None] * t2\n    residuals = centered_flux - fit\n\n    row_ok = np.isfinite(beta1) & np.isfinite(beta2)\n    row_ok &= np.isfinite(residuals).all(axis=1)\n\n    edge_delta = (centered_flux[:, 0] - centered_flux[:, 1]) / (t[0] - t[1])\n    edge_delta -= (centered_flux[:, 2] - centered_flux[:, 3]) / (t[2] - t[3])\n\n    row_ok &= np.isfinite(edge_delta)\n    row_ok &= np.isfinite(beta0)\n\n    if np.any(row_ok):\n        slope[row_ok] = beta1[row_ok]\n        curvature[row_ok] = beta2[row_ok]\n        residual_row = residuals[row_ok]\n        residual_rms[row_ok] = np.sqrt(np.mean(residual_row * residual_row, axis=1))\n        residual_mae[row_ok] = np.mean(np.abs(residual_row), axis=1)\n        residual_max_abs[row_ok] = np.max(np.abs(residual_row), axis=1)\n        residual_u[row_ok] = residual_row[:, 0]\n        residual_z[row_ok] = residual_row[:, 4]\n        blue_red_break_delta[row_ok] = edge_delta[row_ok]\n\n    return pd.DataFrame(\n        {\n            \"sed_slope_quad\": slope,\n            \"sed_curvature_quad\": curvature,\n            \"sed_resid_rms\": residual_rms,\n            \"sed_resid_mae\": residual_mae,\n            \"sed_resid_max_abs\": residual_max_abs,\n            \"sed_resid_u\": residual_u,\n            \"sed_resid_z\": residual_z,\n            \"sed_break_delta_blue_minus_red\": blue_red_break_delta,\n        },\n        index=index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"observed_sed_continuum_moments\",\n        \"fn\": add_observed_sed_continuum_moments,\n        \"depends_on\": [],\n        \"description\": \"Compute robust relative SED shape descriptors by fitting a centered quadratic continuum over SDSS bands and summarizing quadratic slope/curvature and residual structure.\",\n    }\n]",
+  "usage": {
+    "threadId": "019ef78f-be44-77f0-be5b-29ee0801ba1d",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8320,
+        "inputTokens": 10196,
+        "outputTokens": 8975,
+        "reasoningOutputTokens": 7449,
+        "totalTokens": 19171
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 8320,
+        "inputTokens": 10196,
+        "outputTokens": 8975,
+        "reasoningOutputTokens": 7449,
+        "totalTokens": 19171
+      }
+    },
+    "turnId": "019ef78f-be53-7e70-8274-cf1aa2a716cf"
+  },
+  "wall_ms": 8492,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

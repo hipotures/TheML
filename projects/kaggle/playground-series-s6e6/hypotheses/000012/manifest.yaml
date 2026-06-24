@@ -1,12 +1,26 @@
+hypothesis:
+  id: '000012'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
-    active: autogluon-002.py
-    sha256: 6fa481552876179145bb50c42da544de55ac9244ca102afb09b2c25ac0c1eccd
-    created_at: '2026-06-22T16:07:41'
-feature_group:
-  logical_name: faint_blue_galaxy_wedge_margins
-  version_id: faint_blue_galaxy_wedge_margins@000012
-  source_hypothesis_id: '000012'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-002.py
+    active: autogluon-003.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 0436d81a3f6abc904cdce1bc0e465de124ca07b7f7621154ee46b562f18b9a2e
+      created_at: '2026-06-22T16:07:41'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: 6fa481552876179145bb50c42da544de55ac9244ca102afb09b2c25ac0c1eccd
+      created_at: '2026-06-22T16:07:41'
+    - file: autogluon-003.py
+      revision: 2
+      sha256: 9d784db477a35c8dc691a874112a1845c0b791b51ef984d7f8b07f3dd49768bb
+      created_at: '2026-06-24T04:54:16'

@@ -1,12 +1,22 @@
+hypothesis:
+  id: 000009
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: e154622795e0de24a8df3610593ac85aa3a830bebabc87925c42eeef4dc662a2
-    created_at: '2026-06-22T14:03:51'
-feature_group:
-  logical_name: canonical_locus_coordinates
-  version_id: canonical_locus_coordinates@000009
-  source_hypothesis_id: 000009
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: e154622795e0de24a8df3610593ac85aa3a830bebabc87925c42eeef4dc662a2
+      created_at: '2026-06-22T14:03:51'
+    - file: autogluon-002.py
+      revision: 2
+      sha256: 790397bd4060cc310e1dc3a629bb0eddd42f1cefcb2ac1c6aeb1ff149ed13e6d
+      created_at: '2026-06-24T04:53:48'

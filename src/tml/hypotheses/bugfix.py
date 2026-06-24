@@ -22,6 +22,7 @@ from tml.utils.yaml_io import read_yaml
 
 from .baseline import ensure_root_baseline
 from .materialize import _parse_code, _update_manifest
+from .revisions import load_revision
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,7 @@ def root_bugfix_plan(
     project_dir: Path,
     mode: str,
     hypothesis_id: str | None = None,
+    revision: int | None = None,
 ) -> RootBugfixPlan:
     upsert_project(project_dir)
     ensure_root_baseline(project_dir)
@@ -54,15 +56,19 @@ def root_bugfix_plan(
     providers = repo_providers_for_project(project_dir)
     spec = resolve_model_spec(model, providers)
     provider_config = {**(spec.provider_config or {}), **role_options}
-    candidates = bugfix_candidates(project_dir, mode, hypothesis_id=hypothesis_id)
+    candidates = bugfix_candidates(project_dir, mode, hypothesis_id=hypothesis_id, revision=revision)
     source_files: list[str] = []
     target_files: list[str] = []
     hypothesis_ids: list[str] = []
+    reserved_targets: dict[str, set[str]] = {}
     for record in candidates:
         hdir = _candidate_hypothesis_dir(project_dir, record)
         source = hdir / "materializations" / str(record["file"])
+        reserved = reserved_targets.setdefault(hdir.name, set())
+        target = _next_materialization_path(project_dir, source.parent, mode, hdir.name, reserved=reserved)
         source_files.append(source.name)
-        target_files.append(_next_materialization_path(project_dir, source.parent, mode, hdir.name).name)
+        target_files.append(target.name)
+        reserved.add(target.name)
         hypothesis_ids.append(str(record["hypothesis_id"]))
     return RootBugfixPlan(
         mode=mode,
@@ -86,6 +92,7 @@ def bugfix_failed_materializations(
     project_dir: Path,
     mode: str,
     hypothesis_id: str | None = None,
+    revision: int | None = None,
     progress: Callable[[str, int | None], None] | None = None,
 ) -> int:
     upsert_project(project_dir)
@@ -94,15 +101,22 @@ def bugfix_failed_materializations(
     model, role_options = resolve_role_model(models, "materializations", fallback_role="code")
     providers = repo_providers_for_project(project_dir)
     timeout_seconds = int(role_options.get("timeout_seconds") or 900)
-    candidates = bugfix_candidates(project_dir, mode, hypothesis_id=hypothesis_id)
+    candidates = bugfix_candidates(project_dir, mode, hypothesis_id=hypothesis_id, revision=revision)
     total = len(candidates)
     created = 0
+    reserved_targets: dict[str, set[str]] = {}
     for index, record in enumerate(candidates, start=1):
         hid = str(record["hypothesis_id"])
         hdir = _candidate_hypothesis_dir(project_dir, record)
         mat_dir = hdir / "materializations"
         source = mat_dir / str(record["file"])
-        target = _next_materialization_path(project_dir, mat_dir, mode, hid)
+        raw_revision = record.get("hypothesis_revision")
+        if raw_revision is None:
+            raise ValueError(f"Missing hypothesis_revision for bugfix candidate {hid}/{source.name}")
+        source_revision = int(raw_revision)
+        reserved = reserved_targets.setdefault(hid, set())
+        target = _next_materialization_path(project_dir, mat_dir, mode, hid, reserved=reserved)
+        reserved.add(target.name)
         progress_prefix = f"ROOT bugfix {hid} {mode} ({index}/{total})"
         if progress is not None:
             progress(f"Fixing {progress_prefix} with {model}...", timeout_seconds)
@@ -111,15 +125,18 @@ def bugfix_failed_materializations(
             if progress is not None:
                 progress(f"{prefix}: {message}", timeout_seconds)
 
+        source_code = _source_materialization_code(mat_dir, source.name)
+        error_text = _failure_context(project_dir, record)
         bugfix_context = {
             "mode": mode,
             "hypothesis_id": hid,
             "source_file": source.name,
             "target_file": target.name,
-            "source_code": _source_materialization_code(mat_dir, source.name),
+            "source_code": source_code,
             "node_id": str(record.get("node_id") or ""),
             "run_id": str(record.get("run_id") or ""),
-            "error_text": _failure_context(project_dir, record),
+            "error_text": error_text,
+            "repair_notes": _repair_notes(error_text),
         }
         rendered = render_template(
             project_dir,
@@ -140,6 +157,7 @@ def bugfix_failed_materializations(
                 metadata={
                     "mode": mode,
                     "hypothesis_id": hid,
+                    "hypothesis_revision": source_revision,
                     "bugfix_source_file": source.name,
                     "bugfix_source_node_id": bugfix_context["node_id"],
                 },
@@ -160,13 +178,20 @@ def bugfix_failed_materializations(
                 f"response={_project_path_text(project_dir, response_path)}: {exc}"
             )
             atomic_write_text(mat_dir / f"{target.stem}.error.txt", error_text + "\n")
-            upsert_failed_materialization(project_dir, hdir, mode, target.name, code_text=group_code)
+            upsert_failed_materialization(
+                project_dir,
+                hdir,
+                mode,
+                target.name,
+                code_text=group_code,
+                hypothesis_revision=source_revision,
+            )
             if progress is not None:
                 progress(f"{progress_prefix}: failed validation: {exc}", None)
             continue
         atomic_write_text(target, group_code)
-        hypothesis = read_yaml(hdir / "hypothesis.yaml")
-        _update_manifest(hdir, mode, target, hypothesis)
+        hypothesis = load_revision(hdir, source_revision).payload
+        _update_manifest(hdir, mode, target, hypothesis, revision=source_revision)
         upsert_materialization(
             project_dir,
             hdir,
@@ -177,6 +202,7 @@ def bugfix_failed_materializations(
             source_node_id=bugfix_context["node_id"],
             fixed_from_file=source.name,
             fixed_from_code_hash=str(record["code_hash"]),
+            hypothesis_revision=source_revision,
         )
         created += 1
     return created
@@ -193,7 +219,7 @@ def _project_path_text(project_dir: Path, path: Path) -> str:
         return path.name
 
 
-def _next_materialization_path(project_dir: Path, mat_dir: Path, mode: str, hypothesis_id: str) -> Path:
+def _next_materialization_path(project_dir: Path, mat_dir: Path, mode: str, hypothesis_id: str, *, reserved: set[str] | None = None) -> Path:
     highest = 0
     for path in mat_dir.glob(f"{mode}-*.py"):
         try:
@@ -204,6 +230,12 @@ def _next_materialization_path(project_dir: Path, mat_dir: Path, mode: str, hypo
     for row in materialization_rows(project_dir, mode=mode, hypothesis_id=hypothesis_id):
         try:
             number = int(Path(str(row.get("file") or "")).stem.rsplit("-", 1)[-1])
+        except ValueError:
+            continue
+        highest = max(highest, number)
+    for file_name in reserved or set():
+        try:
+            number = int(Path(file_name).stem.rsplit("-", 1)[-1])
         except ValueError:
             continue
         highest = max(highest, number)
@@ -218,6 +250,32 @@ def _source_materialization_code(mat_dir: Path, file_name: str) -> str:
     if response.exists():
         return _parse_code(response.read_text(encoding="utf-8"))
     raise ValueError(f"Cannot find source materialization code or response text for {file_name}")
+
+
+def _repair_notes(error_text: str) -> str:
+    notes: list[str] = []
+    if "must not call functions in top-level assignments" in error_text:
+        notes.append(
+            "The validator rejected a module-level assignment whose right-hand side calls a function, constructor, "
+            "generator, or comprehension. Keep only literal constants at module level. Move calls such as "
+            "`np.array(...)`, `tuple(...)`, `range(...)`, `pd.IntervalIndex(...)`, `np.linspace(...)`, and "
+            "comprehensions into the feature function or a helper that is called from the feature function. "
+            "For example, replace `_Q12_LEVELS = tuple(i / 12 for i in range(13))` with an explicit literal tuple, "
+            "or construct it inside the function."
+        )
+    if "must not execute top-level code outside imports, definitions, and registry assignments" in error_text:
+        notes.append(
+            "The validator rejected executable module-level code. Do not use top-level `try`, `if`, loops, "
+            "function calls, or computed assignments. Plain imports, function/class definitions, literal constants, "
+            "and the final `FEATURE_GROUPS` registry are allowed. Move optional imports or fallback logic inside "
+            "the feature function or a helper function."
+        )
+    if "SyntaxError" in error_text or "was never closed" in error_text:
+        notes.append(
+            "The generated module is syntactically invalid. Fix the exact syntax error first, then ensure the "
+            "module still obeys the feature-group contract."
+        )
+    return "\n".join(f"- {note}" for note in notes)
 
 
 def _failure_context(project_dir: Path, record: dict[str, object]) -> str:

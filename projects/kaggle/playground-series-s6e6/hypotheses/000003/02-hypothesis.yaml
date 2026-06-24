@@ -1,0 +1,45 @@
+title: Galactic sightline morphology features
+group_name: galactic_sightline_context
+family: sky_position
+summary: Represent each object by physically meaningful Galactic-sky morphology features
+  that capture how its line of sight aligns with the Milky Way disk and high-latitude
+  regions, enabling the model to distinguish foreground-star-dense directions from
+  cleaner extragalactic sightlines.
+depends_on: []
+strategy: "From alpha and delta, compute radians: \u03B1 = deg2rad(alpha mod 360),\
+  \ \u03B4 = deg2rad(delta). Compute Galactic longitude and latitude using IAU J2000\
+  \ formulas: sinb = sin\u03B4\xB7sin\u03B4_NGP + cos\u03B4\xB7cos\u03B4_NGP\xB7cos(\u03B1\
+  \u2212\u03B1_NGP), b = asin(clamp(sinb, -1, 1)); l = (l_asc \u2212 atan2(cos\u03B4\
+  \xB7sin(\u03B1\u2212\u03B1_NGP), cos\u03B4_NGP\xB7sin\u03B4 \u2212 sin\u03B4_NGP\xB7\
+  cos\u03B4\xB7cos(\u03B1\u2212\u03B1_NGP))) mod 2\u03C0, with \u03B1_NGP = 192.85948\xB0\
+  , \u03B4_NGP = 27.12825\xB0, l_asc = 122.93192\xB0. Convert b and l to degrees after\
+  \ wrapping l into [0, 360). Also build a parallel unit-vector path via x = cos\u03B4\
+  \ cos\u03B1, y = cos\u03B4 sin\u03B1, z = sin\u03B4 and rotate to Galactic Cartesian\
+  \ to reduce singularity risk, then recover l, b if needed from the rotated vector.\
+  \ Derive deterministic features: b_abs = |b|, sign_b, sin(b), cos(b), sin(l), cos(l),\
+  \ d_plane = b_abs, angular distances to Galactic center d_gc = arccos(clamp(cos(b_rad)\xB7\
+  cos(l_rad), -1, 1)), anticenter d_ac = arccos(clamp(-cos(b_rad)\xB7cos(l_rad), -1,\
+  \ 1)), north pole d_np = arccos(clamp(sin(b_rad), -1, 1)), south pole d_sp = arccos(clamp(-sin(b_rad),\
+  \ -1, 1)); all inverse-trig inputs must be clipped to [-1, 1] and all angular outputs\
+  \ in degrees. Bin b_abs into nine bands: [0,5), [5,10), [10,20), [20,30), [30,40),\
+  \ [40,50), [50,60), [60,75), [75,90] with the final bin closed; bin l into 12 equal\
+  \ 30\xB0 sectors [0,30), ... [330,360), plus explicit treatment for l==360 as 0;\
+  \ create crossed regime feature band_id\xD7sector_id and include b_sign\xD7band\
+  \ and b_sign\xD7sector interactions. Include these as integer/categorical encodings\
+  \ plus optional one-hot expansion in modeling."
+expected_signal: 'Spatial prior captures class-specific anisotropy in the sky that
+  is not available from photometry alone: stars are more frequent near the Galactic
+  plane while extragalactic sources are comparatively less detectable there, so this
+  geometry channel should improve discrimination where u/g/r/i/z and redshift signatures
+  are overlapping, especially by improving STAR recall and reducing confusion in low-latitude/high
+  contamination regions.'
+risk: Strongly spatial features can absorb survey footprint artifacts (masked fields,
+  depth variation, target-selection boundaries) and overfit if train/test coverage
+  differs, they may remain noisy around pole/crossing boundaries if angle normalization
+  is mishandled, and they may provide only incremental benefit because color-based
+  features already dominate class separability.
+schema_version: 1
+hypothesis_id: '000003'
+revision: 2
+enabled: true
+created_at: '2026-06-24T04:38:23'

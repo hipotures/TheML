@@ -1,12 +1,30 @@
+hypothesis:
+  id: '000003'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
-    active: autogluon-002.py
-    sha256: 1de6ff1be77d135c2f8fbcd11cf2846535cdf74b8efad21d39291c167b467104
-    created_at: '2026-06-22T15:51:25'
-feature_group:
-  logical_name: galactic_sightline_context
-  version_id: galactic_sightline_context@000003
-  source_hypothesis_id: '000003'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-002.py
+    active: autogluon-004.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 12e00e4190977fc6f81aaeefa79ccf141126889a260457a3e6a98826d9256585
+      created_at: '2026-06-22T15:51:25'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: 1de6ff1be77d135c2f8fbcd11cf2846535cdf74b8efad21d39291c167b467104
+      created_at: '2026-06-22T15:51:25'
+    - file: autogluon-003.py
+      revision: 2
+      sha256: d0a3efbda6b84378bc2315cc2e9b7c04d86c7531e0643e26b0a676d180a00a90
+      created_at: '2026-06-24T04:52:15'
+    - file: autogluon-004.py
+      revision: 2
+      sha256: 2b5b5fcd9ff154454be8e1231f471efc458e0243ac9e0daf005bf1ad980c09ec
+      created_at: '2026-06-24T08:52:59'

@@ -1,12 +1,22 @@
+hypothesis:
+  id: '000052'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: 830113f0b7e59159d0aff329ebde392254c19e02a916db95cf91ddc27a85bee3
-    created_at: '2026-06-23T15:01:04'
-feature_group:
-  logical_name: segue_stellar_subtype_margins
-  version_id: segue_stellar_subtype_margins@000052
-  source_hypothesis_id: '000052'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 830113f0b7e59159d0aff329ebde392254c19e02a916db95cf91ddc27a85bee3
+      created_at: '2026-06-23T15:01:04'
+    - file: autogluon-002.py
+      revision: 2
+      sha256: bb29629fca99ebc64942b85f8671ca70d5bb90c677b33b006340878143acb443
+      created_at: '2026-06-24T05:15:34'

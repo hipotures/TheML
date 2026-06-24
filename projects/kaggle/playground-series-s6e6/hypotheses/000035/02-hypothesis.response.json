@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Robust eBOSS c1/c3 wedge and bright-pocket geometry\",\n  \"group_name\": \"eboss_ptf_c1_c3_geometry\",\n  \"family\": \"color_plane_selection_geometry\",\n  \"summary\": \"This feature group encodes the rotated ugri color-manifold geometry used in quasar targeting by measuring signed distances to the c1/c3 selection wedge and the proximity of objects to a known bright-object contamination pocket, yielding a compact contamination-aware representation for multiclass separation.\",\n  \"depends_on\": [],\n  \"strategy\": \"Create adjacent colors from clipped magnitudes to reduce outlier sensitivity: c_ug = u-g, c_gr = g-r, c_ri = r-i, with each band first clipped to training-set robust bounds (p0.5 and p99.5, and fallback to [-30, 35] per band if bounds are missing). Compute c1 = 0.95*c_ug + 0.31*c_gr + 0.11*c_ri and c3 = -0.39*c_ug + 0.79*c_gr + 0.47*c_ri. Define wedge responses d1 = (1.4 - 0.55*c1) - c3 and d2 = (0.3 - 0.1*c1) - c3. Emit signed separation: S1 = max(d1, 0), S2 = max(d2, 0), core = min(d1, d2), V1 = max(-d1, 0), V2 = max(-d2, 0), soft_gap = max(V1, V2), and normalized_gap = soft_gap / (1 + abs(c1)) to avoid magnitude dependence at large c1. Emit bright-pocket coordinates with explicit finite handling: pocket_c1 = max(0.85 - c1, 0, c1 - 1.35), pocket_c3 = max(-c3 - 0.2, 0), pocket_flag = 1 if (r < 20.5 and pocket_c1 == 0 and pocket_c3 == 0), else 0; pocket_distance = max(pocket_c1, pocket_c3). Add stable discretized companions using training-time quantiles only: q_core in {below, near, above} from core values (split at two symmetric quantiles around zero, with tie-safe fallback to sign-based bins), c1_bin as train tertiles, and soft_gap_bin from train quantiles [q0.33, q0.67], while clamping all edge/inf values into nearest finite bin.\",\n  \"expected_signal\": \"The rotated-plane formulation directly reflects quasar-targeting structure, so distance-to-boundary and boundary-violation features distinguish QSO-like points from the dense stellar/galaxy manifold even when raw colors are similar, and the bright-pocket terms add a calibrated penalty for low-r, color-restricted contaminants, likely improving minority-class recall balance in the multiclass setting.\",\n  \"risk\": \"The linear boundaries and pocket constants are derived from a specific SDSS-like selection context and may be offset if this dataset\u2019s photometric calibration, extinction treatment, or magnitude conventions differ, which can create systematic false positives/negatives; percentile-based clipping and binning can also dampen true-but-rare extremes and add redundancy with other engineered color-ratio features.\"\n}",
+  "usage": {
+    "threadId": "019ef783-a838-7963-95a1-ebe6f4b19dec",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 10247,
+        "outputTokens": 3480,
+        "reasoningOutputTokens": 2769,
+        "totalTokens": 13727
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 10247,
+        "outputTokens": 3480,
+        "reasoningOutputTokens": 2769,
+        "totalTokens": 13727
+      }
+    },
+    "turnId": "019ef783-a84a-7e31-9e7d-45ce570b9cbe"
+  },
+  "wall_ms": 5460,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Robust SEGUE subtype margins with normalized prototype proximity features\",\n  \"group_name\": \"segue_stellar_subtype_margins\",\n  \"family\": \"stellar_color_geometry\",\n  \"summary\": \"Model canonical stellar subtype regions from calibrated color-space geometry as smooth signed-distance-to-envelope features, so each object carries structured evidence of how closely it matches multiple known stellar loci versus how far it deviates.\",\n  \"depends_on\": [],\n  \"strategy\": \"Compute base colors ug=u-g, gr=g-r, ri=r-i, iz=i-z, gi=g-i. Compute the SEGUE-style linear transforms on magnitudes: l_color=-0.436*u+1.129*g-0.119*r-0.574*i+0.1984, s_color=-0.249*u+0.794*g-0.555*r+0.234, p1=0.91*ug+0.415*gr-1.280, and v=0.283*ug-0.354*gr+0.455*ri+0.766*iz. For each primitive term t, estimate training-only robust scale s_t as max(MAD(t),0.01) and clip raw t to the train 0.5th/99.5th percentile range before normalization. Use penalties: I_int(x,[a,b])=0 if a<=x<=b else min(|x-a|,|x-b|)/s_x, I_hi(x,k)=max(0,x-k)/s_x, I_lo(x,k)=max(0,k-x)/s_x. For each prototype p, define a weighted sum P_p of clause penalties (weights proportional to inverse interval width) with explicit bounds: white_dwarf: gr in [-1,-0.2], ug in [-1,0.7], and ug+2*gr <= -0.1; cool_white_dwarf: r in [14.5,20.5], gi in [-2,1.7], and if gi<0.6 then ug in [-0.4,1.0], else ug in [-0.2,1.4]; A_BHB: ug in [0.8,1.5], gr in [-0.5,0.2], and v in [-0.15,0.15]; K_giants: gr in [0.35,0.8], ri in [0.15,0.6], and l_color>=0.07 (I_lo form); low_metallicity: gr in [-0.5,0.75], ug in [0.6,3.0], and l_color>=0.135; M_subdwarf: ri<=0.9, ri<=0.787*gr-0.356, gi in [1.8,2.4]; main_sequence_white_dwarf_pairs: ug<=2.25, gr in [-0.2,1.2], ri in [0.5,2.0], gr>-1.0*ri+1.13, gr<0.95*ri+0.50, and if ri<1 use iz in [-0.5,1.0], else iz in [-0.2,0.7]. Apply a redshift trust gate g_z = 1 + max(0, redshift-0.30)/0.30 and use P_p = g_z * P_p. Emit aggregated outputs: star_margin_best=min(P_p), star_margin_second=min2(P_p), star_margin_gap=star_margin_second-star_margin_best, star_inlier_count=\u03a3(P_p<=0.02), and star_confidence=exp(-star_margin_best).\",\n  \"expected_signal\": \"The model receives continuous proximity-to-locus and margin-gap structure instead of brittle binary cuts, which should better preserve star-like manifold geometry and expose ambiguous regions where galaxies or quasars mimic one stellar cut but fail a full subtype envelope, improving balanced separability for the STAR class.\",\n  \"risk\": \"SEGUE-style legacy cuts are sensitive to photometric calibration, extinction treatment, and selection shifts; boundary hardening can overfit to this survey epoch, and quasar/galaxy contaminants with low redshift and star-like colors may still produce small prototype penalties, especially when transformed scales change across subsets.\"\n}",
+  "usage": {
+    "threadId": "019ef786-315d-7550-b92b-34e295ad1471",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 10428,
+        "outputTokens": 8657,
+        "reasoningOutputTokens": 7748,
+        "totalTokens": 19085
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 10428,
+        "outputTokens": 8657,
+        "reasoningOutputTokens": 7748,
+        "totalTokens": 19085
+      }
+    },
+    "turnId": "019ef786-316b-7d90-ad78-cb2db522b9ff"
+  },
+  "wall_ms": 11738,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Robust Ordinal Band Topology Signature\",\n  \"group_name\": \"band_order_topology\",\n  \"family\": \"ordinal_sed\",\n  \"summary\": \"Encode each object by the shape of its ugriz brightness ordering and local monotonicity pattern so the model can separate smooth stellar continua, galaxy-like single turnovers, and more irregular quasar band patterns while remaining insensitive to absolute flux scale.\",\n  \"depends_on\": [],\n  \"strategy\": \"Let m=[u,g,r,i,z] and \u03c4=0.02 mag. Compute spread \u0394=max(m)-min(m). If \u0394<=2\u03c4, mark flat_topology=1 and set rank/turn features to neutral defaults (monotone=1, inversion counts=0, sign_changes=0, first_change=0, peak/valley positions=0). Otherwise set flat_topology=0 and proceed. Form a deterministic ordered-band sequence by sorting indices by ascending magnitude (brighter first), breaking exact equality or |m_a-m_b|<=\u03c4 ties by wavelength index u<g<r<i<z. For this sequence derive: (a) position of brightest and faintest bands (1..5), (b) whether each is interior {g,r,i} vs edge {u,z}, (c) total tie-block count, (d) pairwise inversion count versus template [u,g,r,i,z], and (e) pairwise inversion count versus reverse template [z,i,r,g,u], both restricted to non-tied pairs. Compute adjacent differences d1=g-u,d2=r-g,d3=i-r,d4=z-i and initial signs qk=sign(dk) where sign=+1 if dk>\u03c4, -1 if dk< -\u03c4, else 0. Impute zeros deterministically: scan from left to right to fill each interior zero with nearest non-zero sign; if still missing use nearest on the right, and if both neighbors non-zero and conflicting keep 0 (ambiguous inflection). From imputed q derive monotone flag (all non-zero signs equal), number of sign changes over consecutive q entries, a one_turn flag, first_change position in {0..3} (0 when none), and second_change if present. Map the imputed sign pattern into 4 buckets: strictly_monotone, single_turn, multi_turn, and flat/ambiguous. These structural outputs are the hypothesis features.\",\n  \"expected_signal\": \"By encoding only relative order and local slope signs, the representation is robust to magnitude zero-point offsets and global extinction-like shifts, while still preserving the class-distinctive topology cues (smooth monotonicity for many stars, one interior turnover for many galaxies, and mixed turnovers for many QSOs) that can improve recall balance on minority structure-heavy classes under balanced_accuracy.\",\n  \"risk\": \"The discrete topology features can be brittle when adjacent bands differ by tiny amounts, so small photometric noise may flip tie/turn states; aggressive tie smoothing may also over-stabilize genuinely informative micro-structure, and several signals may be correlated with explicit color features, reducing marginal gain versus noise.\"\n}",
+  "usage": {
+    "threadId": "019ef77e-885b-7a30-9765-f70c00b68708",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2944,
+        "inputTokens": 10156,
+        "outputTokens": 4013,
+        "reasoningOutputTokens": 3364,
+        "totalTokens": 14169
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 2944,
+        "inputTokens": 10156,
+        "outputTokens": 4013,
+        "reasoningOutputTokens": 3364,
+        "totalTokens": 14169
+      }
+    },
+    "turnId": "019ef77e-8876-7731-a961-fc31863c106c"
+  },
+  "wall_ms": 5628,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

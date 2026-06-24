@@ -25,6 +25,15 @@ from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml, write_yaml
 
 from .baseline import BASELINE_HYPOTHESIS_ID, BASELINE_MODE, ensure_root_baseline
+from .revisions import (
+    active_materialization_file,
+    append_materialization,
+    load_revision,
+    materialization_entries,
+    migrate_root_revisions,
+    normalize_hypothesis_id,
+    revision_records,
+)
 
 
 @dataclass(frozen=True)
@@ -42,6 +51,7 @@ class RootMaterializationPlan:
     existing_count: int
     iteration_count: int
     hypothesis_ids: list[str]
+    revisions: list[int]
     target_files: list[str]
     version: str | None
 
@@ -51,28 +61,34 @@ def root_materialization_plan(
     mode: str,
     hypothesis_id: str | None = None,
     version: str | None = None,
+    revision: int | None = None,
 ) -> RootMaterializationPlan:
     upsert_project(project_dir)
     ensure_root_baseline(project_dir)
+    migrate_root_revisions(project_dir)
     models = repo_models_for_project(project_dir)
     model, role_options = resolve_role_model(models, "materializations", fallback_role="code")
     providers = repo_providers_for_project(project_dir)
     spec = resolve_model_spec(model, providers)
     provider_config = {**(spec.provider_config or {}), **role_options}
-    candidates = materialization_candidates(project_dir, hypothesis_id=hypothesis_id)
+    candidates = _materialization_revision_candidates(project_dir, mode, hypothesis_id=hypothesis_id, revision=revision)
     pending_ids: list[str] = []
+    revisions: list[int] = []
     target_files: list[str] = []
+    reserved_targets: dict[str, set[str]] = {}
     existing_count = 0
     for record in candidates:
         if str(record["hypothesis_id"]) == BASELINE_HYPOTHESIS_ID and mode != BASELINE_MODE:
             continue
-        hdir = _candidate_hypothesis_dir(project_dir, record)
-        target = _materialization_target(project_dir, hdir, mode, version=version)
-        if target.exists() or _has_materialization_record(project_dir, record, mode, target, version=version):
+        hdir = project_dir / "hypotheses" / str(record["hypothesis_id"])
+        if _revision_has_materialization(hdir, mode, int(record["revision"])):
             existing_count += 1
             continue
+        target = _materialization_target(project_dir, hdir, mode, version=version, reserved=reserved_targets.setdefault(hdir.name, set()))
         pending_ids.append(str(record["hypothesis_id"]))
+        revisions.append(int(record["revision"]))
         target_files.append(target.name)
+        reserved_targets[hdir.name].add(target.name)
     return RootMaterializationPlan(
         mode=mode,
         role="materializations",
@@ -87,6 +103,7 @@ def root_materialization_plan(
         existing_count=existing_count,
         iteration_count=len(pending_ids),
         hypothesis_ids=pending_ids,
+        revisions=revisions,
         target_files=target_files,
         version=version,
     )
@@ -97,45 +114,47 @@ def materialize_missing(
     mode: str,
     hypothesis_id: str | None = None,
     version: str | None = None,
+    revision: int | None = None,
     progress: Callable[[str, int | None], None] | None = None,
 ) -> int:
     upsert_project(project_dir)
     ensure_root_baseline(project_dir)
+    migrate_root_revisions(project_dir)
     models = repo_models_for_project(project_dir)
     model, role_options = resolve_role_model(models, "materializations", fallback_role="code")
     providers = repo_providers_for_project(project_dir)
     created = 0
-    candidates = materialization_candidates(project_dir, hypothesis_id=hypothesis_id)
-    pending_total = sum(
-        1
-        for record in candidates
-        if str(record["hypothesis_id"]) != BASELINE_HYPOTHESIS_ID
-        and _needs_materialization(project_dir, record, mode, version=version)
-    )
+    candidates = _materialization_revision_candidates(project_dir, mode, hypothesis_id=hypothesis_id, revision=revision)
+    pending_total = sum(1 for record in candidates if not _revision_has_materialization(project_dir / "hypotheses" / str(record["hypothesis_id"]), mode, int(record["revision"])))
     pending_index = 0
+    reserved_targets: dict[str, set[str]] = {}
     for record in candidates:
         if str(record["hypothesis_id"]) == BASELINE_HYPOTHESIS_ID and mode != BASELINE_MODE:
             continue
-        hdir = _candidate_hypothesis_dir(project_dir, record)
+        hdir = project_dir / "hypotheses" / str(record["hypothesis_id"])
+        selected_revision = int(record["revision"])
         mat_dir = hdir / "materializations"
         mat_dir.mkdir(parents=True, exist_ok=True)
-        target = _materialization_target(project_dir, hdir, mode, version=version)
-        if not target.exists() and _has_materialization_record(project_dir, record, mode, target, version=version):
+        if _revision_has_materialization(hdir, mode, selected_revision):
             continue
+        target = _materialization_target(project_dir, hdir, mode, version=version, reserved=reserved_targets.setdefault(hdir.name, set()))
+        reserved_targets[hdir.name].add(target.name)
         if target.exists():
-            active_file = _manifest_active_file(hdir, mode)
+            active_file = active_materialization_file(hdir, mode)
             is_active_target = active_file is None or active_file == target.name
             if _is_runtime_wrapper(target):
-                hypothesis = read_yaml(hdir / "hypothesis.yaml")
+                hypothesis = load_revision(hdir, selected_revision).payload
                 if _rewrite_group_only_from_response(hdir, mat_dir, mode, target, hypothesis):
-                    upsert_materialization(project_dir, hdir, mode, target, active=is_active_target)
+                    append_materialization(hdir, mode, target, revision=selected_revision, active=is_active_target)
+                    upsert_materialization(project_dir, hdir, mode, target, active=is_active_target, hypothesis_revision=selected_revision)
                     created += 1
             else:
-                upsert_materialization(project_dir, hdir, mode, target, active=is_active_target)
+                append_materialization(hdir, mode, target, revision=selected_revision, active=is_active_target)
+                upsert_materialization(project_dir, hdir, mode, target, active=is_active_target, hypothesis_revision=selected_revision)
             continue
         timeout_seconds = int(role_options.get("timeout_seconds") or 900)
         pending_index += 1
-        progress_prefix = f"ROOT materialization {hdir.name} {mode} ({pending_index}/{pending_total})"
+        progress_prefix = f"ROOT materialization {hdir.name} rev {selected_revision} {mode} ({pending_index}/{pending_total})"
         if progress is not None:
             progress(f"Materializing {progress_prefix} with {model}...", timeout_seconds)
 
@@ -143,7 +162,7 @@ def materialize_missing(
             if progress is not None:
                 progress(f"{prefix}: {message}", timeout_seconds)
 
-        hypothesis = read_yaml(hdir / "hypothesis.yaml")
+        hypothesis = load_revision(hdir, selected_revision).payload
         template_id = f"root.materialize-{mode}"
         rendered = render_template(
             project_dir,
@@ -162,7 +181,7 @@ def materialize_missing(
                 rendered_prompt_hash=rendered["rendered_hash"],
                 cwd=repo_root_for_project(project_dir),
                 sandbox="read_only",
-                metadata={"mode": mode},
+                metadata={"mode": mode, "hypothesis_id": hdir.name, "hypothesis_revision": selected_revision},
                 progress=invocation_progress if progress is not None else None,
             ),
             artifact_dir=mat_dir,
@@ -180,15 +199,49 @@ def materialize_missing(
                 f"response={_project_path_text(project_dir, response_path)}: {exc}"
             )
             atomic_write_text(mat_dir / f"{target.stem}.error.txt", error_text + "\n")
-            upsert_failed_materialization(project_dir, hdir, mode, target.name, code_text=group_code)
+            upsert_failed_materialization(
+                project_dir,
+                hdir,
+                mode,
+                target.name,
+                code_text=group_code,
+                hypothesis_revision=selected_revision,
+            )
             if progress is not None:
                 progress(f"{progress_prefix}: failed validation: {exc}", None)
             continue
         atomic_write_text(target, group_code)
-        _update_manifest(hdir, mode, target, hypothesis)
-        upsert_materialization(project_dir, hdir, mode, target)
+        _update_manifest(hdir, mode, target, hypothesis, revision=selected_revision)
+        is_active_target = active_materialization_file(hdir, mode) == target.name
+        upsert_materialization(project_dir, hdir, mode, target, active=is_active_target, hypothesis_revision=selected_revision)
         created += 1
     return created
+
+
+def _materialization_revision_candidates(
+    project_dir: Path,
+    mode: str,
+    *,
+    hypothesis_id: str | None,
+    revision: int | None,
+) -> list[dict[str, object]]:
+    _ = mode
+    target_id = normalize_hypothesis_id(hypothesis_id) if hypothesis_id else None
+    candidates: list[dict[str, object]] = []
+    for hdir in sorted((project_dir / "hypotheses").glob("*")):
+        if not hdir.is_dir():
+            continue
+        if target_id and hdir.name != target_id:
+            continue
+        for record in revision_records(hdir):
+            if revision is not None and record.revision != revision:
+                continue
+            candidates.append({"hypothesis_id": hdir.name, "revision": record.revision})
+    return candidates
+
+
+def _revision_has_materialization(hdir: Path, mode: str, revision: int) -> bool:
+    return any(int(entry.get("revision") or 0) == revision for entry in materialization_entries(hdir, mode))
 
 
 def _candidate_hypothesis_dir(project_dir: Path, record: dict[str, object]) -> Path:
@@ -242,11 +295,11 @@ def _needs_materialization(
     )
 
 
-def _materialization_target(project_dir: Path, hdir: Path, mode: str, *, version: str | None = None) -> Path:
+def _materialization_target(project_dir: Path, hdir: Path, mode: str, *, version: str | None = None, reserved: set[str] | None = None) -> Path:
     if version is not None:
         text = str(version).strip()
         if text == "new":
-            return _new_materialization_target(project_dir, hdir, mode)
+            return _new_materialization_target(project_dir, hdir, mode, reserved=reserved)
         if text.endswith(".py"):
             return hdir / "materializations" / text
         if text.isdigit():
@@ -254,10 +307,10 @@ def _materialization_target(project_dir: Path, hdir: Path, mode: str, *, version
         if text.startswith(f"{mode}-") and text.removeprefix(f"{mode}-").isdigit():
             return hdir / "materializations" / f"{text}.py"
         raise ValueError("version must be 'new', a number like 2, or a file like autogluon-002.py")
-    return hdir / "materializations" / f"{mode}-001.py"
+    return _new_materialization_target(project_dir, hdir, mode, reserved=reserved)
 
 
-def _new_materialization_target(project_dir: Path, hdir: Path, mode: str) -> Path:
+def _new_materialization_target(project_dir: Path, hdir: Path, mode: str, *, reserved: set[str] | None = None) -> Path:
     mat_dir = hdir / "materializations"
     max_index = 0
     for path in mat_dir.glob(f"{mode}-*.py"):
@@ -266,6 +319,10 @@ def _new_materialization_target(project_dir: Path, hdir: Path, mode: str) -> Pat
             max_index = max(max_index, int(suffix))
     for row in materialization_rows(project_dir, mode=mode, hypothesis_id=hdir.name):
         file_name = str(row.get("file") or "")
+        suffix = Path(file_name).stem.removeprefix(f"{mode}-")
+        if suffix.isdigit():
+            max_index = max(max_index, int(suffix))
+    for file_name in reserved or set():
         suffix = Path(file_name).stem.removeprefix(f"{mode}-")
         if suffix.isdigit():
             max_index = max(max_index, int(suffix))
@@ -326,37 +383,15 @@ def _parse_code(text: str) -> str:
     return text
 
 
-def _update_manifest(hdir: Path, mode: str, path: Path, hypothesis: dict[str, object]) -> None:
-    manifest_path = hdir / "manifest.yaml"
-    manifest = read_yaml(manifest_path)
-    versions = manifest.setdefault("materializations", {})
-    if not isinstance(versions, dict):
-        versions = {}
-        manifest["materializations"] = versions
-    versions[mode] = {
-        "active": path.name,
-        "sha256": sha256_file(path),
-        "created_at": datetime.now().isoformat(timespec="seconds"),
-    }
-    group_name = str(hypothesis.get("group_name") or hdir.name)
-    manifest["feature_group"] = {
-        "logical_name": group_name,
-        "version_id": f"{group_name}@{hdir.name}",
-        "source_hypothesis_id": str(hypothesis.get("hypothesis_id") or hdir.name),
-        "operation": "create_new_root_group",
-        "depends_on": list(hypothesis.get("depends_on") or []),
-        "code_artifact": path.name,
-    }
-    write_yaml(manifest_path, manifest)
+def _update_manifest(hdir: Path, mode: str, path: Path, hypothesis: dict[str, object], *, revision: int | None = None) -> None:
+    append_materialization(
+        hdir,
+        mode,
+        path,
+        revision=int(revision or hypothesis.get("revision") or 1),
+        active=active_materialization_file(hdir, mode) is None,
+    )
 
 
 def _manifest_active_file(hdir: Path, mode: str) -> str | None:
-    manifest = read_yaml(hdir / "manifest.yaml")
-    versions = manifest.get("materializations")
-    if not isinstance(versions, dict):
-        return None
-    entry = versions.get(mode)
-    if not isinstance(entry, dict):
-        return None
-    active = entry.get("active")
-    return active if isinstance(active, str) else None
+    return active_materialization_file(hdir, mode)

@@ -1,0 +1,45 @@
+title: Tag-Color Concordance with Redshift-Calibrated Residuals
+group_name: catalog_tag_color_concordance
+family: tag_photometry_consistency
+summary: "Generate deterministic color-consistency descriptors that score how well\
+  \ an object\u2019s observed ugriz color profile aligns with the physical expectation\
+  \ encoded by its spectral-type and galaxy-population tags, while explicitly accounting\
+  \ for redshift-driven color shifts so that agreement and contradiction signals remain\
+  \ interpretable across classes."
+depends_on: []
+strategy: "For each object, compute adjacent color components c1=u-g, c2=g-r, c3=r-i,\
+  \ c4=i-z. Convert each to a robustly scaled value in [0,1] using training-set quantiles:\
+  \ rj = clip((cj - q0.02_j) / (q0.98_j - q0.02_j), 0, 1), where q0.02_j and q0.98_j\
+  \ are the 2nd and 98th percentiles of color cj in the training data and are fixed\
+  \ after fitting. Build an observed redness scalar R = 0.40*r1 + 0.30*r2 + 0.20*r3\
+  \ + 0.10*r4. Map spectral_type to te \u2208 {O/B\u21920.00, A/F\u21920.33, G/K\u2192\
+  0.67, M\u21921.00} and galaxy_population to ge \u2208 {Blue_Cloud\u21920.00, Red_Sequence\u2192\
+  1.00}; any unseen category maps to 0.50. Compute scalar agreement and mismatch terms:\
+  \ At = 1 - |R-te|, Ag = 1 - |R-ge|, M_t = |R-te|, M_g = |R-ge|, and T = te - ge\
+  \ with signed and absolute versions. Also compute per-color residual vectors dj_t\
+  \ = rj - te and dj_g = rj - ge; derive their mean, median, L1 sum, L2 sum (sum of\
+  \ squares), and max absolute values separately for tag and for each tag pair. Define\
+  \ a redshift trust gate w_z = 1 - clip((redshift - 0.45)/1.25, 0, 1); multiply all\
+  \ mismatch and contradiction-derived features by w_z and produce both raw and weighted\
+  \ versions. Create contradiction binaries: htc = 1 if te <= 0.34 and R >= 0.67 else\
+  \ 0; ctc = 1 if te >= 0.67 and R <= 0.33 else 0; rbc = 1 if ge >= 0.67 and R <=\
+  \ 0.33 else 0; brc = 1 if ge <= 0.34 and R >= 0.67 else 0; dual_contra = 1 if M_t\
+  \ >= 0.35 and M_g >= 0.35 else 0. Include clipped color/feature handling for safety:\
+  \ any non-finite R, M_t, M_g, or residual becomes 0.50 for score terms and 0 for\
+  \ indicator terms."
+expected_signal: The hypothesis preserves the same catalog-tag consistency intuition
+  but improves precision by replacing fixed color constants with train-calibrated
+  normalization, adding signed and magnitude mismatch geometry at both scalar and
+  per-color levels, and de-weighting those disagreements when redshift is high where
+  color tracks shift for real astrophysical reasons, which should help separate noisy
+  or contradictory tag/color combinations and improve class separation for minority
+  classes under balanced accuracy.
+risk: Quantile scaling and fixed thresholds can still be brittle when photometric
+  distributions drift from the training sample, and redshift-based down-weighting
+  may mask useful signal for genuinely contradictory high-z objects or amplify noise
+  when redshift is uncertain or extreme.
+schema_version: 1
+hypothesis_id: 000018
+revision: 2
+enabled: true
+created_at: '2026-06-24T04:41:30'

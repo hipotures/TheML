@@ -1,0 +1,1 @@
+Invalid bugfix for hypothesis 000058 (autogluon); response=hypotheses/000058/materializations/autogluon-008.response.md: Group materialization must not execute top-level code outside imports, definitions, and registry assignments

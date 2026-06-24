@@ -1,12 +1,22 @@
+hypothesis:
+  id: '000004'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
-    active: autogluon-001.py
-    sha256: b72e287abc635f20afdd38ebc2291c70ea83dec1316832faa97a650e570c9e16
-    created_at: '2026-06-22T04:53:12'
-feature_group:
-  logical_name: distance_corrected_luminosity_signature
-  version_id: distance_corrected_luminosity_signature@000004
-  source_hypothesis_id: '000004'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    active: autogluon-002.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: b72e287abc635f20afdd38ebc2291c70ea83dec1316832faa97a650e570c9e16
+      created_at: '2026-06-22T04:53:12'
+    - file: autogluon-002.py
+      revision: 2
+      sha256: f2af6dcfff19983e18b8c807cf1c321f9e96e901f04df2fd233f75ad6b4c27fd
+      created_at: '2026-06-24T04:52:22'

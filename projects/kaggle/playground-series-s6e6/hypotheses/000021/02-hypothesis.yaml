@@ -1,0 +1,33 @@
+title: AIDE broadband ratio and flux-proxy expansion
+group_name: aide_broadband_flux_ratios
+family: aide_photometry
+summary: Create deterministic nonlinear broadband representations that preserve relative
+  color information while introducing flux-like scaling and smooth redshift interactions
+  so class boundaries among GALAXY, QSO, and STAR become more separable than with
+  raw magnitudes and simple colors alone.
+depends_on: []
+strategy: "Use only raw u,g,r,i,z magnitudes and redshift with no fitted statistics.\
+  \ Set eps = 1e-6. For each band m in {u,g,r,i,z}, compute lm = -0.4*ln(10)*m and\
+  \ lf = exp(clamp(lm, -20, 10)); emit both lm and lf. For pair set P={(u,g),(g,r),(r,i),(i,z),(u,r),(u,i),(u,z),(g,z),(r,z)},\
+  \ emit color_gap(a,b)=abs(ma-mb), ratio_norm(a,b)=(ma-mb)/(abs(mb)+eps), and safe_mag_ratio(a,b)=ma/(abs(mb)+eps).\
+  \ Skip exact duplicates of any pair-specific first-order color features already\
+  \ produced by another group if upstream deduplication is enabled, otherwise keep\
+  \ all P as defined. Add curvature terms c1=u-2*r+i and c2=g-2*i+z. For redshift,\
+  \ define zr=max(redshift,0), then emit z1=log1p(zr), z2=zr^2, z3=zr^3, plus interaction\
+  \ terms z1*lf_u, z1*lf_g, z2*(r-i), and z3*(g-z). Enforce finite outputs: if denom\u2248\
+  0 use eps, and clip all exponential/log arguments to prevent overflow or NaN propagation."
+expected_signal: Normalized gaps and ratios capture relative spectral slopes with
+  reduced sensitivity to absolute flux scale, while lm and lf approximate a physical
+  flux domain that linear models and trees exploit differently than raw magnitudes;
+  curvature and redshift-polynomial interactions add compact, astrophysically relevant
+  nonlinearity for high-redshift and extreme-color objects that are otherwise merged
+  by simpler feature sets.
+risk: The feature set is likely to be redundant with existing color/magnitude transforms,
+  increasing collinearity and variance, and aggressive ratio/exponential terms can
+  overfit noisy tails unless clipping and eps handling are tightly controlled; this
+  is most harmful for sparse high-redshift regions where numerical extremes are strongest.
+schema_version: 1
+hypothesis_id: '000021'
+revision: 2
+enabled: true
+created_at: '2026-06-24T04:42:09'

@@ -1,0 +1,63 @@
+{%- set task_context_heading = "Project Context" -%}
+{% include "blocks/task-context.md.j2" %}
+
+# Instruction
+
+Analyze the selected ROOT hypothesis, the project context, and the previous
+revisions.
+
+Create the next revision by expanding or improving the hypothesis while
+preserving its substantive feature-group idea. You are not writing code. You are
+not creating a new feature group.
+
+The revision should make the hypothesis more precise, internally consistent,
+implementable, or better justified. Improve the hypothesis text, especially
+`strategy`, when there is a concrete useful improvement. Do not force arbitrary
+changes.
+
+Use previous revisions only as context. If they contain useful details, use that
+context, but do not mechanically merge them. The output must be one coherent
+revised hypothesis using exactly the same JSON schema as a newly generated
+hypothesis.
+
+{% if web_search_enabled %}
+# Web Search
+
+Live web search is enabled. If internet verification is useful, use the
+`web_search` tool before writing the revised hypothesis. Check at most 3 sources.
+Use web search only to verify domain facts, feature-engineering background,
+validation risks, or implementation constraints relevant to the selected
+hypothesis. Do not use web search to invent a different feature-group idea, copy
+a public solution, or broaden the scope. If web search is not useful, continue
+without inventing sources.
+{% endif %}
+
+# Selected Hypothesis
+
+Hypothesis ID: {{ hypothesis_id }}
+
+Previous versions:
+{% for revision in previous_revisions %}
+- rev {{ revision.get("revision") }}: {{ revision.get("title") }}
+  group_name={{ revision.get("group_name") }}
+  family={{ revision.get("family") }}
+  summary={{ revision.get("summary") }}
+  strategy={{ revision.get("strategy") }}
+  expected_signal={{ revision.get("expected_signal") }}
+  risk={{ revision.get("risk") }}
+{% endfor %}
+
+{% include "blocks/output-contract.md.j2" %}
+
+Return exactly this JSON object:
+
+{
+  "title": "short descriptive title",
+  "group_name": "same concise_snake_case_group_name as the previous version",
+  "family": "compact feature-family label",
+  "summary": "one comprehensive sentence describing the semantic feature-set idea; do not list formulas, exact feature names, or implementation details here",
+  "depends_on": [],
+  "strategy": "concrete deterministic feature logic, formulas, bins, statistics, and edge handling",
+  "expected_signal": "why this group may improve or clarify the metric",
+  "risk": "specific overfitting, leakage, cost, redundancy, or instability risk"
+}

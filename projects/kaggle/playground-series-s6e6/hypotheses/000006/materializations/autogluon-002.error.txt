@@ -1,0 +1,1 @@
+Invalid materialization for hypothesis 000006 (autogluon); response=hypotheses/000006/materializations/autogluon-002.response.md: Group materialization must not call functions in top-level assignments

@@ -1,12 +1,26 @@
+hypothesis:
+  id: 000028
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
-    active: autogluon-001.py
-    sha256: 2015d7d140c1fa570e08ebc4ffab601b8637ec95cf0bc7060d2608b4c8dc0386
-    created_at: '2026-06-23T14:22:24'
-feature_group:
-  logical_name: foreground_reddening_geometry
-  version_id: foreground_reddening_geometry@000028
-  source_hypothesis_id: 000028
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    active: autogluon-005.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 2015d7d140c1fa570e08ebc4ffab601b8637ec95cf0bc7060d2608b4c8dc0386
+      created_at: '2026-06-23T14:22:24'
+    - file: autogluon-003.py
+      revision: 1
+      sha256: 21a9f36b9f8d830973a4c0609148d3bb3d331185fc3a858491dd7e9cdbd957e0
+      created_at: '2026-06-24T05:25:05'
+    - file: autogluon-005.py
+      revision: 2
+      sha256: 2aef17b03256e99ffa6c6948208c5e4920e90150814bc2d0b15f304ce842c147
+      created_at: '2026-06-24T05:37:50'

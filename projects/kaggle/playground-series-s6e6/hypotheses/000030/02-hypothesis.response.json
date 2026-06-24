@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Smoothed SDSS quasar-targeting surface geometry\",\n  \"group_name\": \"sdss_quasar_targeting_surface\",\n  \"family\": \"astrophysical_selection_geometry\",\n  \"summary\": \"Model quasar likelihood as a smooth function of distance from learned stellar-locus tube geometry in two SDSS color manifolds while explicitly injecting the known redshift-dependent quasar inclusion regions and color-rejection penalties that resolve ambiguity where quasar and star colors overlap.\",\n  \"depends_on\": [],\n  \"strategy\": \"Compute base colors c1=u-g, c2=g-r, c3=r-i, c4=i-z. On train, clip each color component to the 1st and 99th percentiles to define robust color bounds and avoid tail leakage. Build two color cubes: A=(c1,c2,c3) and B=(c2,c3,c4). In cube A bin by c3 with fixed width 0.08 mag between clipped bounds; in cube B bin by c2 with the same width and the same boundary rules. For each bin in each cube, compute robust centroid \u03bc_b and MAD scale s_b (per axis, clamped floor=0.015). Compute principal axis t_b from eigen-decomposition of the robust covariance of standardized colors in the bin. Define global fallback statistics \u03bc_0, s_0, t_0 from all train objects in the corresponding cube. Let n_b be bin size and w_b=clamp((n_b-30)/80,0,1); define blended parameters \u03bc'_b=w_b \u03bc_b +(1-w_b) \u03bc_0, s'_b = sqrt(w_b s_b^2 +(1-w_b) s_0^2), t'_b=normalize(w_b t_b +(1-w_b) t_0). If n_b=0, set \u03bc'_b=\u03bc_0, s'_b=s_0, t'_b=t_0. For each object x in a cube, compute standardized residual r=(x-\u03bc'_b)/s'_b, projection p=r\u00b7t'_b, orthogonal residue q=r-p t'_b, then d=||q||_2. Convert to soft outlier score O=sigmoid((d-3.9)/0.45). Compute OA and OB from cubes A and B and keep both OA, OB and their max Omax=max(OA,OB). Define sigmoid-box gate g(v;L,U,\u03c4)=\u03c3((v-L)/\u03c4)*\u03c3((U-v)/\u03c4), \u03c4 in [0.05,0.12]. Inclusion terms: UVX = \u03c3((20.2-i)/1.0)*\u03c3((0.60-c1)/0.05); mid_z = g(c1,0.65,1.5,0.07)*g(c2,0.0,0.20,0.06)*\u03c3((redshift-2.35)/0.35)*\u03c3((3.20-redshift)/0.35); hi_z = \u03c3((redshift-3.0)/0.35)*\u03c3((c1-1.55)/0.08)*\u03c3((20.2-i)/1.0). Exclusion terms: WD = g(g-r,-0.8,-0.2,0.10)*g(r-i,-0.6,-0.2,0.10)*g(i-z,-1.0,0.0,0.10); MWD = g(g-r,0.0,1.6,0.10)*g(r-i,0.6,2.0,0.10); A = g(u-g,0.9,1.5,0.06)*g(g-r,-0.35,0.0,0.06); BLUE = \u03c3((0.90-c1)/0.08)*\u03c3((0.80-c2)/0.08)*\u03c3((i-19.0)/1.0). Also build population-aware geometry: if a population-specific bin has n_b>=40 compute separate \u03bc_b, s_b, t_b; otherwise use blended \u03bc'_b as above, else fallback global. Output OA,OB,Omax and the smooth inclusion/rejection terms as distinct numeric features.\",\n  \"expected_signal\": \"The revision keeps the original SDSS-inspired physical selection geometry but removes brittle hard thresholds by using probabilistic tubes and continuous gates, which should preserve the discriminative behavior near the 2.7-2.8 and high-redshift overlap regions while reducing instability from hard bin edges and outliers; this directly targets STAR/QSO confusion and can improve balanced accuracy for minority quasar rows by making the boundary signal more calibratable.\",\n  \"risk\": \"The constants remain from historical SDSS designs and can be mismatched to this dataset's calibration, color system, and spectroscopic mix; sparse-bin PCA blending can still produce unstable ridge directions in extreme tails, and redshift-magnitude gating may over-penalize noisy faint objects unless model regularization keeps these features from dominating.\"\n}",
+  "usage": {
+    "threadId": "019ef782-cb0c-7c71-ab8f-974f88d7429a",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 10752,
+        "inputTokens": 10995,
+        "outputTokens": 182,
+        "reasoningOutputTokens": 88,
+        "totalTokens": 11177
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 30592,
+        "inputTokens": 32282,
+        "outputTokens": 623,
+        "reasoningOutputTokens": 346,
+        "totalTokens": 32905
+      }
+    },
+    "turnId": "019ef782-cb17-7672-a8ff-df8de52eabb4"
+  },
+  "wall_ms": 15186,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

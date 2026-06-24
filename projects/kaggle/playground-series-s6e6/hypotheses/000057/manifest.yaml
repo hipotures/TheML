@@ -1,12 +1,22 @@
+hypothesis:
+  id: '000057'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: de43b0bbc19a604987104f6dfea4e88283733172fd57de253c5cdef8752b984f
-    created_at: '2026-06-23T15:03:56'
-feature_group:
-  logical_name: quasar_stellar_locus_conflict
-  version_id: quasar_stellar_locus_conflict@000057
-  source_hypothesis_id: '000057'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: de43b0bbc19a604987104f6dfea4e88283733172fd57de253c5cdef8752b984f
+      created_at: '2026-06-23T15:03:56'
+    - file: autogluon-002.py
+      revision: 2
+      sha256: 67b7f5bca279a8f2d1ef24999cc7a9e410a655bdc23e88cde762eb0ce7da7459
+      created_at: '2026-06-24T05:18:10'

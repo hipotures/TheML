@@ -1,12 +1,22 @@
+hypothesis:
+  id: '000036'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: 21367db940da820ef8e9d9b79a427c327dd2992f47f2c5cdb5bbacdc3afb15cf
-    created_at: '2026-06-23T14:36:44'
-feature_group:
-  logical_name: segue_stellar_atmospheric_indices
-  version_id: segue_stellar_atmospheric_indices@000036
-  source_hypothesis_id: '000036'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 21367db940da820ef8e9d9b79a427c327dd2992f47f2c5cdb5bbacdc3afb15cf
+      created_at: '2026-06-23T14:36:44'
+    - file: autogluon-002.py
+      revision: 2
+      sha256: 9c91017e8f8b49de8c3dec9567f7c431593df06248dae901392539dac60443d2
+      created_at: '2026-06-24T05:04:58'

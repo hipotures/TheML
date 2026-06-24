@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -37,10 +38,14 @@ from tml.db.reindex import reindex_project
 from tml.db.state import (
     best_score,
     branch_rows,
+    delete_hypothesis_revision,
     materialization_rows,
     mark_submission_submitted,
+    revision_status_rows as db_revision_status_rows,
     root_counts,
     root_hypothesis_rows,
+    root_revision_overview_rows,
+    root_revision_promote_targets,
     root_run_rows,
     run_request_status,
     solution_tree_branch_rows,
@@ -48,6 +53,8 @@ from tml.db.state import (
     submission_by_sha_prefix,
     submission_rows,
     sync_submission_remote_rows,
+    upsert_hypothesis,
+    upsert_materialization,
 )
 from tml.hypotheses.generate import (
     GeneratedHypothesis,
@@ -58,6 +65,8 @@ from tml.hypotheses.generate import (
 from tml.hypotheses.baseline import ensure_root_baseline
 from tml.hypotheses.bugfix import RootBugfixPlan, bugfix_failed_materializations, root_bugfix_plan
 from tml.hypotheses.materialize import RootMaterializationPlan, materialize_missing, root_materialization_plan
+from tml.hypotheses.revise import RootRevisePlan, revise_root_hypothesis, root_revise_plan
+from tml.hypotheses.revisions import delete_revision, normalize_hypothesis_id, set_active_materialization
 from tml.hypotheses.run import RootRunPlan, root_run_plan, run_missing
 from tml.prompts.diff import diff_prompt
 from tml.prompts.probe import probe_prompt, render_prompt
@@ -66,6 +75,7 @@ from tml.utils.yaml_io import read_yaml
 
 
 console = Console(highlight=False)
+DEFAULT_SUBMISSION_TABLE_LIMIT = 20
 
 
 class TmlGroup(TyperGroup):
@@ -95,6 +105,8 @@ kaggle_app = typer.Typer(no_args_is_help=True)
 ROOT_HYPOTHESIS_COLUMNS = [
     {"key": "id", "label": "ID", "style": "bold", "no_wrap": True},
     {"key": "status", "label": "S", "justify": "center", "no_wrap": True},
+    {"key": "revision", "label": "Rev", "justify": "right", "no_wrap": True},
+    {"key": "score", "label": "Score", "justify": "right", "no_wrap": True},
     {"key": "created_at", "label": "Created", "no_wrap": True},
     {"key": "model", "label": "Model", "no_wrap": True},
     {"key": "reasoning_tokens", "label": "Res/Tokens", "justify": "right", "no_wrap": True},
@@ -252,10 +264,33 @@ def tree_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@root_app.command("status", context_settings=EXTRA, help="Show ROOT progress, counts, and hypothesis table.")
-def root_status_cmd(ctx: typer.Context) -> None:
-    _ = ctx
+@root_app.command(
+    "status",
+    context_settings=EXTRA,
+    help=(
+        "Show ROOT progress, counts, and hypothesis table.\n\n"
+        "Accepted key=value parameters:\n"
+        "  json=true          Print machine-readable JSON.\n"
+        "  json_output=true   Alias for json=true.\n\n"
+        "Options:\n"
+        "  --json             Print machine-readable JSON.\n"
+        "  --json-output      Alias for --json."
+    ),
+)
+def root_status_cmd(
+    ctx: typer.Context,
+    json_flag: Annotated[bool, typer.Option("--json", help="Print machine-readable JSON.")] = False,
+    json_output_flag: Annotated[bool, typer.Option("--json-output", help="Alias for --json.")] = False,
+) -> None:
     try:
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"json", "json_output"}, "tml root status")
+        json_output = (
+            json_flag
+            or json_output_flag
+            or _bool(overrides.get("json", False))
+            or _bool(overrides.get("json_output", False))
+        )
         ref = active_project_ref()
         ensure_root_baseline(ref.path)
         config = load_project_config(ref.path)
@@ -264,6 +299,18 @@ def root_status_cmd(ctx: typer.Context) -> None:
         profile_id = active_profile_id(config, mode)
         active_hash = profile_hash(ref.path, mode, profile_id)
         best = best_score(ref.path)
+        if json_output:
+            _print_root_status_json(
+                ref.slug,
+                config=config,
+                mode=mode,
+                profile_id=profile_id,
+                profile_hash_value=active_hash,
+                counts=counts,
+                best=best,
+                project_dir=ref.path,
+            )
+            return
         console.print(f"Active project: {ref.slug}")
         console.print(f"Target ROOT count: {config.get('root', {}).get('target_count', 20)}")
         console.print(f"Active mode: {mode}")
@@ -273,7 +320,7 @@ def root_status_cmd(ctx: typer.Context) -> None:
         console.print(f"Evaluated: {counts['evaluated']}")
         console.print(f"Incomplete nodes: {counts['incomplete']}")
         console.print(f"Best ROOT score: {f'{best:.6f}' if best is not None else 'n/a'}")
-        _print_existing_root_hypotheses(ref.path, created_ids=set())
+        _print_existing_root_hypotheses(ref.path, created_ids=set(), mode=mode, profile_id=profile_id)
     except Exception as exc:
         _abort(exc)
 
@@ -364,6 +411,98 @@ def root_generate_cmd(ctx: typer.Context) -> None:
 
 
 @root_app.command(
+    "revise",
+    context_settings=EXTRA,
+    help=(
+        "Create ROOT hypothesis revisions or show revision status.\n\n"
+        "Accepted positional arguments:\n"
+        "  status            Print revision status. Without id, print all scored revisions.\n\n"
+        "  promote|prom      Promote active materializations to best scored revisions.\n\n"
+        "  delete|del        Delete one unmaterialized revision.\n\n"
+        "Accepted key=value parameters:\n"
+        "  hypothesis=<id>    Hypothesis to revise.\n"
+        "  id=<id>            Alias for hypothesis=<id>.\n"
+        "  count=<N>          Maximum number of new revisions.\n"
+        "  rev=<N>            Revision to delete.\n"
+        "  revision=<N>       Alias for rev=<N>.\n"
+        "  yes=true           Accepted for scripted workflows."
+    ),
+)
+def root_revise_cmd(ctx: typer.Context) -> None:
+    try:
+        ref = active_project_ref()
+        ensure_root_baseline(ref.path)
+        positional = _positional(ctx.args)
+        delete_requested = positional in (["delete"], ["del"])
+        promote_requested = positional in (["promote"], ["prom"])
+        status_only = False if delete_requested or promote_requested else _command_status_requested(ctx.args, "tml root revise")
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"hypothesis", "id", "count", "mode", "revision", "rev", "yes"}, "tml root revise")
+        hypothesis_id = _optional_text(overrides.get("hypothesis") or overrides.get("id"))
+        hid = normalize_hypothesis_id(hypothesis_id) if hypothesis_id else None
+        config = load_project_config(ref.path)
+        mode = str(overrides.get("mode") or active_mode(config))
+        profile_id = active_profile_id(config, mode)
+        if status_only:
+            if hid:
+                _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={hid})
+            else:
+                _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id)
+            return
+        if promote_requested:
+            targets = root_revision_promote_targets(ref.path, mode=mode, profile_id=profile_id)
+            if hid:
+                targets = [row for row in targets if str(row.get("hypothesis_id") or "") == hid]
+            if not targets:
+                console.print("No ROOT revision active pointers to promote.")
+                return
+            _print_root_revision_promote_plan(targets)
+            if not _bool(overrides.get("yes")) and not Confirm.ask("Promote ROOT revisions?", default=False):
+                console.print("No ROOT revisions promoted.")
+                return
+            promoted = _promote_root_revisions(ref.path, mode=mode, targets=targets)
+            console.print(f"Promoted ROOT active materializations: {len(promoted)}")
+            _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={row["hypothesis_id"] for row in promoted})
+            return
+        if delete_requested:
+            if not hid:
+                raise TmlError("Missing required parameter: id=<hypothesis>.")
+            revision = _revision_override(overrides)
+            if revision is None:
+                raise TmlError("Missing required parameter: rev=<revision>.")
+            hdir = ref.path / "hypotheses" / hid
+            deleted = delete_revision(ref.path, hdir, revision)
+            delete_hypothesis_revision(ref.path, hypothesis_id=hid, revision=revision)
+            upsert_hypothesis(ref.path, hdir)
+            console.print(f"Deleted ROOT hypothesis {hid} revision {revision}: {len(deleted)} files")
+            _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={hid})
+            return
+        if not hid:
+            _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id)
+            return
+        if "count" not in overrides:
+            plan = root_revise_plan(ref.path, hypothesis_id=hid, count=0)
+            _print_root_revise_plan(ref.slug, plan)
+            console.print("No revision created. Pass count=<N> to create revisions.")
+            return
+        count = int(overrides.get("count") or 0)
+        if count < 1:
+            raise TmlError("count=<N> must be greater than 0.")
+        plan = root_revise_plan(ref.path, hypothesis_id=hid, count=count)
+        _print_root_revise_plan(ref.slug, plan)
+        created = revise_root_hypothesis(ref.path, hypothesis_id=hid, count=count, progress=console.print)
+        console.print(f"Created ROOT revisions: {len(created)}")
+        _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={hid})
+    except Exception as exc:
+        _abort(exc)
+
+
+@root_app.command(
+    "mat",
+    context_settings=EXTRA,
+    help="Alias for `tml root materialize`.",
+)
+@root_app.command(
     "materialize",
     context_settings=EXTRA,
     help=(
@@ -374,6 +513,8 @@ def root_generate_cmd(ctx: typer.Context) -> None:
         "  mode=<name>        Materialization mode; defaults to the active mode.\n"
         "  hypothesis=<id>    Materialize only one hypothesis.\n"
         "  id=<id>            Alias for hypothesis=<id>.\n"
+        "  revision=<N>       Materialize one hypothesis revision.\n"
+        "  rev=<N>            Alias for revision=<N>.\n"
         "  version=new        Create the next materialization version, e.g. autogluon-002.py.\n"
         "  version=<number>   Create a specific materialization version, e.g. version=2.\n"
         "  yes=true           Skip the confirmation prompt."
@@ -386,16 +527,17 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
         status_only = _command_status_requested(ctx.args, "tml root materialize")
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"mode", "hypothesis", "id", "version", "yes"}, "tml root materialize")
+        _validate_override_keys(overrides, {"mode", "hypothesis", "id", "revision", "rev", "version", "yes"}, "tml root materialize")
         mode = str(overrides.get("mode") or active_mode(config))
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         hypothesis_id_text = _optional_text(hypothesis_id)
+        revision = _revision_override(overrides)
         if status_only:
             _print_root_materializations(ref.path, mode=mode, created_count=None, hypothesis_id=hypothesis_id_text)
             return
         assume_yes = _bool(overrides.get("yes", False))
         version = _optional_text(overrides.get("version"))
-        plan = root_materialization_plan(ref.path, mode=mode, hypothesis_id=hypothesis_id_text, version=version)
+        plan = root_materialization_plan(ref.path, mode=mode, hypothesis_id=hypothesis_id_text, version=version, revision=revision)
         _print_root_materialization_plan(ref.slug, plan, hypothesis_id=hypothesis_id_text)
         if plan.iteration_count == 0:
             console.print("No ROOT materializations to create.")
@@ -409,8 +551,19 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
             mode=mode,
             hypothesis_id=hypothesis_id_text,
             version=version,
+            revision=revision,
         )
-        _print_root_materializations(ref.path, mode=mode, created_count=created, hypothesis_id=hypothesis_id_text)
+        shown_targets = {
+            (str(hid).zfill(6), str(file_name))
+            for hid, file_name in zip(plan.hypothesis_ids, plan.target_files, strict=False)
+        }
+        _print_root_materializations(
+            ref.path,
+            mode=mode,
+            created_count=created,
+            hypothesis_id=hypothesis_id_text,
+            only_targets=shown_targets,
+        )
     except Exception as exc:
         _abort(exc)
 
@@ -426,6 +579,8 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
         "  mode=<name>        Materialization mode; defaults to the active mode.\n"
         "  hypothesis=<id>    Fix only one hypothesis.\n"
         "  id=<id>            Alias for hypothesis=<id>.\n"
+        "  revision=<N>       Fix only one hypothesis revision.\n"
+        "  rev=<N>            Alias for revision=<N>.\n"
         "  yes=true           Skip the confirmation prompt."
     ),
 )
@@ -436,15 +591,16 @@ def root_bugfix_cmd(ctx: typer.Context) -> None:
         status_only = _command_status_requested(ctx.args, "tml root bugfix")
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"mode", "hypothesis", "id", "yes"}, "tml root bugfix")
+        _validate_override_keys(overrides, {"mode", "hypothesis", "id", "revision", "rev", "yes"}, "tml root bugfix")
         mode = str(overrides.get("mode") or active_mode(config))
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         hypothesis_id_text = _optional_text(hypothesis_id)
+        revision = _revision_override(overrides)
         if status_only:
             _print_root_materializations(ref.path, mode=mode, created_count=None, hypothesis_id=hypothesis_id_text)
             return
         assume_yes = _bool(overrides.get("yes", False))
-        plan = root_bugfix_plan(ref.path, mode=mode, hypothesis_id=hypothesis_id_text)
+        plan = root_bugfix_plan(ref.path, mode=mode, hypothesis_id=hypothesis_id_text, revision=revision)
         _print_root_bugfix_plan(ref.slug, plan, hypothesis_id=hypothesis_id_text)
         if plan.iteration_count == 0:
             console.print("No failed ROOT materializations to fix.")
@@ -457,13 +613,14 @@ def root_bugfix_cmd(ctx: typer.Context) -> None:
             ref.path,
             mode=mode,
             hypothesis_id=hypothesis_id_text,
+            revision=revision,
         )
         _print_root_materializations(ref.path, mode=mode, created_count=created, hypothesis_id=hypothesis_id_text)
     except Exception as exc:
         _abort(exc)
 
 
-def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | None, version: str | None = None) -> int:
+def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | None, version: str | None = None, revision: int | None = None) -> int:
     state: dict[str, object] = {
         "message": "Preparing materialization...",
         "timeout": 1,
@@ -486,6 +643,7 @@ def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: s
                 mode=mode,
                 hypothesis_id=hypothesis_id,
                 version=version,
+                revision=revision,
                 progress=report,
             )
             with lock:
@@ -528,7 +686,7 @@ def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: s
     return created
 
 
-def _bugfix_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | None) -> int:
+def _bugfix_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | None, revision: int | None = None) -> int:
     state: dict[str, object] = {
         "message": "Preparing bugfix...",
         "timeout": 1,
@@ -546,7 +704,13 @@ def _bugfix_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | 
 
     def run() -> None:
         try:
-            created = bugfix_failed_materializations(project_dir, mode=mode, hypothesis_id=hypothesis_id, progress=report)
+            created = bugfix_failed_materializations(
+                project_dir,
+                mode=mode,
+                hypothesis_id=hypothesis_id,
+                revision=revision,
+                progress=report,
+            )
             with lock:
                 state["created"] = created
         except Exception as exc:  # pragma: no cover - re-raised in caller thread
@@ -598,6 +762,9 @@ def _bugfix_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | 
         "  mode=<name>        Run mode; defaults to the active mode.\n"
         "  hypothesis=<id>    Run only one hypothesis.\n"
         "  id=<id>            Alias for hypothesis=<id>.\n"
+        "  revision=<N>       Run one hypothesis revision.\n"
+        "  rev=<N>            Alias for revision=<N>.\n"
+        "  force=true         Run even if an evaluation already exists for the same code hash.\n"
         "  yes=true           Skip the confirmation prompt.\n"
         "Profile override parameters are accepted for the active mode."
     ),
@@ -611,10 +778,12 @@ def root_run_cmd(ctx: typer.Context) -> None:
         mode = str(overrides["mode"]) if "mode" in overrides else None
         config = load_project_config(ref.path)
         active_run_mode = mode or active_mode(config)
-        allowed = {"mode", "hypothesis", "id", "yes"} | _profile_override_keys(ref.path, active_run_mode)
+        allowed = {"mode", "hypothesis", "id", "revision", "rev", "force", "yes"} | _profile_override_keys(ref.path, active_run_mode)
         _validate_override_keys(overrides, allowed, "tml root run")
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         hypothesis_id_text = _optional_text(hypothesis_id)
+        revision = _revision_override(overrides)
+        force = _bool(overrides.get("force", False))
         if status_only:
             _print_root_run_request_status(ref.path, mode=active_run_mode, hypothesis_id=hypothesis_id_text)
             _print_root_run_summary(
@@ -626,12 +795,14 @@ def root_run_cmd(ctx: typer.Context) -> None:
             )
             return
         assume_yes = _bool(overrides.get("yes", False))
-        run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "hypothesis", "id", "yes"}}
+        run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "hypothesis", "id", "revision", "rev", "force", "yes"}}
         plan = root_run_plan(
             ref.path,
             mode=mode,
             hypothesis_id=hypothesis_id_text,
+            revision=revision,
             profile_overrides=run_overrides,
+            force=force,
         )
         _print_root_run_plan(ref.slug, plan, hypothesis_id=hypothesis_id_text)
         if plan.iteration_count == 0:
@@ -652,7 +823,9 @@ def root_run_cmd(ctx: typer.Context) -> None:
             ref.path,
             mode=mode,
             hypothesis_id=hypothesis_id_text,
+            revision=revision,
             profile_overrides=run_overrides,
+            force=force,
             progress=console.print,
         )
         _print_root_run_request_status(ref.path, mode=active_run_mode, hypothesis_id=hypothesis_id_text)
@@ -945,13 +1118,6 @@ def branch_grow_cmd(
             progress=console.print,
         )
         _print_branch_grow_summary(result)
-        _print_branch_status(
-            ref.path,
-            mode=active_run_mode,
-            branch_id=None,
-            executed_ids={item.branch_id for item in result.items},
-            executed_count=result.processed_steps,
-        )
     except Exception as exc:
         _abort(exc)
 
@@ -1081,13 +1247,17 @@ def reindex_cmd(scope: str | None = None, run_id: str | None = None) -> None:
         _abort(exc)
 
 
-@app.command("submissions", help="List local and synced Kaggle submissions.")
-@app.command("sub", help="Alias for submissions.")
-@app.command("subm", help="Alias for submissions.")
-def submissions_cmd() -> None:
+@app.command("submissions", context_settings=EXTRA, help="List local and synced Kaggle submissions.")
+@app.command("sub", context_settings=EXTRA, help="Alias for submissions.")
+@app.command("subm", context_settings=EXTRA, help="Alias for submissions.")
+def submissions_cmd(ctx: typer.Context) -> None:
     try:
+        _reject_positional(ctx.args, "tml sub")
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"limit"}, "tml sub")
+        limit = _submission_table_limit(overrides.get("limit"))
         ref = active_project_ref()
-        _print_submissions(ref.path)
+        _print_submissions(ref.path, limit=limit)
     except Exception as exc:
         _abort(exc)
 
@@ -1204,7 +1374,11 @@ def prompt_render_cmd(ctx: typer.Context) -> None:
         if not positional:
             print_prompt_choices(console)
             return
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"hypothesis", "id", "output"}, "tml prompt render")
         target, stage = _prompt_target_stage(positional)
+        hypothesis_id = _optional_text(overrides.get("hypothesis") or overrides.get("id"))
+        output = _optional_text(overrides.get("output"))
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -1216,6 +1390,8 @@ def prompt_render_cmd(ctx: typer.Context) -> None:
                 ref.path,
                 target=target,
                 stage=stage,
+                hypothesis_id=hypothesis_id,
+                output_path=Path(output) if output else None,
                 tmp_root=_tmp_root(),
             )
             progress.update(task, description=f"Prompt rendered: {path}")
@@ -1371,6 +1547,21 @@ def _validate_override_keys(overrides: dict[str, object], allowed: set[str], com
 
 def _optional_text(value: object) -> str | None:
     return None if value is None else str(value)
+
+
+def _revision_override(overrides: dict[str, object]) -> int | None:
+    raw = overrides.get("revision", overrides.get("rev"))
+    if raw is None:
+        return None
+    if str(raw).strip().lower() == "pending":
+        raise TmlError("revision=pending is not supported; use a numeric revision.")
+    try:
+        revision = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise TmlError(f"Invalid revision: {raw}. Use a numeric revision.") from exc
+    if revision < 1:
+        raise TmlError("Revision must be >= 1.")
+    return revision
 
 
 def _reject_positional(args: list[str], command: str) -> None:
@@ -1561,17 +1752,36 @@ def _print_root_generation_plan(project_slug: str, plan: RootGenerationPlan) -> 
     console.print(table)
 
 
+def _print_root_revise_plan(project_slug: str, plan: RootRevisePlan) -> None:
+    table = Table(title="ROOT revise plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Hypothesis", plan.hypothesis_id)
+    table.add_row("Role", plan.role)
+    table.add_row("Model", plan.model)
+    table.add_row("Provider", plan.provider)
+    table.add_row("Provider kind", str(plan.provider_kind or "n/a"))
+    table.add_row("Resolved model", str(plan.resolved_model or "n/a"))
+    table.add_row("Reasoning effort", str(plan.reasoning_effort or "default"))
+    table.add_row("Timeout seconds", str(plan.timeout_seconds or "n/a"))
+    table.add_row("Sandbox", plan.sandbox)
+    table.add_row("Next revision", str(plan.next_revision))
+    table.add_row("Max revisions to create", str(plan.count))
+    console.print(table)
+
+
 def _print_root_materialization_plan(
     project_slug: str,
     plan: RootMaterializationPlan,
     *,
     hypothesis_id: str | None,
 ) -> None:
-    ids = plan.hypothesis_ids
-    if len(ids) > 8:
-        id_text = f"{ids[0]}..{ids[-1]}"
+    id_revisions = [f"{hid}:{rev}" for hid, rev in zip(plan.hypothesis_ids, plan.revisions, strict=False)]
+    if len(id_revisions) > 8:
+        id_rev_text = f"{id_revisions[0]} ... {id_revisions[-1]}"
     else:
-        id_text = ", ".join(ids) if ids else "none"
+        id_rev_text = ", ".join(id_revisions) if id_revisions else "none"
     if len(plan.target_files) == 1:
         target_text = plan.target_files[0]
     elif plan.target_files:
@@ -1597,7 +1807,7 @@ def _print_root_materialization_plan(
     table.add_row("Existing materializations", str(plan.existing_count))
     table.add_row("Iterations to run", str(plan.iteration_count))
     table.add_row("Target file", target_text)
-    table.add_row("Hypothesis IDs", id_text)
+    table.add_row("Hypothesis revisions", id_rev_text)
     console.print(table)
 
 
@@ -1645,6 +1855,10 @@ def _print_root_run_plan(project_slug: str, plan: RootRunPlan, *, hypothesis_id:
         id_text = f"{ids[0]}..{ids[-1]}"
     else:
         id_text = ", ".join(ids) if ids else "none"
+    if len(plan.files) > 8:
+        file_text = f"{plan.files[0]} ... {plan.files[-1]}"
+    else:
+        file_text = ", ".join(plan.files) if plan.files else "none"
     table = Table(title="ROOT run plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
     table.add_column("Parameter", style="bold", no_wrap=True)
     table.add_column("Value", overflow="fold")
@@ -1659,7 +1873,9 @@ def _print_root_run_plan(project_slug: str, plan: RootRunPlan, *, hypothesis_id:
     table.add_row("Hypothesis filter", str(hypothesis_id).zfill(6) if hypothesis_id else "all")
     table.add_row("Candidate materializations", str(plan.candidate_count))
     table.add_row("Already evaluated", str(plan.already_evaluated_count))
+    table.add_row("Force", "true" if plan.force else "false")
     table.add_row("Iterations to run", str(plan.iteration_count))
+    table.add_row("Files", file_text)
     table.add_row("Hypothesis IDs", id_text)
     console.print(table)
 
@@ -1785,6 +2001,7 @@ def _print_branch_grow_summary(result: BranchGrowResult) -> None:
     item_table.add_column("Run", no_wrap=True)
     item_table.add_column("Score", justify="right", no_wrap=True)
     item_table.add_column("Node", no_wrap=True)
+    best_metric = _best_numeric(item.metric for item in result.items)
     for item in result.items:
         item_table.add_row(
             str(item.step_index),
@@ -1793,7 +2010,7 @@ def _print_branch_grow_summary(result: BranchGrowResult) -> None:
             item.parent_ref or "-",
             item.source_ref or "-",
             item.run_status,
-            _format_score(item.metric),
+            _score_text(item.metric, best=best_metric, style="reverse"),
             item.node_id or "",
         )
     if result.items:
@@ -1882,7 +2099,13 @@ def _print_generated_hypotheses_json(project_dir: Path, created: list[GeneratedH
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
-def _print_existing_root_hypotheses(project_dir: Path, *, created_ids: set[str]) -> None:
+def _print_existing_root_hypotheses(
+    project_dir: Path,
+    *,
+    created_ids: set[str],
+    mode: str | None = None,
+    profile_id: str | None = None,
+) -> None:
     table = Table(title="Existing ROOT hypotheses", box=box.SIMPLE_HEAVY)
     for column in ROOT_HYPOTHESIS_COLUMNS:
         table.add_column(
@@ -1896,7 +2119,7 @@ def _print_existing_root_hypotheses(project_dir: Path, *, created_ids: set[str])
         )
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
     rows = []
-    for db_row in root_hypothesis_rows(project_dir):
+    for db_row in root_hypothesis_rows(project_dir, mode=mode, profile_id=profile_id):
         row = _root_hypothesis_row(db_row, created_ids=created_ids)
         if not row:
             continue
@@ -1920,17 +2143,46 @@ def _print_existing_root_hypotheses(project_dir: Path, *, created_ids: set[str])
     console.print(table)
 
 
+def _print_root_status_json(
+    project_slug: str,
+    *,
+    config: dict[object, object],
+    mode: str,
+    profile_id: str,
+    profile_hash_value: str,
+    counts: dict[str, int],
+    best: float | None,
+    project_dir: Path,
+) -> None:
+    payload = {
+        "project": project_slug,
+        "target_root_count": config.get("root", {}).get("target_count", 20) if isinstance(config.get("root"), dict) else 20,
+        "mode": mode,
+        "profile_id": profile_id,
+        "profile_hash": profile_hash_value,
+        "counts": counts,
+        "best_root_score": best,
+        "hypotheses": [
+            _root_hypothesis_json_row(row, created_ids=set())
+            for row in root_hypothesis_rows(project_dir, mode=mode, profile_id=profile_id)
+        ],
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
 def _print_root_materializations(
     project_dir: Path,
     *,
     mode: str,
     created_count: int | None,
     hypothesis_id: str | None,
+    only_targets: set[tuple[str, str]] | None = None,
 ) -> None:
     target_id = hypothesis_id.zfill(6) if hypothesis_id else None
     title = "ROOT materializations" if created_count is None else f"ROOT materializations (created: {created_count})"
     table = Table(title=title, box=box.SIMPLE_HEAVY)
     table.add_column("ID", style="bold", no_wrap=True)
+    table.add_column("Rev", justify="right", no_wrap=True)
     table.add_column("S", justify="center", no_wrap=True, width=1)
     table.add_column("File", no_wrap=True)
     table.add_column("Model", no_wrap=True)
@@ -1941,6 +2193,8 @@ def _print_root_materializations(
     rows = materialization_rows(project_dir, mode=mode, hypothesis_id=target_id)
     for db_row in rows:
         current_hypothesis_id = str(db_row.get("hypothesis_id") or "")
+        if only_targets is not None and (current_hypothesis_id, str(db_row.get("file") or "")) not in only_targets:
+            continue
         if current_hypothesis_id != previous_hypothesis_id:
             group_index += 1
             previous_hypothesis_id = current_hypothesis_id
@@ -1951,11 +2205,135 @@ def _print_root_materializations(
         _print_failed_materialization_summary(rows)
 
 
+def _print_root_revision_status(project_dir: Path, *, hypothesis_id: str, mode: str) -> None:
+    rows = db_revision_status_rows(project_dir, hypothesis_id=hypothesis_id, mode=mode)
+    table = Table(title=f"ROOT revisions {str(hypothesis_id).zfill(6)}", box=box.SIMPLE_HEAVY)
+    table.add_column("Revision", justify="right", no_wrap=True)
+    table.add_column("S", justify="center", no_wrap=True)
+    table.add_column("Hypothesis file", no_wrap=True)
+    table.add_column("Mat file", no_wrap=True)
+    table.add_column("Started", no_wrap=True)
+    table.add_column("Score", justify="right", no_wrap=True)
+    for row in rows:
+        materialization_file = str(row.get("materialization_file") or "none")
+        table.add_row(
+            str(row.get("revision") or ""),
+            _revision_status_icon(row),
+            Path(str(row.get("hypothesis_file") or "")).name,
+            materialization_file,
+            _short_datetime(row.get("evaluation_created_at") or row.get("component_created_at")) or "-",
+            _format_score(row.get("metric")) or "-",
+        )
+    console.print(table)
+
+
+def _print_root_revision_overview(
+    project_dir: Path,
+    *,
+    mode: str,
+    profile_id: str,
+    hypothesis_ids: set[str] | None = None,
+) -> None:
+    rows = root_revision_overview_rows(project_dir, mode=mode, profile_id=profile_id)
+    if hypothesis_ids is not None:
+        rows = [row for row in rows if str(row.get("hypothesis_id") or "") in hypothesis_ids]
+    table = Table(title="ROOT revision status", box=box.SIMPLE_HEAVY)
+    table.add_column("ID", style="bold", no_wrap=True)
+    table.add_column("Rev", justify="right", no_wrap=True)
+    table.add_column("S", justify="center", no_wrap=True)
+    table.add_column("Score", justify="right", no_wrap=True)
+    previous_hypothesis_id: str | None = None
+    group_index = -1
+    for row in rows:
+        hypothesis_id = str(row.get("hypothesis_id") or "")
+        if hypothesis_id != previous_hypothesis_id:
+            group_index += 1
+            previous_hypothesis_id = hypothesis_id
+        table.add_row(
+            hypothesis_id,
+            str(row.get("revision") or ""),
+            _revision_overview_icon(row),
+            _format_score(row.get("revision_score")) or "-",
+            style=_zebra_style(group_index),
+        )
+    console.print(table)
+
+
+def _revision_overview_icon(row: dict[str, object]) -> Text:
+    active = bool(row.get("is_active_revision"))
+    best = bool(row.get("is_best_revision"))
+    if active and best:
+        return Text("★", style="bold green")
+    if active:
+        return Text("!", style="bold red")
+    if best:
+        return Text("▶", style="green")
+    return Text("·", style="dim")
+
+
+def _print_root_revision_promote_plan(rows: list[dict[str, object]]) -> None:
+    table = Table(title="ROOT revision promotion plan", box=box.SIMPLE_HEAVY)
+    table.add_column("ID", style="bold", no_wrap=True)
+    table.add_column("To rev", justify="right", no_wrap=True)
+    table.add_column("To file", no_wrap=True)
+    table.add_column("Score", justify="right", no_wrap=True)
+    table.add_column("From rev", justify="right", no_wrap=True)
+    table.add_column("From file", no_wrap=True)
+    for index, row in enumerate(rows):
+        table.add_row(
+            str(row.get("hypothesis_id") or ""),
+            str(row.get("revision") or ""),
+            str(row.get("materialization_file") or ""),
+            _format_score(row.get("metric")) or "-",
+            str(row.get("active_revision") or "-"),
+            str(row.get("active_file") or "-"),
+            style=_zebra_style(index),
+        )
+    console.print(table)
+
+
+def _promote_root_revisions(
+    project_dir: Path,
+    *,
+    mode: str,
+    targets: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    promoted: list[dict[str, object]] = []
+    for row in targets:
+        hid = str(row.get("hypothesis_id") or "")
+        file_name = str(row.get("materialization_file") or "")
+        if not hid or not file_name:
+            continue
+        revision = int(row.get("revision") or 1)
+        hdir = project_dir / "hypotheses" / hid
+        code_path = hdir / "materializations" / file_name
+        if not code_path.exists():
+            raise TmlError(f"Cannot promote missing materialization file: {code_path}")
+        set_active_materialization(hdir, mode, file_name)
+        upsert_materialization(project_dir, hdir, mode, code_path, active=True, hypothesis_revision=revision)
+        promoted.append(dict(row))
+    return promoted
+
+
+def _revision_status_icon(row: dict[str, object]) -> Text:
+    evaluation_status = str(row.get("evaluation_status") or "")
+    if evaluation_status:
+        return _run_status_text(evaluation_status)
+    component_status = str(row.get("component_status") or "")
+    if component_status:
+        return _run_status_text(component_status)
+    if row.get("materialization_file"):
+        materialization_status = str(row.get("materialization_status") or "")
+        return Text("⌘", style="bold yellow" if materialization_status == "fixed" else "cyan")
+    return Text("◇", style="dim")
+
+
 def _root_materialization_row(db_row: dict[str, object]) -> list[object]:
     active = bool(db_row.get("active"))
     status = str(db_row.get("status") or "")
     return [
         str(db_row.get("hypothesis_id") or ""),
+        str(db_row.get("hypothesis_revision") or ""),
         _materialization_status_icon(status, active=active),
         str(db_row.get("file") or ""),
         str(db_row.get("model") or ""),
@@ -2006,6 +2384,7 @@ def _print_root_run_summary(
     title = "ROOT run" if count is None else f"ROOT run (executed: {count})"
     table = Table(title=title, box=box.SIMPLE_HEAVY)
     table.add_column("ID", style="bold", no_wrap=True)
+    table.add_column("Rev", justify="right", no_wrap=True)
     table.add_column("S", justify="center", no_wrap=True)
     table.add_column("Created", no_wrap=True)
     table.add_column("Model", no_wrap=True)
@@ -2022,7 +2401,8 @@ def _print_root_run_summary(
     for db_row in root_run_rows(project_dir, mode=mode, profile_id=profile_id, hypothesis_id=target_id):
         row = _root_run_row(db_row, summary_limit=summary_limit)
         hypothesis_id_value = str(db_row.get("hypothesis_id") or "")
-        if hypothesis_id_value in executed_ids:
+        revision_key = f"{hypothesis_id_value}:{db_row.get('hypothesis_revision') or 1}"
+        if revision_key in executed_ids or hypothesis_id_value in executed_ids:
             new_rows.append(row)
         else:
             old_rows.append(row)
@@ -2261,9 +2641,14 @@ def _print_root_run_request_status(project_dir: Path, *, mode: str, hypothesis_i
         console.print(f"Run skipped: hypothesis {hid} has no {mode} materialization. Run: uv run tml root materialize id={int(hid)}")
 
 
-def _print_submissions(project_dir: Path) -> None:
+def _print_submissions(project_dir: Path, *, limit: int | None = None) -> None:
     rows = submission_rows(project_dir)
-    table = Table(title="Submission candidates", box=box.SIMPLE_HEAVY)
+    display_rows = _submission_display_rows(rows)
+    shown_rows = display_rows if limit is None else display_rows[:limit]
+    title = "Submission candidates"
+    if display_rows and len(shown_rows) < len(display_rows):
+        title = f"{title} (showing {len(shown_rows)}/{len(display_rows)}; limit=0 for all)"
+    table = Table(title=title, box=box.SIMPLE_HEAVY)
     table.add_column("#", justify="right", no_wrap=True)
     table.add_column("ID", no_wrap=True)
     table.add_column("CV#", justify="right", no_wrap=True)
@@ -2284,8 +2669,7 @@ def _print_submissions(project_dir: Path) -> None:
 
     best_local = _best_numeric(row.get("local_score") for row in rows)
     best_public = _best_numeric(row.get("public_score") for row in rows)
-    display_rows = _submission_display_rows(rows)
-    for marker, row, is_child, group_index in display_rows:
+    for marker, row, is_child, group_index in shown_rows:
         local_score = row.get("local_score")
         public_score = row.get("public_score")
         table.add_row(
@@ -2307,6 +2691,25 @@ def _print_submissions(project_dir: Path) -> None:
         )
     console.print(table)
     _print_submission_actions(rows)
+
+
+def _submission_table_limit(value: object) -> int | None:
+    if value is None:
+        return _adaptive_table_limit(default=DEFAULT_SUBMISSION_TABLE_LIMIT)
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise TmlError(f"Invalid limit: {value!r}. Use a non-negative integer.") from exc
+    if parsed < 0:
+        raise TmlError("Invalid limit: use a non-negative integer.")
+    return None if parsed == 0 else parsed
+
+
+def _adaptive_table_limit(*, default: int) -> int:
+    terminal_rows = shutil.get_terminal_size(fallback=(80, default)).lines
+    if terminal_rows <= 0:
+        return default
+    return max(default, int(terminal_rows * 0.65))
 
 
 def _submission_display_rows(rows: list[dict[str, object]]) -> list[tuple[str, dict[str, object], bool, int]]:
@@ -2554,6 +2957,11 @@ def _root_run_row(
         score = _format_score(db_row.get("metric"))
         node = str(db_row.get("node_id") or "")
         run_duration = _seconds_text(db_row.get("run_seconds"))
+    elif db_row.get("component_status"):
+        status = _run_status_text(str(db_row.get("component_status") or ""))
+        score = ""
+        node = str(db_row.get("component_node_id") or "")
+        run_duration = _seconds_text(db_row.get("component_run_seconds"))
     elif db_row.get("code_hash"):
         materialization_status = str(db_row.get("materialization_status") or "")
         status = Text("⌘", style="bold yellow" if materialization_status == "fixed" else "cyan")
@@ -2567,6 +2975,7 @@ def _root_run_row(
         run_duration = ""
     return [
         str(db_row.get("hypothesis_id") or ""),
+        str(db_row.get("hypothesis_revision") or ""),
         status,
         _short_datetime(db_row.get("created_at")),
         str(db_row.get("model") or ""),
@@ -2635,9 +3044,15 @@ def _root_hypothesis_json_row(db_row: dict[str, object], *, created_ids: set[str
     row = _root_hypothesis_row(db_row, created_ids=created_ids)
     if not row:
         return {}
+    status = row.get("status", "")
+    if isinstance(status, Text):
+        status = status.plain
     return {
         "is_new": bool(row["is_new"]),
-        **{str(column["key"]): row.get(str(column["key"]), "") for column in ROOT_HYPOTHESIS_COLUMNS},
+        **{
+            str(column["key"]): status if str(column["key"]) == "status" else row.get(str(column["key"]), "")
+            for column in ROOT_HYPOTHESIS_COLUMNS
+        },
     }
 
 
@@ -2659,6 +3074,8 @@ def _root_hypothesis_row(db_row: dict[str, object], *, created_ids: set[str]) ->
         "id": hypothesis_id,
         "is_new": hypothesis_id in created_ids,
         "status": _hypothesis_status_text(str(db_row.get("status_icon") or "")),
+        "revision": str(db_row.get("best_revision") or ""),
+        "score": _format_score(db_row.get("best_score")),
         "created_at": _short_datetime(db_row.get("created_at")),
         "model": str(db_row.get("model") or ""),
         "reasoning_tokens": _token_summary(db_row),

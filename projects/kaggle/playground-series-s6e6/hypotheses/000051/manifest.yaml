@@ -1,12 +1,30 @@
+hypothesis:
+  id: '000051'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
-    active: autogluon-003.py
-    sha256: 825a808252b97d7a51b7ea72cb0395dde3a7cd08c361667a22654bff0cedabc6
-    created_at: '2026-06-23T17:01:22'
-feature_group:
-  logical_name: k_correction_residual_manifold
-  version_id: k_correction_residual_manifold@000051
-  source_hypothesis_id: '000051'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-003.py
+    active: autogluon-005.py
+    files:
+    - file: autogluon-002.py
+      revision: 1
+      sha256: cf5e749b952d8ca189c5884fd11ab3d29675fa7f006c6b3e52da9a8379588cf3
+      created_at: '2026-06-23T17:01:22'
+    - file: autogluon-003.py
+      revision: 1
+      sha256: 825a808252b97d7a51b7ea72cb0395dde3a7cd08c361667a22654bff0cedabc6
+      created_at: '2026-06-23T17:01:22'
+    - file: autogluon-004.py
+      revision: 2
+      sha256: d53e4d3ae2e16f1f6a847c2c601f6d50d2992366542a3f4ab6eb8b7cafb8b34f
+      created_at: '2026-06-24T05:15:05'
+    - file: autogluon-005.py
+      revision: 2
+      sha256: 7ab84628e2d7dec87a29540d6efec93d108475ca3074329f4cd4aaab45cff156
+      created_at: '2026-06-24T08:56:41'

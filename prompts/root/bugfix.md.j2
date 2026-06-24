@@ -46,6 +46,12 @@ Generate only the corrected module.
 {{ bugfix.error_text }}
 ```
 
+{% if bugfix.repair_notes %}
+# Repair Notes
+
+{{ bugfix.repair_notes }}
+
+{% endif %}
 # Previous Code
 
 ```python

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n_BAND_COLUMNS = (\"u\", \"g\", \"r\", \"i\", \"z\")\n_WAVELENGTH_NM = (355.1, 468.6, 616.5, 748.1, 893.1)\n_ALPHA = 1e-12\n_EPS = 1e-12\n_Z_LOW = -0.99\n_Z_HIGH = 20.0\n\n\ndef add_flux_allocation_entropy(raw, deps, aux):\n    n = raw.shape[0]\n    mags = raw.loc[:, list(_BAND_COLUMNS)].to_numpy(dtype=float)\n    shares = np.full((n, len(_BAND_COLUMNS)), 0.2, dtype=float)\n    invalid_share = np.zeros(n, dtype=bool)\n\n    finite_rows = np.isfinite(mags).all(axis=1)\n    if finite_rows.any():\n        valid_idx = np.nonzero(finite_rows)[0]\n        l = -0.4 * mags[valid_idx]\n        l = l - np.max(l, axis=1, keepdims=True)\n        q = np.exp(np.log(10.0) * l)\n        q_sum = np.sum(q, axis=1)\n        calc_ok = np.isfinite(q_sum) & (q_sum > 0.0)\n\n        if (~calc_ok).any():\n            invalid_share[valid_idx[~calc_ok]] = True\n\n        if calc_ok.any():\n            ok_idx = valid_idx[calc_ok]\n            shares[ok_idx] = (q[calc_ok] + _ALPHA) / (q_sum[calc_ok, None] + 5.0 * _ALPHA)\n\n    if (~finite_rows).any():\n        invalid_share[~finite_rows] = True\n\n    share_u = shares[:, 0]\n    share_g = shares[:, 1]\n    share_r = shares[:, 2]\n    share_i = shares[:, 3]\n    share_z = shares[:, 4]\n\n    sorted_shares = np.sort(shares, axis=1)[:, ::-1]\n    p1 = sorted_shares[:, 0]\n    p2 = sorted_shares[:, 1]\n\n    entropy = -np.sum(np.where(shares > 0.0, shares * np.log(shares), 0.0), axis=1)\n    entropy_norm = entropy / np.log(len(_BAND_COLUMNS))\n    simpson = np.sum(shares * shares, axis=1)\n    gini = 1.0 - simpson\n    neff = 1.0 / (simpson + _EPS)\n    top_ratio = p1 / (p2 + _EPS)\n    top_gap = p1 - p2\n\n    bucket_b = share_u + share_g\n    bucket_m = share_g + share_r\n    bucket_r = share_i + share_z\n    delta_br = bucket_b - bucket_r\n    delta_ui = share_u - share_i\n    delta_gr = share_g - share_r\n    delta_zi = share_z - share_g\n\n    x = np.log(np.array(_WAVELENGTH_NM, dtype=float))\n    mu = np.sum(shares * x, axis=1)\n    dx = x[None, :] - mu[:, None]\n    var = np.sum(shares * (dx ** 2), axis=1)\n    sigma = np.maximum(np.sqrt(var), _EPS)\n    skew = np.sum(shares * (dx ** 3), axis=1) / (sigma ** 3)\n    kurt = np.sum(shares * (dx ** 4), axis=1) / (sigma ** 4) - 3.0\n    skew = np.clip(skew, -8.0, 8.0)\n    kurt = np.clip(kurt, -8.0, 8.0)\n\n    x_min = x.min()\n    x_max = x.max()\n    x_span = x_max - x_min\n    centroid_ratio = mu / x_max\n    scale_ratio = var / (x_span ** 2)\n\n    z = raw[\"redshift\"].to_numpy(dtype=float)\n    z_clamp = np.clip(z, _Z_LOW, _Z_HIGH)\n    log_shift = np.log1p(z_clamp)\n    x_rf = x[None, :] - log_shift[:, None]\n\n    mu_rf = np.sum(shares * x_rf, axis=1)\n    dx_rf = x_rf - mu_rf[:, None]\n    var_rf = np.sum(shares * (dx_rf ** 2), axis=1)\n    sigma_rf = np.maximum(np.sqrt(var_rf), _EPS)\n    skew_rf = np.sum(shares * (dx_rf ** 3), axis=1) / (sigma_rf ** 3)\n    kurt_rf = np.sum(shares * (dx_rf ** 4), axis=1) / (sigma_rf ** 4) - 3.0\n    skew_rf = np.clip(skew_rf, -8.0, 8.0)\n    kurt_rf = np.clip(kurt_rf, -8.0, 8.0)\n\n    dmu = mu - mu_rf\n    dv = var - var_rf\n\n    def _clean(arr):\n        return np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)\n\n    entropy = _clean(entropy)\n    entropy_norm = _clean(entropy_norm)\n    simpson = _clean(simpson)\n    gini = _clean(gini)\n    neff = _clean(neff)\n    top_ratio = _clean(top_ratio)\n    top_gap = _clean(top_gap)\n    bucket_b = _clean(bucket_b)\n    bucket_m = _clean(bucket_m)\n    bucket_r = _clean(bucket_r)\n    delta_br = _clean(delta_br)\n    delta_ui = _clean(delta_ui)\n    delta_gr = _clean(delta_gr)\n    delta_zi = _clean(delta_zi)\n    mu = _clean(mu)\n    var = _clean(var)\n    skew = _clean(skew)\n    kurt = _clean(kurt)\n    centroid_ratio = _clean(centroid_ratio)\n    scale_ratio = _clean(scale_ratio)\n    mu_rf = _clean(mu_rf)\n    var_rf = _clean(var_rf)\n    skew_rf = _clean(skew_rf)\n    kurt_rf = _clean(kurt_rf)\n    dmu = _clean(dmu)\n    dv = _clean(dv)\n\n    return pd.DataFrame(\n        {\n            \"flux_share_u\": share_u,\n            \"flux_share_g\": share_g,\n            \"flux_share_r\": share_r,\n            \"flux_share_i\": share_i,\n            \"flux_share_z\": share_z,\n            \"flux_entropy\": entropy,\n            \"flux_entropy_norm\": entropy_norm,\n            \"flux_simpson\": simpson,\n            \"flux_gini\": gini,\n            \"flux_neff\": neff,\n            \"flux_top_ratio\": top_ratio,\n            \"flux_top_gap\": top_gap,\n            \"flux_bucket_b\": bucket_b,\n            \"flux_bucket_m\": bucket_m,\n            \"flux_bucket_r\": bucket_r,\n            \"flux_delta_br\": delta_br,\n            \"flux_delta_ui\": delta_ui,\n            \"flux_delta_gr\": delta_gr,\n            \"flux_delta_zi\": delta_zi,\n            \"flux_log_lambda_mean\": mu,\n            \"flux_log_lambda_var\": var,\n            \"flux_log_lambda_skew\": skew,\n            \"flux_log_lambda_kurtosis\": kurt,\n            \"flux_log_lambda_centroid_ratio\": centroid_ratio,\n            \"flux_log_lambda_scale_ratio\": scale_ratio,\n            \"flux_log_lambda_mean_rf\": mu_rf,\n            \"flux_log_lambda_var_rf\": var_rf,\n            \"flux_log_lambda_skew_rf\": skew_rf,\n            \"flux_log_lambda_kurtosis_rf\": kurt_rf,\n            \"flux_delta_mu\": dmu,\n            \"flux_delta_var\": dv,\n            \"flux_invalid_share\": invalid_share,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"flux_allocation_entropy\",\n        \"fn\": add_flux_allocation_entropy,\n        \"depends_on\": [],\n        \"description\": \"Builds rest-frame-aware, five-band normalized flux-share descriptors with concentration, asymmetry, and moment features for SED-shape characterization.\",\n    }\n]",
+  "usage": {
+    "threadId": "019ef79d-3adc-7360-8819-254c929f2477",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8960,
+        "inputTokens": 10387,
+        "outputTokens": 9838,
+        "reasoningOutputTokens": 8082,
+        "totalTokens": 20225
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 8960,
+        "inputTokens": 10387,
+        "outputTokens": 9838,
+        "reasoningOutputTokens": 8082,
+        "totalTokens": 20225
+      }
+    },
+    "turnId": "019ef79d-3ae9-7911-a4c1-fe49c99a84c9"
+  },
+  "wall_ms": 20714,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

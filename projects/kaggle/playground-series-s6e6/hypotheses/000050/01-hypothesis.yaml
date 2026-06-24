@@ -1,0 +1,33 @@
+title: Main-Sequence Photometric Parallax Plausibility
+group_name: main_sequence_parallax_plausibility
+family: photometric_parallax
+summary: Build features from a calibrated main-sequence distance interpretation of
+  each object's ugriz colors, so the model receives an explicit signal for how physically
+  plausible its photometry is as a star versus a non-stellar galaxy/quasar-like source.
+depends_on: []
+strategy: 'Compute x = g - i and clip it into [0.2, 4.0] with two edge flags for lower/upper
+  saturation. Evaluate the main-sequence absolute-magnitude surrogate M_r(x) = -5.06
+  + 14.32x - 12.97x^2 + 6.127x^3 - 1.267x^4 + 0.0967x^5. Define distance modulus mu
+  = r - M_r(x), implied distance d_pc = 10^((mu + 5)/5), and log10 distance log_d
+  = log10(max(d_pc, 1)). Derive implied absolute magnitudes in all other bands using
+  M_u = u - mu, M_g = g - mu, M_i = i - mu, M_z = z - mu. Partition x into fixed quantile
+  bins (for example 80 equal-count bins), compute per-bin median_mu and MAD_mu from
+  the same pipeline context, then add standardized offset mu_z = (mu - median_mu_bin)
+  / (MAD_mu_bin + 1e-6) and mu_percentile rank within the x-bin. Keep deterministic
+  handling: if a bin has too few samples, back off to neighboring bins with a fallback
+  global median/MAD.'
+expected_signal: Objects whose colors and brightness are consistent with the calibrated
+  main-sequence distance mapping should keep coherent mu, d_pc, and implied absolute
+  colors, while galaxies and quasars should produce inconsistent photometric distances
+  or out-of-manifold abs-magnitude signatures, improving class separation where raw
+  colors alone overlap.
+risk: The adopted relation is for main-sequence stars; giants, unresolved blends,
+  very red/blue extremes, metallicity/extinction shifts, and noisy faint measurements
+  can produce spurious distances. Clipping x can blur edge objects, and the per-bin
+  normalization may overcorrect if the global population is highly imbalanced across
+  classes or if sampling density is low in some color tails.
+schema_version: 1
+hypothesis_id: '000050'
+enabled: true
+created_at: '2026-06-23T14:31:54'
+revision: 1

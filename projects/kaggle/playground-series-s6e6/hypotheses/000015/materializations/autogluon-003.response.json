@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\ndef _format_breakpoint(bp):\n    token = f\"{bp}\"\n    return token.replace(\"-\", \"m\").replace(\".\", \"p\")\n\n\ndef _compute_domain_margin(z_values, low, high):\n    margin = np.where(\n        z_values < low,\n        z_values - low,\n        np.where(z_values > high, z_values - high, 0.0),\n    )\n    gap = np.abs(margin)\n    inside = np.where((z_values >= low) & (z_values <= high), 1, 0).astype(np.uint8)\n    return margin, gap, inside\n\n\ndef add_redshift_template_domain_margins(raw, deps, aux):\n    z_values = raw[\"redshift\"].to_numpy(dtype=np.float64)\n    index = raw.index\n\n    v_max = 1200.0\n    c_kms = 299792.458\n\n    star_low = -v_max / c_kms\n    star_high = v_max / c_kms\n\n    galaxy_low = -0.01\n    galaxy_high = 1.0\n\n    qso_low = 0.0333\n    qso_high = 7.0\n\n    distance_cap = 10.0\n    log1p_cap = 10.0\n\n    star_velocity_scale = c_kms / v_max\n    star_penalty_cut = 0.00401\n    sentinel_next = 1000.0\n\n    m_star, g_star, f_star = _compute_domain_margin(z_values, star_low, star_high)\n    m_galaxy, g_galaxy, f_galaxy = _compute_domain_margin(z_values, galaxy_low, galaxy_high)\n    m_qso, g_qso, f_qso = _compute_domain_margin(z_values, qso_low, qso_high)\n\n    features = {\n        \"redshift_star_margin\": np.clip(m_star, -distance_cap, distance_cap),\n        \"redshift_star_gap\": np.clip(g_star, 0.0, distance_cap),\n        \"redshift_star_in_domain\": f_star,\n        \"redshift_galaxy_margin\": np.clip(m_galaxy, -distance_cap, distance_cap),\n        \"redshift_galaxy_gap\": np.clip(g_galaxy, 0.0, distance_cap),\n        \"redshift_galaxy_in_domain\": f_galaxy,\n        \"redshift_qso_margin\": np.clip(m_qso, -distance_cap, distance_cap),\n        \"redshift_qso_gap\": np.clip(g_qso, 0.0, distance_cap),\n        \"redshift_qso_in_domain\": f_qso,\n        \"redshift_sign\": np.sign(z_values),\n        \"redshift_star_velocity_proxy\": z_values * star_velocity_scale,\n        \"redshift_penalty_star_domain\": np.clip(np.abs(m_star) - star_penalty_cut, 0.0, distance_cap),\n        \"redshift_penalty_galaxy_low\": np.clip(-m_galaxy, 0.0, distance_cap),\n        \"redshift_penalty_qso_low\": np.clip(-(z_values - qso_low), 0.0, distance_cap),\n    }\n\n    breakpoints = (-0.01, 0.0, 0.0333, 1.0, 2.2, 3.0, 3.5, 4.5, 5.0, 7.0)\n    n_breakpoints = len(breakpoints)\n\n    for i, t in enumerate(breakpoints):\n        token = _format_breakpoint(t)\n\n        d_low = np.clip(z_values - t, -distance_cap, distance_cap)\n        features[f\"redshift_regime_dlow_{token}\"] = d_low\n        features[f\"redshift_regime_dlow_abslog1p_{token}\"] = np.clip(\n            np.log1p(np.abs(d_low)), 0.0, log1p_cap\n        )\n\n        if i < n_breakpoints - 1:\n            raw_d_high = breakpoints[i + 1] - z_values\n        else:\n            raw_d_high = sentinel_next - z_values\n\n        d_high = np.clip(raw_d_high, -distance_cap, distance_cap)\n        features[f\"redshift_regime_dhigh_{token}\"] = d_high\n        features[f\"redshift_regime_dhigh_abslog1p_{token}\"] = np.clip(\n            np.log1p(np.abs(d_high)), 0.0, log1p_cap\n        )\n\n    return pd.DataFrame(features, index=index)\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"redshift_template_domain_margins\",\n        \"fn\": add_redshift_template_domain_margins,\n        \"depends_on\": [],\n        \"description\": \"Build redshift geometry and domain-feasibility features from STAR/GALAXY/QSO templates with boundary gaps, signed distances, penalties, and ordered breakpoint regime distances.\",\n    }\n]",
+  "usage": {
+    "threadId": "019ef78d-f665-7732-9bac-1cbf8e2aee0c",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8320,
+        "inputTokens": 10331,
+        "outputTokens": 7245,
+        "reasoningOutputTokens": 6192,
+        "totalTokens": 17576
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 8320,
+        "inputTokens": 10331,
+        "outputTokens": 7245,
+        "reasoningOutputTokens": 6192,
+        "totalTokens": 17576
+      }
+    },
+    "turnId": "019ef78d-f675-79b1-bdcc-2279991f0b85"
+  },
+  "wall_ms": 8685,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

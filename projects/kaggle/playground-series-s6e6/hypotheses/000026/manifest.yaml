@@ -1,23 +1,34 @@
-schema_version: 1
-hypothesis_id: '000026'
-slug: aide_smooth_spline_sed_interactions
+hypothesis:
+  id: '000026'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
     active: autogluon-004.py
-    sha256: 55fdd092020e56ad941d7ae932491f42cc03895ca724f15495806d2c3b2214dd
-    created_at: '2026-06-22T22:34:40'
-origin:
-  run: /home/xai/DEV/aideml/logs/2-liberal-celadon-panther
-  source_artifacts:
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T095849/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T201550/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T122537/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T193547/solution.py
-  - /home/xai/DEV/aideml/logs/2-liberal-celadon-panther/artifacts/20260613T152049/solution.py
-feature_group:
-  logical_name: aide_smooth_spline_sed_interactions
-  version_id: aide_smooth_spline_sed_interactions@000026
-  source_hypothesis_id: '000026'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-004.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: c29ebeafc9385c36b569c8785481c27f0ded8f16a82f8d56395f0634089a2c22
+      created_at: '2026-06-22T22:34:40'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: 4dd4666110312204d8fd4441b79414f49fc851a13e3f531b06b4dbcdc668de0b
+      created_at: '2026-06-22T22:34:40'
+    - file: autogluon-003.py
+      revision: 1
+      sha256: 9678cb0ef1ef28b9d69cc8a8bb341997fbee7e4b985c756903b54b1458483641
+      created_at: '2026-06-22T22:34:40'
+    - file: autogluon-004.py
+      revision: 1
+      sha256: 55fdd092020e56ad941d7ae932491f42cc03895ca724f15495806d2c3b2214dd
+      created_at: '2026-06-22T22:34:40'
+    - file: autogluon-005.py
+      revision: 2
+      sha256: c688d18959c4edb50d4388dff553f224aab6c5e8eaeb79aa4e5a0bbc004ac846
+      created_at: '2026-06-24T05:01:08'

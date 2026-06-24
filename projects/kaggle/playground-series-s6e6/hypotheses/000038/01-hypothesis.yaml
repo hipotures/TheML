@@ -1,0 +1,40 @@
+title: Redshift-Trajectory Geometry Residuals
+group_name: photoz_trajectory_geometry
+family: trajectory_consistency
+summary: Model the SDSS color vector as a smooth function of redshift and encode both
+  deviation from, and geometric relation to, the local color-redshift trajectory so
+  that objects with non-physical evolutionary motion in color space are separated
+  from the dominant manifolds.
+depends_on: []
+strategy: "Create colors c1=u-g, c2=g-r, c3=r-i, c4=i-z. Build a redshift grid using\
+  \ quantiles of redshift (for example 0.5th to 99.5th percentile in bins of fixed\
+  \ width or 160 quantile knots) and fit a robust smooth function to each color over\
+  \ redshift (e.g., LOWESS or monotonic cubic spline on the training distribution,\
+  \ and apply the same transform to test). For every redshift node compute the local\
+  \ mean vector \u03BC(z)=[\u03BC1,\u03BC2,\u03BC3,\u03BC4], robust covariance Sc(z)\
+  \ of colors, and first and second derivatives v(z)=d\u03BC/dz and a(z)=d\xB2\u03BC\
+  /dz\xB2 by central differences. For each row, interpolate \u03BC(z), v(z), a(z),\
+  \ Sc(z); define residual r=c-\u03BC(z). Output features from geometry: orthogonal\
+  \ offset d_orth = r^T S_c(z)^{-1/2}(I - u u^T)S_c(z)^{1/2}r (with u = S_c(z)^{-1/2}v\
+  \ / ||S_c(z)^{-1/2}v||), tangential signed offset d_tan = r\xB7u, curvature mismatch\
+  \ m_curv = (r\xB7a) / (||a||+\u03B5), and a pair of scale-normalized versions d_orth/\u03C3\
+  _orth(z), d_tan/\u03C3_tan(z). Clip z to grid endpoints with expanded-neighbor fallback\
+  \ for sparse bins; when n(z-bin)<minimum, widen the bin and smooth with neighbor\
+  \ bins, and for z<0.01 or extremely high-z tails use global spline fallback with\
+  \ reduced derivative weight."
+expected_signal: "This turns the broad color-redshift relation into structured geometric\
+  \ features where nearby redshifted stars/galaxies/quasars are constrained differently:\
+  \ quasars with emission-line-driven color drift create larger manifold-orthogonal\
+  \ residual structure, galaxies typically stay closer to smoother evolutionary tracks,\
+  \ and stars near z\u22480 are forced to low-variation trajectories, improving discrimination\
+  \ in ambiguous regions and likely stabilizing balanced-class recall."
+risk: If redshift values are noisy or biased for a substantial fraction of objects,
+  tangent and derivative estimates can become unstable and inject noise into features;
+  extrapolation beyond sparse redshift extremes may produce unreliable derivatives,
+  and the spline/quantile-knot choice can overfit sparse regions, requiring careful
+  regularization and fallback logic.
+schema_version: 1
+hypothesis_id: 000038
+enabled: true
+created_at: '2026-06-23T14:16:42'
+revision: 1

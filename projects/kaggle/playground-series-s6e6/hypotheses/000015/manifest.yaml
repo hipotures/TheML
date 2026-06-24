@@ -1,12 +1,26 @@
+hypothesis:
+  id: '000015'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
     active: autogluon-002.py
-    sha256: 8b5ead10f82b9c951c5b3566bd15af85fc4167d199d84b0829f1cbc964d5c90b
-    created_at: '2026-06-22T16:07:47'
-feature_group:
-  logical_name: redshift_template_domain_margins
-  version_id: redshift_template_domain_margins@000015
-  source_hypothesis_id: '000015'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-002.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 814df0bc9214f21f610a733ae2c41b126053e13a618119116cc309d67f1742b9
+      created_at: '2026-06-22T16:07:47'
+    - file: autogluon-002.py
+      revision: 1
+      sha256: 8b5ead10f82b9c951c5b3566bd15af85fc4167d199d84b0829f1cbc964d5c90b
+      created_at: '2026-06-22T16:07:47'
+    - file: autogluon-003.py
+      revision: 2
+      sha256: 5eaa6eff9286b9e5086638c448d0f18de6133664e9e1be2b25c6071b5e2c3ca6
+      created_at: '2026-06-24T04:55:45'

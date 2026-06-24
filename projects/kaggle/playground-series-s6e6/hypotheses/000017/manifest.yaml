@@ -1,12 +1,26 @@
+hypothesis:
+  id: '000017'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: f265354a391faa5bc73c5e627642e91b39226b75a587d95e0cc7d0ccd786d8ec
-    created_at: '2026-06-22T14:54:38'
-feature_group:
-  logical_name: redshift_luminosity_plausibility
-  version_id: redshift_luminosity_plausibility@000017
-  source_hypothesis_id: '000017'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: f265354a391faa5bc73c5e627642e91b39226b75a587d95e0cc7d0ccd786d8ec
+      created_at: '2026-06-22T14:54:38'
+    - file: autogluon-002.py
+      revision: 2
+      sha256: fea74ad0bdceaa0550417cf647f7565cf5d38fc84a3d827cb1129dce4d6994a9
+      created_at: '2026-06-24T04:56:13'
+    - file: autogluon-003.py
+      revision: 2
+      sha256: ca3dae37f945abe5385021f1920213c5ce6c3b565399d54914833ec1e31fb1aa
+      created_at: '2026-06-24T08:53:24'

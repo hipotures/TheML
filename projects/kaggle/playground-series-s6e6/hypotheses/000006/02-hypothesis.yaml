@@ -1,0 +1,37 @@
+title: Bandpass break localization with confidence-aware soft assignment
+group_name: bandpass_break_localization
+family: spectral_break
+summary: Represent each object by the location of its strongest broadband discontinuity
+  across ugriz and how strong, asymmetric, and reliable that discontinuity is, so
+  class-specific spectral-shape signatures become easier to separate.
+depends_on: []
+strategy: "Use only bands u,g,r,i,z. Compute l_u,l_g,l_r,l_i,l_z as log-flux proxies\
+  \ with l_b=-0.4*m_b. Let d_ug=l_u-l_g, d_gr=l_g-l_r, d_ri=l_r-l_i, d_iz=l_i-l_z,\
+  \ and a_uj=|d_j| for j in {ug,gr,ri,iz}. Let A=a_ug+a_gr+a_ri+a_iz and eps=1e-8.\
+  \ If A<1e-6 (near-flat spectrum), emit break_present=0, break_position=-1, and set\
+  \ all break-derived numeric outputs to 0 with a dedicated flag. Otherwise set break_present=1\
+  \ and choose dominant break index k=argmax_j a_j with tie broken by smallest j (bluest)\
+  \ for deterministic behavior. For all j define soft posterior p_j=a_j/(A+eps), entropy\
+  \ H=\u2212\u2211 p_j log(max(p_j,eps)), and expected position k_soft=\u2211 p_j\xB7\
+  idx(j) where idx maps ug/gr/ri/iz to 1..4. For chosen k, compute d_k and s_k=sign(d_k);\
+  \ blue_mean=mean(a_ug..a_{prev(k)-1}) (0 if k=1), red_mean=mean(a_{k+1}..a_iz) (0\
+  \ if k=4), and continuity_break= d_k - (blue_mean+red_mean)/2. Define asymmetry=blue_mean-red_mean,\
+  \ sharpness=|d_k|/(A+eps), and turnover_count = I(k>1 and sign(d_{k-1})!=s_k)+I(k<4\
+  \ and sign(d_{k+1})!=s_k). Optionally add confidence bins by applying equal-frequency\
+  \ cutpoints on sharpness and H computed on training data (e.g., quartiles) and record\
+  \ low/med/high bins to avoid brittle behavior in near-tie cases."
+expected_signal: The approach gives the model a compact description of where and how
+  abrupt the largest spectral break is, which is physically aligned with galaxy continuum
+  breaks, redshifted quasar features moving across ugriz, and the smoother monotonic
+  trends of stars, so it should improve recall-balanced discrimination where global
+  colors alone are ambiguous.
+risk: Because magnitudes can be noisy at faint flux levels, argmax selection may flip
+  between adjacent bands and inflate discrete break-location features; entropy and
+  soft-weights reduce but do not remove this, and these descriptors are partially
+  redundant with adjacent-color slopes, so careless use can still overfit survey-specific
+  photometric quirks.
+schema_version: 1
+hypothesis_id: '000006'
+revision: 2
+enabled: true
+created_at: '2026-06-24T04:38:43'

@@ -1,12 +1,26 @@
+hypothesis:
+  id: '000044'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
     active: autogluon-001.py
-    sha256: 7c7f0b7b28277594bec2667279e6c5c827f63816cb294863773ffb6566dfa406
-    created_at: '2026-06-23T14:55:00'
-feature_group:
-  logical_name: redshifted_absorption_trough_residuals
-  version_id: redshifted_absorption_trough_residuals@000044
-  source_hypothesis_id: '000044'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 7c7f0b7b28277594bec2667279e6c5c827f63816cb294863773ffb6566dfa406
+      created_at: '2026-06-23T14:55:00'
+    - file: autogluon-002.py
+      revision: 2
+      sha256: 4151c14354f88e59788d294ace33532dab95bfdd63f4204306891a7f93b81769
+      created_at: '2026-06-24T05:10:42'
+    - file: autogluon-003.py
+      revision: 2
+      sha256: 0e28c9cc8292ec817dc983df482c2060e1d1b4f9a007d5f919792eba24f5ae6d
+      created_at: '2026-06-24T08:55:23'

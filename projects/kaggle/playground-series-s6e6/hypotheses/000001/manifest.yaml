@@ -1,12 +1,22 @@
+hypothesis:
+  id: '000001'
+  latest_revision: 2
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
-    active: autogluon-001.py
-    sha256: f3ed5048490b8f38456e574896cc35c7eca012937fba5401a5863a53cd5e9306
-    created_at: '2026-06-22T02:10:18'
-feature_group:
-  logical_name: broadband_color_shape
-  version_id: broadband_color_shape@000001
-  source_hypothesis_id: '000001'
-  operation: create_new_root_group
-  depends_on: []
-  code_artifact: autogluon-001.py
+    active: autogluon-002.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: f3ed5048490b8f38456e574896cc35c7eca012937fba5401a5863a53cd5e9306
+      created_at: '2026-06-22T02:10:18'
+    - file: autogluon-002.py
+      revision: 2
+      sha256: 8c0cf148c7da0513d33a36e772ef4ed6b5d5fa244520bcf5bafbd8826ef6cf78
+      created_at: '2026-06-24T04:51:56'
