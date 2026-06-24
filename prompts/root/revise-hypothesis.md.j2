@@ -1,22 +1,25 @@
-Revise one existing ROOT feature-group hypothesis.
+Improve one existing ROOT feature-group hypothesis without turning it into a different hypothesis.
 
 {% include "blocks/task-context.md.j2" %}
 
 # Instruction
 
-You must produce the next semantic revision of the selected ROOT hypothesis.
+Read the selected ROOT hypothesis and its previous numbered versions.
 
-Use the previous revisions below as the full history of the idea. Keep the same
-feature-group identity and improve only the hypothesis content, especially the
-deterministic `strategy`, when there is a concrete useful improvement. If the
-best change would create a different group, duplicate another idea, or add
-unsafe complexity, return `decision: "no_change"`.
+Then do exactly one of these:
+
+1. Return `decision: "revise"` with a next version of the same hypothesis. Keep
+   the same `group_name` and semantic goal, but make the hypothesis more useful
+   by changing its content. Focus on making `strategy` more concrete,
+   deterministic, robust, or better aligned with the project metric.
+2. Return `decision: "no_change"` if there is no concrete useful improvement
+   that keeps the same `group_name` and semantic goal.
 
 # Selected Hypothesis
 
 Hypothesis ID: {{ hypothesis_id }}
 
-Previous revisions:
+Previous versions:
 {% for revision in previous_revisions %}
 - rev {{ revision.get("revision") }}: {{ revision.get("title") }}
   group_name={{ revision.get("group_name") }}
@@ -29,7 +32,8 @@ Previous revisions:
 
 # Rules
 
-- Revise the same semantic feature-group idea.
+- Keep the same semantic feature-group idea.
+- Create a clearer or stronger deterministic strategy for that same idea.
 - Keep `group_name` exactly the same.
 - Keep `depends_on` compatible with previous revisions.
 - Prefer keeping `family` the same.
