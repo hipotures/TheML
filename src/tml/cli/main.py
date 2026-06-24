@@ -2001,6 +2001,7 @@ def _print_branch_grow_summary(result: BranchGrowResult) -> None:
     item_table.add_column("Run", no_wrap=True)
     item_table.add_column("Score", justify="right", no_wrap=True)
     item_table.add_column("Node", no_wrap=True)
+    best_metric = _best_numeric(item.metric for item in result.items)
     for item in result.items:
         item_table.add_row(
             str(item.step_index),
@@ -2009,7 +2010,7 @@ def _print_branch_grow_summary(result: BranchGrowResult) -> None:
             item.parent_ref or "-",
             item.source_ref or "-",
             item.run_status,
-            _format_score(item.metric),
+            _score_text(item.metric, best=best_metric, style="reverse"),
             item.node_id or "",
         )
     if result.items:
