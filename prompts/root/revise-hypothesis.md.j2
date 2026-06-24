@@ -4,7 +4,19 @@ Improve one existing ROOT feature-group hypothesis without turning it into a dif
 
 # Instruction
 
-Read the selected ROOT hypothesis and its previous numbered versions.
+You are editing a hypothesis document, not writing code and not creating a new
+feature group.
+
+Input:
+
+- one selected ROOT hypothesis, identified by `Hypothesis ID`;
+- all previous numbered versions of that same hypothesis.
+
+Output:
+
+- either one JSON object describing the next numbered version of that same
+  hypothesis;
+- or one JSON object saying that no safe useful change should be made.
 
 Then do exactly one of these:
 
@@ -14,6 +26,9 @@ Then do exactly one of these:
    deterministic, robust, or better aligned with the project metric.
 2. Return `decision: "no_change"` if there is no concrete useful improvement
    that keeps the same `group_name` and semantic goal.
+
+The next version should answer: "How should this same feature group be defined
+better than the previous version?"
 
 # Selected Hypothesis
 
