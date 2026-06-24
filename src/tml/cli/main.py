@@ -431,6 +431,11 @@ def root_revise_cmd(ctx: typer.Context) -> None:
 
 
 @root_app.command(
+    "mat",
+    context_settings=EXTRA,
+    help="Alias for `tml root materialize`.",
+)
+@root_app.command(
     "materialize",
     context_settings=EXTRA,
     help=(
