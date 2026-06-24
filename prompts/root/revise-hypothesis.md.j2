@@ -3,17 +3,23 @@
 
 # Instruction
 
-You are creating the next revision of the selected ROOT hypothesis.
+Analyze the selected ROOT hypothesis, the project context, and the previous
+revisions. If live web search is available and useful, check at most 3 sources
+for relevant domain or feature-engineering context.
 
-You are not writing code. You are not creating a new feature group.
+Create the next revision by expanding or improving the hypothesis while
+preserving its substantive feature-group idea. You are not writing code. You are
+not creating a new feature group.
 
-Return a revised hypothesis using exactly the same JSON schema as a newly
-generated hypothesis. Keep `group_name` exactly the same and keep the same
-feature-group idea. Improve the hypothesis text, especially `strategy`, so it is
-more concrete, deterministic, robust, and easier to materialize.
+The revision should make the hypothesis more precise, internally consistent,
+implementable, or better justified. Improve the hypothesis text, especially
+`strategy`, when there is a concrete useful improvement. Do not force arbitrary
+changes.
 
-Use previous revisions only as context. Do not merge them mechanically. The
-output must be one coherent revised hypothesis.
+Use previous revisions only as context. If they contain useful details, use that
+context, but do not mechanically merge them. The output must be one coherent
+revised hypothesis using exactly the same JSON schema as a newly generated
+hypothesis.
 
 # Selected Hypothesis
 
