@@ -393,7 +393,14 @@ def root_revise_cmd(ctx: typer.Context) -> None:
         if status_only:
             _print_root_revision_status(ref.path, hypothesis_id=hypothesis_id, mode=mode)
             return
-        count = int(overrides.get("count") or 1)
+        if "count" not in overrides:
+            plan = root_revise_plan(ref.path, hypothesis_id=hypothesis_id, count=0)
+            _print_root_revise_plan(ref.slug, plan)
+            console.print("No revision created. Pass count=<N> to create revisions.")
+            return
+        count = int(overrides.get("count") or 0)
+        if count < 1:
+            raise TmlError("count=<N> must be greater than 0.")
         plan = root_revise_plan(ref.path, hypothesis_id=hypothesis_id, count=count)
         _print_root_revise_plan(ref.slug, plan)
         created = revise_root_hypothesis(ref.path, hypothesis_id=hypothesis_id, count=count, progress=console.print)
