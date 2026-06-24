@@ -78,6 +78,9 @@ def revise_root_hypothesis(
     models = repo_models_for_project(project_dir)
     model, role_options = resolve_role_model(models, "hypothesis")
     providers = repo_providers_for_project(project_dir)
+    spec = resolve_model_spec(model, providers)
+    provider_config = {**(spec.provider_config or {}), **role_options}
+    web_search_enabled = _web_search_enabled(provider_config.get("web_search"))
     created: list[Path] = []
     for _ in range(count):
         previous = revision_records(hdir)
@@ -95,6 +98,7 @@ def revise_root_hypothesis(
                 hypothesis=latest,
                 hypothesis_id=hid,
                 previous_revisions=[record.payload for record in previous],
+                web_search_enabled=web_search_enabled,
             ),
         )
         response = run_model_invocation(
@@ -139,6 +143,12 @@ def _parse_revision_response(text: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("Revise response must be a JSON object")
     return parsed
+
+
+def _web_search_enabled(value: object) -> bool:
+    if str(value or "").strip().lower() in {"live", "cached"}:
+        return True
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _revision_payload_from_response(payload: dict[str, Any], latest: dict[str, Any]) -> dict[str, Any]:

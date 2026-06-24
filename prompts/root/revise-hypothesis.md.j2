@@ -4,8 +4,7 @@
 # Instruction
 
 Analyze the selected ROOT hypothesis, the project context, and the previous
-revisions. If live web search is available and useful, check at most 3 sources
-for relevant domain or feature-engineering context.
+revisions.
 
 Create the next revision by expanding or improving the hypothesis while
 preserving its substantive feature-group idea. You are not writing code. You are
@@ -20,6 +19,17 @@ Use previous revisions only as context. If they contain useful details, use that
 context, but do not mechanically merge them. The output must be one coherent
 revised hypothesis using exactly the same JSON schema as a newly generated
 hypothesis.
+
+{% if web_search_enabled %}
+# Web Search
+
+Live web search is enabled. If it is useful, verify the revision context with at
+most 3 sources before writing the revised hypothesis. Use search only to check
+domain facts, feature-engineering background, validation risks, or implementation
+constraints relevant to the selected hypothesis. Do not use web search to invent
+a different feature-group idea, copy a public solution, or broaden the scope.
+If web search is not useful, continue without inventing sources.
+{% endif %}
 
 # Selected Hypothesis
 

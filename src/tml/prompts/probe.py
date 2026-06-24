@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from tml.ai import ModelInvocation, run_model_invocation
-from tml.ai.models import resolve_role_model
+from tml.ai.models import resolve_model_spec, resolve_role_model
 from tml.core.config import active_mode, load_project_config, repo_models_for_project, repo_providers_for_project, repo_root_for_project
 from tml.core.errors import TmlError
 from tml.core.ids import run_id
@@ -128,6 +128,11 @@ def _render_for_target(
         records = revision_records(hdir)
         if not records:
             raise FileNotFoundError(f"No canonical ROOT revisions in {hdir}")
+        models = repo_models_for_project(project_dir)
+        providers = repo_providers_for_project(project_dir)
+        model, role_options = resolve_role_model(models, "hypothesis")
+        spec = resolve_model_spec(model, providers)
+        provider_config = {**(spec.provider_config or {}), **role_options}
         rendered = render_template(
             project_dir,
             "root.revise-hypothesis",
@@ -135,6 +140,7 @@ def _render_for_target(
                 project_dir,
                 hypothesis_id=hid,
                 previous_revisions=[record.payload for record in records],
+                web_search_enabled=_web_search_enabled(provider_config.get("web_search")),
             ),
         )
         rendered["hypothesis_id"] = hid
@@ -184,6 +190,12 @@ def _unknown_prompt_target_message(target: str | None, stage: str | None) -> str
         "tml prompt render <hypothesis_id> code, "
         "tml prompt render revise id=<hypothesis>."
     )
+
+
+def _web_search_enabled(value: object) -> bool:
+    if str(value or "").strip().lower() in {"live", "cached"}:
+        return True
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _hypothesis_for_target(project_dir: Path, target: str | None) -> tuple[dict[str, object], Path | None]:
