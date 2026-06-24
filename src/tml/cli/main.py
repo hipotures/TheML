@@ -2010,6 +2010,7 @@ def _print_branch_rebase_plan(project_slug: str, plan: BranchRebasePlan) -> None
     change_table.add_column("New", no_wrap=True)
     change_table.add_column("Old score", justify="right", no_wrap=True)
     change_table.add_column("New score", justify="right", no_wrap=True)
+    change_table.add_column("Delta", justify="right", no_wrap=True)
     for change in plan.changed_components:
         change_table.add_row(
             change.source_id,
@@ -2018,6 +2019,7 @@ def _print_branch_rebase_plan(project_slug: str, plan: BranchRebasePlan) -> None
             change.new_file,
             _format_score(change.old_score) or "n/a",
             _format_score(change.new_score) or "n/a",
+            _format_score_delta(change.old_score, change.new_score),
         )
     console.print(change_table)
 
@@ -3155,6 +3157,14 @@ def _format_score(value: object) -> str:
     if isinstance(value, int | float):
         return f"{float(value):.5f}"
     return ""
+
+
+def _format_score_delta(old_score: object, new_score: object) -> str:
+    if not (isinstance(old_score, int | float) and isinstance(new_score, int | float)):
+        return "n/a"
+    delta = float(new_score) - float(old_score)
+    sign = "+" if delta >= 0 else ""
+    return f"{sign}{delta:.5f}"
 
 
 def _normalize_branch_display(value: object) -> str:
