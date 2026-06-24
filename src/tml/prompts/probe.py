@@ -12,7 +12,7 @@ from tml.core.ids import run_id
 from tml.core.metadata import render_project_metadata_prompt
 from tml.features.validation import validate_group_code_source
 from tml.hypotheses.materialize import _parse_code
-from tml.hypotheses.revisions import latest_revision_record, migrate_hypothesis_dir
+from tml.hypotheses.revisions import latest_revision_record, migrate_hypothesis_dir, normalize_hypothesis_id, revision_records
 from tml.hypotheses.wrapper_source import build_wrapped_materialization_source
 from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
@@ -24,11 +24,17 @@ def render_prompt(
     *,
     target: str | None = None,
     stage: str | None = None,
+    hypothesis_id: str | None = None,
+    output_path: Path | None = None,
     tmp_root: Path | None = None,
 ) -> Path:
+    rendered = _render_for_target(project_dir, target=target, stage=stage, hypothesis_id=hypothesis_id)
+    if output_path is not None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(output_path, rendered["rendered"])
+        return output_path
     out_dir = _tmp_dir(project_dir, tmp_root)
     out_dir.mkdir(parents=True, exist_ok=True)
-    rendered = _render_for_target(project_dir, target=target, stage=stage)
     path = out_dir / "request.md"
     atomic_write_text(path, rendered["rendered"])
     atomic_write_json(out_dir / "request.json", _request_json(project_dir, rendered, "render"))
@@ -104,10 +110,35 @@ def probe_prompt(
     return out_dir
 
 
-def _render_for_target(project_dir: Path, *, target: str | None, stage: str | None) -> dict[str, str]:
+def _render_for_target(
+    project_dir: Path,
+    *,
+    target: str | None,
+    stage: str | None,
+    hypothesis_id: str | None = None,
+) -> dict[str, str]:
     config = load_project_config(project_dir)
     if target is None and stage is None:
         return render_template(project_dir, "root.hypothesis", project_prompt_context(project_dir, count=1))
+    if target in {"revise", "root.revise-hypothesis"} and stage is None:
+        if not hypothesis_id:
+            raise TmlError("Missing required parameter: id=<hypothesis>.")
+        hid = normalize_hypothesis_id(hypothesis_id)
+        hdir = project_dir / "hypotheses" / hid
+        records = revision_records(hdir)
+        if not records:
+            raise FileNotFoundError(f"No canonical ROOT revisions in {hdir}")
+        rendered = render_template(
+            project_dir,
+            "root.revise-hypothesis",
+            project_prompt_context(
+                project_dir,
+                hypothesis_id=hid,
+                previous_revisions=[record.payload for record in records],
+            ),
+        )
+        rendered["hypothesis_id"] = hid
+        return rendered
     if target == "project" and stage == "metadata":
         return render_project_metadata_prompt(
             project_dir,
@@ -150,7 +181,8 @@ def _unknown_prompt_target_message(target: str | None, stage: str | None) -> str
     return (
         f"Unknown prompt target: {supplied or '<empty>'}. "
         "Use one of: tml prompt render, tml prompt render project metadata, "
-        "tml prompt render <hypothesis_id> code."
+        "tml prompt render <hypothesis_id> code, "
+        "tml prompt render revise id=<hypothesis>."
     )
 
 

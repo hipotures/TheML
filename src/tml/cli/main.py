@@ -1261,7 +1261,11 @@ def prompt_render_cmd(ctx: typer.Context) -> None:
         if not positional:
             print_prompt_choices(console)
             return
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"hypothesis", "id", "output"}, "tml prompt render")
         target, stage = _prompt_target_stage(positional)
+        hypothesis_id = _optional_text(overrides.get("hypothesis") or overrides.get("id"))
+        output = _optional_text(overrides.get("output"))
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -1273,6 +1277,8 @@ def prompt_render_cmd(ctx: typer.Context) -> None:
                 ref.path,
                 target=target,
                 stage=stage,
+                hypothesis_id=hypothesis_id,
+                output_path=Path(output) if output else None,
                 tmp_root=_tmp_root(),
             )
             progress.update(task, description=f"Prompt rendered: {path}")

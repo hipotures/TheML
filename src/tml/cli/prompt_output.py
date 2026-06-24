@@ -29,6 +29,11 @@ def print_prompt_choices(console: Console) -> None:
         "uv run tml prompt render <hypothesis_id> code",
         "uv run tml prompt probe <hypothesis_id> code",
     )
+    table.add_row(
+        "revise",
+        "uv run tml prompt render revise id=<hypothesis_id>",
+        "-",
+    )
     console.print(table)
 
 
