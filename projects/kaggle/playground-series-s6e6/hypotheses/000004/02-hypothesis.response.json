@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Redshift-Calibrated Intrinsic Luminosity Profile\",\n  \"group_name\": \"distance_corrected_luminosity_signature\",\n  \"family\": \"luminosity_distance\",\n  \"summary\": \"Transform the five-band photometry into an approximate intrinsic brightness representation using redshift, then summarize its within-row level and spread so objects are compared by physical luminosity regime and dispersion rather than only apparent magnitudes and positional features.\",\n  \"depends_on\": [],\n  \"strategy\": \"Compute a deterministic luminosity-distance surrogate with constants H0=70.0, c=299792.458, q0=-0.55. Let z_safe = max(redshift, 1e-4) and d_L(Mpc) = (c / H0) * (1 + z_safe) * (z_safe + 0.5 * (1 - q0) * z_safe^2); clip d_L to [1e-4, 1e8] before applying logs so z<=0 and extreme values cannot destabilize transforms. For each band b in {u, g, r, i, z}, compute pseudo-absolute magnitude M_b = mag_b - 5 * log10(d_L) - 25. From the 5-value vector {M_u, M_g, M_r, M_i, M_z}, derive robust summaries and range descriptors: median, min, max, 25th percentile, 75th percentile, IQR = p75 - p25, and full span = max - min. Bin the median pseudo-absolute magnitude into five regimes: <= -27, (-27, -23], (-23, -19], (-19, -14], and > -14. Keep all edge handling deterministic: if redshift is missing (unexpected), treat as 0 before clipping, and if any magnitude column is missing at row-level, that row\u2019s derived feature is dropped/recomputed only from available bands with explicit fixed fallback counts.\",\n  \"expected_signal\": \"This feature family adds a physically interpretable luminosity axis that can separate classes whose observed colors overlap but whose implied absolute-scale power differs, and the added spread statistics stabilize against single-band noise or outliers while adding nonlinear structure likely helpful for balanced multiclass discrimination.\",\n  \"risk\": \"The proxy for d_L is a low-order approximation and can mis-estimate distance at high redshift, so the derived magnitudes may add model bias or encode survey artifacts tied to redshift calibration; redundant information with raw magnitudes and redshift may also increase collinearity and overfitting if regularization is weak.\"\n}",
+  "usage": {
+    "threadId": "019ef77e-38f0-7703-8e27-12e3c9affa4e",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2944,
+        "inputTokens": 10144,
+        "outputTokens": 5000,
+        "reasoningOutputTokens": 4455,
+        "totalTokens": 15144
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 2944,
+        "inputTokens": 10144,
+        "outputTokens": 5000,
+        "reasoningOutputTokens": 4455,
+        "totalTokens": 15144
+      }
+    },
+    "turnId": "019ef77e-38fa-7c23-873c-76a1d922b8b1"
+  },
+  "wall_ms": 6606,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

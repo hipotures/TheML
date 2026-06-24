@@ -1,15 +1,22 @@
 hypothesis:
   id: 000019
-  latest_revision: 1
+  latest_revision: 2
 revisions:
   1:
     file: 01-hypothesis.yaml
     prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
-    active: autogluon-001.py
+    active: autogluon-002.py
     files:
     - file: autogluon-001.py
       revision: 1
       sha256: e57240979ac8d596b84302c8c4d7f0965ae464000a6864de56ce76bfe4067ded
       created_at: '2026-06-22T14:54:51'
+    - file: autogluon-002.py
+      revision: 2
+      sha256: 42e9295f28b988daee4d5e344ea9568779dc519889eb55ae944c03de59beb31b
+      created_at: '2026-06-24T04:57:41'

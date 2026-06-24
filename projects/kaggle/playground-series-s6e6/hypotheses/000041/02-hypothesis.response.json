@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Adaptive local XDQSO-style flux-density likelihood margins\",\n  \"group_name\": \"xdqso_inspired_flux_density_scores\",\n  \"family\": \"probabilistic_flux_density_scoring\",\n  \"summary\": \"Build a redshift- and magnitude-conditioned probabilistic representation of normalized flux shape from photometry and convert class-specific likelihood margins into posterior-discriminative features that explicitly target overlap regions between GALAXY, QSO, and STAR.\",\n  \"depends_on\": [],\n  \"strategy\": \"For each object, convert magnitudes to linear flux f_b = 10^{-0.4 m_b} for b in {u,g,r,i,z}, use i as reference, and form color-like relative-flux features x = [log(f_u/f_i), log(f_g/f_i), log(f_r/f_i), log(f_z/f_i)] = -0.4[(m_u-m_i),(m_g-m_i),(m_r-m_i),(m_z-m_i)]. Winsorize each component of x to the 0.5%\u201399.5% train quantiles per component to avoid ratio explosion from extreme magnitudes. Bin two conditioning axes: redshift bins z in { [0,0.8), [0.8,2.5), [2.5,4.0), [4.0,7.0] } and overlapping i bins with centers from min_i_train to max_i_train at 0.2 mag step, each bin width 0.4; assign soft triangular weights across nearest i and z cells so each sample contributes to up to four neighboring (i,z) cells instead of hard assignment. For each class c in {GALAXY, STAR, QSO} and each (i,z) cell with sufficient support, fit a 4D Gaussian mixture on x using train-only class-labeled points in that cell. Use full-covariance components with deterministic count selection by local support n: n>=5000 => 8 comps, 2000<=n<5000 => 4 comps, 500<=n<2000 => 2 comps, n<500 => back off to parent redshift slab; if that is still <200, back off to global class model. Add a diagonal stability term to each component covariance \u03a3_k: \u03a3_k <- \u03a3_k + diag(max(MAD(x_cell,c)^2, 1e-6)); if any eigenvalue is non-positive after fitting, re-regularize with max variance floor then continue. Score test samples by soft-weighted local likelihood L_c = \u03a3_{cells} w_{i,z} \u03a3_k \u03c0_ck N(x | \u03bc_ck, \u03a3_k), where w_{i,z} are the interpolation weights; blend with global-class likelihood with 0.3 weight when effective local support is <200. Compute pseudo-posteriors as P\u0303_c = \u03c0_local(c|cell)\u00b7L_c with \u03c0_local(c|cell)=0.7*empirical_class_freq(cell,c)+0.3/3, then normalize p_c = P\u0303_c / \u03a3_c P\u0303_c. Emit features p_GALAXY, p_STAR, p_QSO, the three pairwise log-odds margins, top-class probability, confidence gap between top two classes, and posterior entropy; if all likelihoods are numerically invalid, use uniform class probabilities as hard fallback.\",\n  \"expected_signal\": \"This yields a principled, locality-aware generative representation that captures subtle class overlap structure missed by global color heuristics, so marginal posteriors become more robust for ambiguous and minority-class cases and better aligned with balanced accuracy weighting.\",\n  \"risk\": \"Sparse bins and multimodal tails can produce unstable local mixtures or over-smoothing, regularization and backoff thresholds become sensitive hyperparameters, and full-covariance GMM fitting across many cells increases compute/memory cost, so implementation must guard against pathological local fits and fallback behavior.\"\n}",
+  "usage": {
+    "threadId": "019ef784-7157-7183-ae57-38177fbbb1b6",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 10250,
+        "outputTokens": 5704,
+        "reasoningOutputTokens": 4886,
+        "totalTokens": 15954
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 10250,
+        "outputTokens": 5704,
+        "reasoningOutputTokens": 4886,
+        "totalTokens": 15954
+      }
+    },
+    "turnId": "019ef784-7165-7a02-b215-f820e98654fe"
+  },
+  "wall_ms": 7138,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Regime-Weighted Dual Rest-Frame Break Residuals\",\n  \"group_name\": \"dual_restframe_break_alignment\",\n  \"family\": \"break_competition_geometry\",\n  \"summary\": \"This feature family encodes how strongly each object exhibits a 1216 \u00c5 and 4000 \u00c5 rest-frame discontinuity when mapped into ugriz, by measuring break jump residuals against a local smooth-continuum expectation so class differences from Lyman-dropout-like quasars versus 4000 \u00c5-dominated galaxies versus weak-break stellar SEDs are expressed in a single geometric signal.\",\n  \"depends_on\": [],\n  \"strategy\": \"Let ugriz magnitudes be m=[m_u,m_g,m_r,m_i,m_z] with effective wavelengths \u03bb=[3551,4670,6170,7480,8930] \u00c5 and z\u0303=clip(redshift, 0, 7). For each target rest-frame break \u03bb_b in {1216,4000}, compute \u03bb_b^obs=\u03bb_b*(1+z\u0303) and locate the unique interval j \u2208 {0,1,2,3} where \u03bb_j \u2264 \u03bb_b^obs < \u03bb_{j+1}; if none exists (below u band or above z band), emit all break-related features as 0 and set miss_b=1 and skip residual computation for that break. For valid intervals, define fractional position \u0394t_b=(ln \u03bb_b^obs\u2212ln \u03bb_j)/(ln \u03bb_{j+1}\u2212ln \u03bb_j), observed jump J_obs,b = m_j\u2212m_{j+1}, and observed slope S_obs,b=(m_j\u2212m_{j+1})/(ln \u03bb_j\u2212ln \u03bb_{j+1}). Estimate local smooth continuum slope S_cont,b via linear fit in ln \u03bb: if j=1 or 2, fit through points (ln \u03bb_{j-1},m_{j-1}) and (ln \u03bb_{j+2},m_{j+2}); if j=0, fit through (ln \u03bb_1,m_1) and (ln \u03bb_2,m_2); if j=3, fit through (ln \u03bb_2,m_2) and (ln \u03bb_4,m_4). Then J_exp,b = S_cont,b\u00b7(ln \u03bb_j\u2212ln \u03bb_{j+1}) and residual R_b=(J_obs,b\u2212J_exp,b)/S_loc,b, where S_loc,b is the median absolute local color scale over available adjacent colors around the interval, specifically S_loc,b=median(|m_0\u2212m_1|, |m_1\u2212m_2|, |m_2\u2212m_3|, |m_3\u2212m_4|)+1e-6; clip R_b to [\u22128,8]. Add interval-confidence C_b=clip(1\u22122\u00b7|\u0394t_b\u22120.5|, 0, 1) so C_b downweights placements near band boundaries; generate miss_b, boundary_b=(C_b<0.2), and regime flags lya_regime=(z\u0303\u2208[1.9,6.5]), balmer_regime=(z\u0303\u2208[0,1.3]). Output deterministic features per break: raw jump J_obs,b, normalized residual R_b, confidence-weighted jump J_obs,b\u00b7C_b, confidence-weighted residual R_b\u00b7C_b, and miss/border/regime flags. Build competition features: Break_balance=((R_1216\u00b7C_1216)\u2212(R_4000\u00b7C_4000)), Break_abs_diff=|R_1216\u00b7C_1216|\u2212|R_4000\u00b7C_4000|, and sign-consistent variants that suppress invalid breaks by multiplying with (1\u2212miss_b).\",\n  \"expected_signal\": \"Because quasars at suitable redshift should show strong positive 1216 \u00c5-break residuals with weak competing 4000 \u00c5 structure while low-redshift galaxies usually show opposite balance and stellar SEDs remain smoother across both windows, these confidence-weighted cross-break residual contrasts should separate the three classes in a regime-aware, redshift-consistent manner and reduce dependence on raw color magnitude alone.\",\n  \"risk\": \"The feature signal is sensitive to redshift-dependent regime assignment, so objects near band-edge transitions or with systematic redshift offsets can misplace breaks and distort residuals; broad-band filters and emission-line features can mimic continuum jumps, and the scheme may be less stable for intrinsically smooth or noisy SEDs where local slopes are poorly defined despite clipping.\"\n}",
+  "usage": {
+    "threadId": "019ef786-6719-7282-a00c-bcb6881439e7",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 10443,
+        "outputTokens": 4901,
+        "reasoningOutputTokens": 3937,
+        "totalTokens": 15344
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 10443,
+        "outputTokens": 4901,
+        "reasoningOutputTokens": 3937,
+        "totalTokens": 15344
+      }
+    },
+    "turnId": "019ef786-6726-7240-88b9-87ad5675c268"
+  },
+  "wall_ms": 5908,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

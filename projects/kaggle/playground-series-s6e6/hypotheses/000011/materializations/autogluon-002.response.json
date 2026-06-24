@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import pandas as pd\n\n_G_PERP_OFFSET = 0.177\n_G_PAR_SHIFT = 0.177\n_CUT_I_R_BIAS = 13.116\n_CUT_I_CPAR_SCALE = 0.3\n_CUT_I_R_MIN = 19.2\n_CUT_I_CPERP_TOL = 0.2\n_CUT_II_CPERP_BIAS = 0.449\n_CUT_II_GMR_SCALE = 6.0\n_CUT_II_RMI_TERM = 0.25\n_CUT_II_GMR_OFFSET = 1.296\n_CUT_II_R_MIN = 19.5\n_MARGIN_CLIP_BOUNDS = (-20.0, 20.0)\n\n\ndef add_lrg_target_cut_margins(raw, deps, aux):\n    g = raw[\"g\"].astype(\"float64\")\n    r = raw[\"r\"].astype(\"float64\")\n    i = raw[\"i\"].astype(\"float64\")\n\n    gmr = g - r\n    rmi = r - i\n    c_perp = rmi - gmr / 4.0 - _G_PERP_OFFSET\n    c_par = 0.7 * gmr + 1.2 * (rmi - _G_PAR_SHIFT)\n\n    vI1 = r - (_CUT_I_R_BIAS + c_par / _CUT_I_CPAR_SCALE)\n    vI2 = r - _CUT_I_R_MIN\n    vI3 = c_perp.abs() - _CUT_I_CPERP_TOL\n    score_cutI_raw = pd.concat([vI1, vI2, vI3], axis=1).max(axis=1)\n    score_cutI = score_cutI_raw.clip(*_MARGIN_CLIP_BOUNDS)\n\n    vII1 = (_CUT_II_CPERP_BIAS - gmr / _CUT_II_GMR_SCALE) - c_perp\n    vII2 = (_CUT_II_GMR_OFFSET + _CUT_II_RMI_TERM * rmi) - gmr\n    vII3 = r - _CUT_II_R_MIN\n    score_cutII_raw = pd.concat([vII1, vII2, vII3], axis=1).max(axis=1)\n    score_cutII = score_cutII_raw.clip(*_MARGIN_CLIP_BOUNDS)\n\n    score_lrg_any = pd.concat([score_cutI_raw, score_cutII_raw], axis=1).min(axis=1).clip(*_MARGIN_CLIP_BOUNDS)\n\n    iI = (score_cutI_raw <= 0).astype(\"int8\")\n    iII = (score_cutII_raw <= 0).astype(\"int8\")\n\n    return pd.DataFrame(\n        {\n            \"gmr\": gmr,\n            \"rmi\": rmi,\n            \"c_perp\": c_perp,\n            \"c_par\": c_par,\n            \"score_cutI\": score_cutI,\n            \"score_cutII\": score_cutII,\n            \"score_lrg_any\": score_lrg_any,\n            \"iI\": iI,\n            \"iII\": iII,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"lrg_target_cut_margins\",\n        \"fn\": add_lrg_target_cut_margins,\n        \"depends_on\": [],\n        \"description\": \"Project magnitudes into LRG color coordinates and emit signed cut-margin features for DR2/DR3 Cut I and Cut II membership geometry.\",\n    }\n]",
+  "usage": {
+    "threadId": "019ef78c-9205-7d73-a317-c52a162de7bf",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8960,
+        "inputTokens": 10274,
+        "outputTokens": 2946,
+        "reasoningOutputTokens": 2193,
+        "totalTokens": 13220
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 8960,
+        "inputTokens": 10274,
+        "outputTokens": 2946,
+        "reasoningOutputTokens": 2193,
+        "totalTokens": 13220
+      }
+    },
+    "turnId": "019ef78c-9210-7c80-a0cf-0864932869e1"
+  },
+  "wall_ms": 3804,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

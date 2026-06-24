@@ -1,13 +1,16 @@
 hypothesis:
   id: '000046'
-  latest_revision: 1
+  latest_revision: 2
 revisions:
   1:
     file: 01-hypothesis.yaml
     prefix: 01-hypothesis
+  2:
+    file: 02-hypothesis.yaml
+    prefix: 02-hypothesis
 materializations:
   autogluon:
-    active: autogluon-006.py
+    active: autogluon-011.py
     files:
     - file: autogluon-001.py
       revision: 1
@@ -33,3 +36,23 @@ materializations:
       revision: 1
       sha256: a7a41239479d548d12304c6681f87bedbff1831ca0818417259584e46fa1f62d
       created_at: '2026-06-23T17:09:14'
+    - file: autogluon-007.py
+      revision: 2
+      sha256: 45c1cdae395517ea6556021168fbb77f1af2f0c5a244aff9f2ecab037422eb2c
+      created_at: '2026-06-24T05:12:15'
+    - file: autogluon-008.py
+      revision: 2
+      sha256: 17634b0072584789a5c679a148703f8ccdd54a65f635f9a30dfdf1ae5155c538
+      created_at: '2026-06-24T08:56:12'
+    - file: autogluon-009.py
+      revision: 2
+      sha256: 714ee33447c154e12510d79ce5b8140b44781353bf279741c3e1b3a747633244
+      created_at: '2026-06-24T11:24:25'
+    - file: autogluon-010.py
+      revision: 2
+      sha256: 2da087c8ebdc83ac7598b0ee0898e9d206825898f1172a5ca7eac048132d9021
+      created_at: '2026-06-24T11:25:48'
+    - file: autogluon-011.py
+      revision: 2
+      sha256: 9cfae335bd55979cc031f68c79fc4550b686b41b529a55cda6485cf79250a318
+      created_at: '2026-06-24T11:31:17'

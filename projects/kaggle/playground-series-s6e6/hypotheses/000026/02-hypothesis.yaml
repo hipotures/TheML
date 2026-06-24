@@ -1,0 +1,38 @@
+title: Boundary-safe smooth spline SED manifold with compact redshift-color tensor
+  terms
+group_name: aide_smooth_spline_sed_interactions
+family: aide_smooth_basis
+summary: Model smooth nonlinear structure in photometric magnitudes, sky position,
+  redshift, and color geometry through localized spline expansions and a small, targeted
+  set of redshift-color interaction components to better expose separable class structure.
+depends_on: []
+strategy: 'Construct colors deterministically as c1=u-g, c2=g-r, c3=r-i, c4=i-z, c5=u-r,
+  c6=g-i, c7=r-z, and c8=u-z from the original magnitudes. Build spline transforms
+  using training-derived statistics only: for each base numeric predictor x in {alpha,
+  delta, u, g, r, i, z, redshift, c1..c8}, first clip x to [q0.01, q0.99] of the same
+  variable in training, then define redshift as max(redshift, max(0, q0.01(redshift)))
+  before clipping so tiny negative values are removed while preserving high-redshift
+  quasars. Fit cubic B-spline bases on the clipped values, with 5 non-cyclic basis
+  functions for all non-periodic variables and 7 cyclic basis functions for alpha
+  after wrapping alpha with alpha mod 360 and enforcing continuity at 0/360; store
+  knot positions and scaling per feature for inference. To reduce collinearity and
+  over-parameterization, keep only the first 4 basis columns from each non-cyclic
+  feature and the first 6 from alpha. Form compact tensor interactions only from the
+  first two retained basis components for the pairs (redshift, c1), (redshift, c2),
+  (redshift, c3), and (c2, c3), yielding a small, fixed interaction set. During inference,
+  clip any out-of-range values to learned bounds and apply the stored basis dictionaries;
+  if NaNs appear unexpectedly, impute with training medians before expansion.'
+expected_signal: This design preserves smooth periodic structure in sky position,
+  captures local nonlinear behavior of magnitudes and colours, and directly represents
+  the redshift-dependent colour geometry where class boundaries are typically curved,
+  giving models a more linearly separable feature space and better discrimination
+  for balanced multi-class performance.
+risk: Aggressive quantile clipping and fixed knot choices can bias very rare extremes,
+  and the expanded correlated spline/interactions can increase dimensionality and
+  variance, so model performance can degrade without regularization or later feature
+  selection if a learner is sensitive to multicollinearity.
+schema_version: 1
+hypothesis_id: '000026'
+revision: 2
+enabled: true
+created_at: '2026-06-24T04:42:55'

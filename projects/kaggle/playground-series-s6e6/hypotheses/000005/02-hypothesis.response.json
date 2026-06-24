@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Hierarchically Shrunk Catalog Template Residuals\",\n  \"group_name\": \"catalog_template_residuals\",\n  \"family\": \"template_mismatch\",\n  \"summary\": \"Build a robust mismatch profile that captures how far each object\u2019s color signature departs from the expected template pattern implied by its catalog tags, so class separation can exploit both conformance and anomaly structure.\",\n  \"depends_on\": [],\n  \"strategy\": \"Compute adjacent colors c1=u-g, c2=g-r, c3=r-i, c4=i-z. For training data, calculate for every (spectral_type, galaxy_population) cell the count n_g, median \u03bc_g,k and MAD s_g,k for each c_k, and the same statistics for each spectral_type alone and for the full training set. For each object, select its cell statistics and define a shrinkage weight w = clip((n_g - 600)/900, 0, 1); if the exact cell is unseen, set w=0 and use the spectral_type profile. Use blended template location and scale: \u03bc*_k = w\u00b7\u03bc_g,k + (1-w)\u00b7\u03bc_sp,k and s*_k = w\u00b7s_g,k + (1-w)\u00b7s_sp,k. If the spectral_type group count is also <600, fall back to global \u03bc_0,k and s_0,k. Replace any scale below 0.02 with 0.02 before division. Standardize residuals as z_k=(c_k-\u03bc*_k)/s*_k and clip each z_k to [-10,10]. Emit a compact set of deterministic descriptors: signed z1..z4, mean(|z|), median(|z|), max(|z|), L2 norm of z, and counts of |z_k|>2 and |z_k|>3. This same fallback chain is applied at inference for unseen category combinations.\",\n  \"expected_signal\": \"Because spectral_type and galaxy_population encode coarse SED families while true class boundaries can still deviate from those templates, these residual and dispersion-based descriptors provide class-specific anomaly signals that can improve recall balance among GALAXY, STAR, and QSO, especially when raw colors overlap.\",\n  \"risk\": \"If template tags are noisy or drift across train and test, residual centroids may shift and amplify miscalibration; very sparse cells can still produce noisy medians even with shrinkage; and high overlap with raw color features can limit incremental signal while adding preprocessing complexity.\"\n}",
+  "usage": {
+    "threadId": "019ef77e-576e-7710-9119-a27124ee5158",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 10080,
+        "outputTokens": 3138,
+        "reasoningOutputTokens": 2613,
+        "totalTokens": 13218
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 10080,
+        "outputTokens": 3138,
+        "reasoningOutputTokens": 2613,
+        "totalTokens": 13218
+      }
+    },
+    "turnId": "019ef77e-577b-78b3-b06c-5eed494b3021"
+  },
+  "wall_ms": 4193,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

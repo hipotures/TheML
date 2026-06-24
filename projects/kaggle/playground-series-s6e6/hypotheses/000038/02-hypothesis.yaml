@@ -1,0 +1,44 @@
+title: Adaptive Redshift-Manifold Color Geometry Features
+group_name: photoz_trajectory_geometry
+family: trajectory_consistency
+summary: Model the expected redshift evolution of SDSS color space as a smooth manifold
+  and encode each object by deterministic distances to this manifold, including displacement
+  off the manifold and residual behavior along and across its local trajectory, so
+  class-dependent departures become explicit predictive signals.
+depends_on: []
+strategy: "Use only train rows to fit the trajectory model. Define colors c=[c1,c2,c3,c4]=[u-g,\
+  \ g-r, r-i, i-z]. Build a redshift grid G={g_k} from quantiles of redshift at levels\
+  \ 0.5%..99.5% with K=180 knots. For each knot g_k, fit local estimates with weights\
+  \ w_i(g_k)=exp(-(z_i-g_k)^2/(2h^2)), h=0.08. Require at least N_min=1500 effective\
+  \ weighted samples; if not satisfied, repeatedly double h (up to 1.0) and recompute;\
+  \ if still insufficient, fallback to a global robust fit with derivative suppressed.\
+  \ Compute weighted Huber location \u03BC(g_k)=HuberMean(c | weights), weighted robust\
+  \ covariance \u03A3(g_k)=HuberCov(c | weights), then shrink \u03A3(g_k): \u03A3\
+  _s(g_k)=0.85\u03A3(g_k)+0.15\xB7I*(tr(\u03A3(g_k))/4) and floor eigenvalues at 1e-6.\
+  \ Fit each color component \u03BC_j(z), each \u03A3_s entry, and first/second derivatives\
+  \ via monotone cubic smoothing splines over k in z to obtain \u03BC\u0303(z), v(z)=d\u03BC\
+  \u0303/dz, a(z)=d\xB2\u03BC\u0303/dz\xB2, \u03A3\u0303(z), and local scales \u03C3\
+  _t(z),\u03C3_e(z),\u03C3_m(z) for projected quantities. For any row (c,z), interpolate\
+  \ at z' = clip(z, g_1, g_K); if z outside [min(train z),max(train z)] then set a=0\
+  \ and damp all derivative-based components by \u03B1=min(1,|z-z_edge|/0.03). Compute\
+  \ residual r=c-\u03BC\u0303(z'). Let L(z') be Cholesky of \u03A3\u0303(z'); y=L^{-1}(z')\
+  \ r, t=L^{-1}(z') v(z'), u=t/||t||, and a_w=L^{-1}(z') a(z'). Define tangential\
+  \ signed offset T=y\xB7u, orthogonal energy E=||y||^2-(y\xB7u)^2, and curvature\
+  \ mismatch M=(r^T \u03A3\u0303^{-1} a)/(||a||+1e-6); emit {T, E, M, T/\u03C3_t(z'),\
+  \ E/\u03C3_e(z'), M/\u03C3_m(z')}. For z<0.01, further multiply T,M,E by z/0.01\
+  \ to avoid unstable derivative behavior in near-zero-redshift regime."
+expected_signal: The feature family turns a noisy multiband snapshot into redshift-normalized
+  manifold diagnostics, so quasars with emission-line-driven color drift, galaxies
+  following smoother spectral tracks, and nearby low-variation stars become separable
+  by different residual geometry patterns, which should improve recall balance across
+  GALAXY, QSO, and STAR.
+risk: A small bandwidth or poorly conditioned covariance can overfit local noise and
+  destabilize derivative features, while large smoothing can erase class-specific
+  local curvature cues; the approach is compute-heavy for spline fitting and per-row
+  linear-algebra operations, and may be partially redundant with other redshift- or
+  color-derived features if not tuned.
+schema_version: 1
+hypothesis_id: 000038
+revision: 2
+enabled: true
+created_at: '2026-06-24T04:44:49'

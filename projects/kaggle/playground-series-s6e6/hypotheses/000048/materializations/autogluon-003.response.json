@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\nBANDS = (\"u\", \"g\", \"r\", \"i\", \"z\")\nLUPTITUDE_B = (1.4e-10, 9.0e-11, 1.2e-10, 1.8e-10, 7.4e-10)\nMAGNITUDE_CORRECTIONS = (-0.04, 0.0, 0.0, 0.0, 0.02)\nWAVELENGTH_A = (3551.0, 4686.0, 6165.0, 7481.0, 8931.0)\nSOFT_COEFF = -0.9210340371976183\nEPS = 1e-12\n\n\ndef add_luptitude_regime_flux_features(raw, deps, aux):\n    u = raw[\"u\"].to_numpy(dtype=np.float64)\n    g = raw[\"g\"].to_numpy(dtype=np.float64)\n    r = raw[\"r\"].to_numpy(dtype=np.float64)\n    i = raw[\"i\"].to_numpy(dtype=np.float64)\n    z = raw[\"z\"].to_numpy(dtype=np.float64)\n\n    m_u = u + MAGNITUDE_CORRECTIONS[0]\n    m_g = g + MAGNITUDE_CORRECTIONS[1]\n    m_r = r + MAGNITUDE_CORRECTIONS[2]\n    m_i = i + MAGNITUDE_CORRECTIONS[3]\n    m_z = z + MAGNITUDE_CORRECTIONS[4]\n\n    m_corr = np.column_stack((m_u, m_g, m_r, m_i, m_z))\n    b = np.asarray(LUPTITUDE_B, dtype=np.float64)\n    log_b = np.log(b)\n\n    f = 2.0 * b * np.sinh(SOFT_COEFF * m_corr - log_b)\n    abs_f = np.abs(f)\n\n    floor1 = (abs_f <= (2.0 * b)).astype(np.float64)\n    floor2 = (abs_f <= (0.2 * b)).astype(np.float64)\n\n    soft_count = np.sum(floor1, axis=1)\n    soft_frac = soft_count / 5.0\n    ultra_floor_count = np.sum(floor2, axis=1)\n    neg_flux_count = np.sum(f < 0.0, axis=1).astype(np.float64)\n\n    f_tilde = np.sign(f) * np.maximum(abs_f, b)\n    v = np.log10(np.abs(f_tilde) + EPS)\n\n    v_u = v[:, 0]\n    v_g = v[:, 1]\n    v_r = v[:, 2]\n    v_i = v[:, 3]\n    v_z = v[:, 4]\n\n    d_ug = v_u - v_g\n    d_gr = v_g - v_r\n    d_ri = v_r - v_i\n    d_iz = v_i - v_z\n\n    t = np.asarray(WAVELENGTH_A, dtype=np.float64)\n    t2 = t * t\n    t3 = t2 * t\n    t4 = t2 * t2\n\n    w = 1.0 + 0.5 * floor1\n\n    S0 = np.sum(w, axis=1)\n    S1 = np.sum(w * t, axis=1)\n    S2 = np.sum(w * t2, axis=1)\n    S3 = np.sum(w * t3, axis=1)\n    S4 = np.sum(w * t4, axis=1)\n\n    rhs0 = np.sum(w * v, axis=1)\n    rhs1 = np.sum(w * (t * v), axis=1)\n    rhs2 = np.sum(w * (t2 * v), axis=1)\n\n    A = np.empty((m_corr.shape[0], 3, 3), dtype=np.float64)\n    A[:, 0, 0] = S0\n    A[:, 0, 1] = S1\n    A[:, 0, 2] = S2\n    A[:, 1, 0] = S1\n    A[:, 1, 1] = S2\n    A[:, 1, 2] = S3\n    A[:, 2, 0] = S2\n    A[:, 2, 1] = S3\n    A[:, 2, 2] = S4\n\n    rhs = np.stack((rhs0, rhs1, rhs2), axis=1)\n    beta = np.linalg.solve(A, rhs[:, :, None])\n    beta = beta[:, :, 0]\n\n    slope = beta[:, 1]\n    curvature = beta[:, 2]\n\n    kappa_ugri = d_ug - 2.0 * d_gr + d_ri\n    kappa_griz = d_gr - 2.0 * d_ri + d_iz\n\n    abs_log_f = np.log10(abs_f + EPS)\n    abs_log_f_t = np.log10(np.abs(f_tilde) + EPS)\n\n    shares = np.abs(f_tilde) / (np.sum(np.abs(f_tilde), axis=1)[:, None] + EPS)\n    max_share = np.max(shares, axis=1)\n    entropy_sh = -np.sum(shares * np.log(shares + EPS), axis=1)\n    l2_share = np.sum(shares ** 2, axis=1)\n    concentration = 1.0 - l2_share\n\n    sign_pos = np.sum(f_tilde > 0.0, axis=1).astype(np.float64)\n    sign_neg = np.sum(f_tilde < 0.0, axis=1).astype(np.float64)\n    p_pos = (sign_pos + EPS) / (5.0 + 2.0 * EPS)\n    p_neg = (sign_neg + EPS) / (5.0 + 2.0 * EPS)\n    sign_entropy = -(p_pos * np.log(p_pos + EPS) + p_neg * np.log(p_neg + EPS))\n\n    features = {}\n\n    for idx, band in enumerate(BANDS):\n        features[f\"floor1_{band}\"] = floor1[:, idx]\n        features[f\"floor2_{band}\"] = floor2[:, idx]\n\n    features[\"soft_count\"] = soft_count\n    features[\"soft_frac\"] = soft_frac\n    features[\"soft_regime_weight\"] = soft_frac\n    features[\"ultra_floor_count\"] = ultra_floor_count\n    features[\"neg_flux_count\"] = neg_flux_count\n\n    features[\"lupt_v_u\"] = v_u\n    features[\"lupt_v_g\"] = v_g\n    features[\"lupt_v_r\"] = v_r\n    features[\"lupt_v_i\"] = v_i\n    features[\"lupt_v_z\"] = v_z\n\n    features[\"dlog_flux_ug\"] = d_ug\n    features[\"dlog_flux_gr\"] = d_gr\n    features[\"dlog_flux_ri\"] = d_ri\n    features[\"dlog_flux_iz\"] = d_iz\n\n    features[\"slope_weighted_poly2\"] = slope\n    features[\"curvature_weighted_poly2\"] = curvature\n    features[\"slope_hi\"] = slope * (1.0 - soft_frac)\n    features[\"slope_lo\"] = slope * soft_frac\n    features[\"curvature_hi\"] = curvature * (1.0 - soft_frac)\n    features[\"curvature_lo\"] = curvature * soft_frac\n\n    features[\"curvature_kappa_ugri\"] = kappa_ugri\n    features[\"curvature_kappa_griz\"] = kappa_griz\n\n    features[\"shape_share_max\"] = max_share\n    features[\"shape_share_entropy\"] = entropy_sh\n    features[\"shape_share_l2\"] = l2_share\n    features[\"shape_share_concentration\"] = concentration\n    features[\"shape_sign_entropy\"] = sign_entropy\n\n    pair_names = (\"ug\", \"gr\", \"ri\", \"iz\")\n    pair_idx = ((0, 1), (1, 2), (2, 3), (3, 4))\n\n    for name, (a, b_idx) in zip(pair_names, pair_idx):\n        mag_color = m_corr[:, a] - m_corr[:, b_idx]\n        flux_color = 2.5 * (abs_log_f[:, a] - abs_log_f[:, b_idx])\n        flux_color_t = 2.5 * (abs_log_f_t[:, a] - abs_log_f_t[:, b_idx])\n\n        mismatch = mag_color - flux_color\n        mismatch_t = mag_color - flux_color_t\n\n        features[f\"mag_color_{name}\"] = mag_color\n        features[f\"flux_color_{name}\"] = flux_color\n        features[f\"mismatch_{name}\"] = mismatch\n        features[f\"mismatch_tilde_{name}\"] = mismatch_t\n        features[f\"mismatch_hi_{name}\"] = mismatch * (1.0 - soft_frac)\n        features[f\"mismatch_lo_{name}\"] = mismatch * soft_frac\n        features[f\"mismatch_tilde_hi_{name}\"] = mismatch_t * (1.0 - soft_frac)\n        features[f\"mismatch_tilde_lo_{name}\"] = mismatch_t * soft_frac\n\n    return pd.DataFrame(features, index=raw.index)\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"luptitude_regime_flux_features\",\n        \"fn\": add_luptitude_regime_flux_features,\n        \"depends_on\": [],\n        \"description\": \"Build luptitude-derived flux-shape, floor-regime, and mismatch descriptors with regime gating for low-SNR behavior.\",\n    }\n]",
+  "usage": {
+    "threadId": "019ef86a-43b9-73f3-8feb-89cdf8007f94",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 9216,
+        "inputTokens": 12885,
+        "outputTokens": 5450,
+        "reasoningOutputTokens": 3383,
+        "totalTokens": 18335
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 9216,
+        "inputTokens": 12885,
+        "outputTokens": 5450,
+        "reasoningOutputTokens": 3383,
+        "totalTokens": 18335
+      }
+    },
+    "turnId": "019ef86a-43c6-7871-a1be-b703071c6446"
+  },
+  "wall_ms": 13331,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

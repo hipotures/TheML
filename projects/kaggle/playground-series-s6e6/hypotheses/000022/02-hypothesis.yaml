@@ -1,0 +1,40 @@
+title: Boundary-safe sky-cell residual harmonization
+group_name: aide_sky_cell_local_residuals
+family: aide_spatial_context
+summary: "Create spatial-context features by expressing each object\u2019s magnitudes,\
+  \ redshift, and color-shape descriptors relative to the local sky-cell population,\
+  \ then summarizing the strength and shape of that local deviation as a robust proxy\
+  \ for survey-systematic structure linked to class differences."
+depends_on: []
+strategy: "Define a fixed equal-area-ish tessellation at 0.5-degree resolution in\
+  \ both coordinates: ra_bin = floor(mod(alpha, 360) * 2), dec_bin = floor((delta\
+  \ + 90) * 2), clipped to [0,719]\xD7[0,337], with RA bins wrapped modulo 720 and\
+  \ DEC neighbors clipped at domain boundaries. Assign each row to one sky cell id,\
+  \ then for each row gather the 3x3 neighborhood (9-cell block, RA-wrapped) and compute\
+  \ n_cell, n_neigh, concentration = n_cell/(n_neigh + 1e-6), plus cell-centered local\
+  \ coordinates if needed. For each numeric feature set x in {u,g,r,i,z,redshift_clipped,\
+  \ and all explicit color/shape features u\u2212g, g\u2212r, r\u2212i, i\u2212z,\
+  \ u\u2212i, u\u2212r, g\u2212z, r\u2212z, u\u22122r+i, g\u22122i+z}, compute cell-wise\
+  \ mean \u03BC_cell(x) and scale \u03C3_cell(x) on training data only, plus global\
+  \ \u03BC_global(x), \u03C3_global(x). Use shrinkage for instability: \u03BC*(x)=w\
+  \ \u03BC_cell(x)+(1\u2212w)\u03BC_global(x), \u03C3*(x)=w \u03C3_cell(x)+(1\u2212\
+  w)\u03C3_global(x), with w=n_cell/(n_cell+20) and a floor \u03C3=0.1-th percentile\
+  \ clamp per feature, then residual \u0394x=x\u2212\u03BC*(x) and robust z_x=\u0394\
+  x/(\u03C3*(x)+1e-6). Add per-row statistics over x: mean \u0394x, mean |\u0394x|,\
+  \ L1 and L2 residual norms, mean z_x, max|z_x|, and residual standard deviation\
+  \ across color/shape features. For sparse cells, also append fallback features from\
+  \ nearest non-empty cell in great-circle RA/DEC Manhattan neighborhood only when\
+  \ n_cell is below threshold to reduce noise; when any feature is undefined, exclude\
+  \ it from that row\u2019s aggregate pool."
+expected_signal: Astrophysical class boundaries often depend on subtle local photometric
+  offsets caused by spatially varying depth, extinction, and calibration, so residualizing
+  to the local sky environment can isolate class-relevant morphology in color-space
+  that is obscured by global feature values.
+risk: Residuals can become brittle where local support is very low, can amplify catalog
+  artifacts if cell definitions mismatch the hidden test distribution, and can overlap
+  with other spatial or photometric feature groups unless de-duplicated or regularized.
+schema_version: 1
+hypothesis_id: '000022'
+revision: 2
+enabled: true
+created_at: '2026-06-24T04:42:16'

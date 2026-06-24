@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\nEPSILON = 1e-8\n_SOFT_INDEX = (1.0, 2.0, 3.0, 4.0)\n\n\ndef _low_med_high_bins(values, index):\n    ranks = pd.Series(values, index=index).rank(pct=True, method=\"average\")\n    bins = pd.Series(\"high\", index=index, dtype=\"object\")\n    bins[ranks <= (1.0 / 3.0)] = \"low\"\n    bins[(ranks > (1.0 / 3.0)) & (ranks <= (2.0 / 3.0))] = \"med\"\n    return bins\n\n\ndef add_bandpass_break_localization(raw, deps, aux):\n    u = raw[\"u\"].to_numpy(dtype=np.float64)\n    g = raw[\"g\"].to_numpy(dtype=np.float64)\n    r = raw[\"r\"].to_numpy(dtype=np.float64)\n    i = raw[\"i\"].to_numpy(dtype=np.float64)\n    z = raw[\"z\"].to_numpy(dtype=np.float64)\n\n    d_ug = u - g\n    d_gr = g - r\n    d_ri = r - i\n    d_iz = i - z\n\n    d_stack = np.column_stack((d_ug, d_gr, d_ri, d_iz))\n    a_stack = np.abs(d_stack)\n\n    a_ug = a_stack[:, 0]\n    a_gr = a_stack[:, 1]\n    a_ri = a_stack[:, 2]\n    a_iz = a_stack[:, 3]\n\n    A = np.sum(a_stack, axis=1)\n    near_flat = A < 1e-6\n    denom = A + EPSILON\n\n    p_stack = a_stack / denom[:, None]\n    entropy = -np.sum(p_stack * np.log(np.maximum(p_stack, EPSILON)), axis=1)\n    position_soft = np.sum(p_stack * np.asarray(_SOFT_INDEX), axis=1)\n\n    dominant = np.argmax(a_stack, axis=1)\n    row = np.arange(raw.shape[0])\n\n    d_k = d_stack[row, dominant]\n    s_k = np.sign(d_k)\n    sharpness = np.abs(d_k) / denom\n\n    cum_a = np.cumsum(a_stack, axis=1)\n\n    blue_sum = np.zeros_like(A, dtype=np.float64)\n    has_blue = dominant > 0\n    blue_sum[has_blue] = cum_a[row[has_blue], dominant[has_blue] - 1]\n    blue_count = dominant.astype(np.float64)\n    blue_mean = np.where(has_blue, blue_sum / blue_count, 0.0)\n\n    red_sum = A - cum_a[row, dominant]\n    red_count = (3.0 - dominant.astype(np.float64))\n    red_mean = np.where(red_count > 0, red_sum / red_count, 0.0)\n\n    continuity = d_k - (blue_mean + red_mean) / 2.0\n    asymmetry = blue_mean - red_mean\n\n    left_sign = np.zeros_like(s_k)\n    right_sign = np.zeros_like(s_k)\n\n    has_left = dominant > 0\n    has_right = dominant < 3\n\n    left_sign[has_left] = np.sign(d_stack[row[has_left], dominant[has_left] - 1])\n    right_sign[has_right] = np.sign(d_stack[row[has_right], dominant[has_right] + 1])\n\n    turnover = (has_left & (left_sign != s_k)).astype(np.int8) + (has_right & (right_sign != s_k)).astype(np.int8)\n\n    p_stack = np.where(near_flat[:, None], 0.0, p_stack)\n    a_stack = np.where(near_flat[:, None], 0.0, a_stack)\n    d_stack = np.where(near_flat[:, None], 0.0, d_stack)\n    entropy = np.where(near_flat, 0.0, entropy)\n    sharpness = np.where(near_flat, 0.0, sharpness)\n    continuity = np.where(near_flat, 0.0, continuity)\n    asymmetry = np.where(near_flat, 0.0, asymmetry)\n    turnover = np.where(near_flat, 0, turnover)\n    d_k = np.where(near_flat, 0.0, d_k)\n    s_k = np.where(near_flat, 0.0, s_k)\n    blue_mean = np.where(near_flat, 0.0, blue_mean)\n    red_mean = np.where(near_flat, 0.0, red_mean)\n\n    break_present = (~near_flat).astype(np.int8)\n    break_is_flat = near_flat.astype(np.int8)\n    break_position = np.where(near_flat, -1, dominant + 1).astype(np.int64)\n    break_position_soft = np.where(near_flat, -1.0, position_soft)\n    break_jump = d_k\n    break_sign = s_k.astype(np.int8)\n\n    sharpness_bin = _low_med_high_bins(sharpness, raw.index).astype(\"object\")\n    entropy_bin = _low_med_high_bins(entropy, raw.index).astype(\"object\")\n    sharpness_bin[near_flat] = \"low\"\n    entropy_bin[near_flat] = \"low\"\n\n    new_features = pd.DataFrame(\n        {\n            \"break_present\": break_present,\n            \"break_is_flat\": break_is_flat,\n            \"break_position\": break_position,\n            \"break_position_soft\": break_position_soft,\n            \"break_jump\": break_jump,\n            \"break_sign\": break_sign,\n            \"break_strength\": np.abs(break_jump),\n            \"break_sharpness\": sharpness,\n            \"break_entropy\": entropy,\n            \"break_blue_mean\": blue_mean,\n            \"break_red_mean\": red_mean,\n            \"break_asymmetry\": asymmetry,\n            \"break_continuity\": continuity,\n            \"break_turnover_count\": turnover,\n            \"break_d_ug\": d_stack[:, 0],\n            \"break_d_gr\": d_stack[:, 1],\n            \"break_d_ri\": d_stack[:, 2],\n            \"break_d_iz\": d_stack[:, 3],\n            \"break_a_ug\": a_stack[:, 0],\n            \"break_a_gr\": a_stack[:, 1],\n            \"break_a_ri\": a_stack[:, 2],\n            \"break_a_iz\": a_stack[:, 3],\n            \"break_p_ug\": p_stack[:, 0],\n            \"break_p_gr\": p_stack[:, 1],\n            \"break_p_ri\": p_stack[:, 2],\n            \"break_p_iz\": p_stack[:, 3],\n            \"break_sharpness_bin\": sharpness_bin,\n            \"break_entropy_bin\": entropy_bin,\n        },\n        index=raw.index,\n    )\n    return new_features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"bandpass_break_localization\",\n        \"fn\": add_bandpass_break_localization,\n        \"depends_on\": [],\n        \"description\": \"Builds dominant-band break localization and confidence-aware soft-assignment descriptors from ugriz color discontinuities.\",\n    }\n]",
+  "usage": {
+    "threadId": "019ef7ad-fa73-7853-af8d-1cf025700c5e",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8960,
+        "inputTokens": 10265,
+        "outputTokens": 12046,
+        "reasoningOutputTokens": 10516,
+        "totalTokens": 22311
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 8960,
+        "inputTokens": 10265,
+        "outputTokens": 12046,
+        "reasoningOutputTokens": 10516,
+        "totalTokens": 22311
+      }
+    },
+    "turnId": "019ef7ad-fa82-7cf3-aee7-7608b1d41095"
+  },
+  "wall_ms": 10426,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

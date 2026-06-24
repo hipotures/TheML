@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Rest-frame Blackbody Continuum Distance\",\n  \"group_name\": \"blackbody_continuum_distance\",\n  \"family\": \"physically_informed_shape_model\",\n  \"summary\": \"This group maps each object's normalized ugriz spectral shape onto a thermal continuum manifold in rest-frame wavelength space and derives compact distance-to-manifold signals that should distinguish near-blackbody stellar spectra from quasar and galaxy continua.\",\n  \"depends_on\": [],\n  \"strategy\": \"For each row, compute flux proxies from magnitudes as `f_b = 10^{-0.4 m_b}` for bands b\u2208{u,g,r,i,z}; if a magnitude is non-finite, replace it with 30 before exponentiation (equivalent to a flux floor of 10^-12) so the proxy is finite. Form the normalized shape vector `p_b = f_b / (\u03a3_b f_b)`; if `\u03a3_b f_b <= 1e-30`, set `p_b = 0.2` for all bands. Use effective wavelengths `\u03bb = [3551,4686,6165,7481,8931] \u00c5` and redshift-corrected wavelengths `\u03bb'_b = \u03bb_b / (1 + z_eff)` with `z_eff = max(redshift, 0)` and non-finite redshift mapped to 0. Build a logarithmic temperature grid `T_j = 10^{linspace(log10(1500), log10(50000), J)}` with `J=180`. For each T_j, evaluate template shape `B_b(T_j) = (1 / \u03bb'^5_b) / (exp(14387.7/(\u03bb'_b * T_j)) - 1)` using a numerically stable `expm1` form and clip argument to `\u2264700` before exponentiation; normalize each template as `t_b(T_j)=B_b/\u03a3_b B_b`. Compute least-squares scale `a_j = (\u03a3_b p_b t_b(T_j)) / (\u03a3_b t_b(T_j)^2)` and residual `SSR_j = \u03a3_b (p_b - a_j t_b(T_j))^2`. Let `j* = argmin SSR_j`; optionally refine `log10(T*)` by quadratic interpolation over `(log10 T)` across `j*-1, j*, j*+1` and clamp within grid bounds. Emit deterministic outputs: best-fit `log10(T*)`, `SSR_min`, `sqrt(SSR_min)`, residual gap to second best `SSR_2nd - SSR_min`, local curvature from second finite-difference in log-space, and signed residuals `r_b = p_b - a_{j*} t_b(T*)` for each band. Implement all operations in vectorized matrix form over T to keep runtime tractable and deterministic.\",\n  \"expected_signal\": \"The procedure yields an explicit physical shape-distance representation: stars are expected to show low, smooth mismatch to a thermal manifold while galaxies and quasars, which often include nonthermal continua, breaks, and strong emission structures, should incur larger manifold residuals, especially where raw magnitudes and color ratios alone blur class boundaries.\",\n  \"risk\": \"The manifold prior is intentionally physics-driven and can over-penalize heavily reddened stars, line-dominated quasars, and objects with calibration artifacts, and grid-based fitting can produce boundary effects or instability at extreme redshift unless interpolation and numeric guards are used; generated features are also partially redundant with color-based predictors, so downstream regularization/selection is advised.\"\n}",
+  "usage": {
+    "threadId": "019ef783-8e14-77e3-b40c-91a1a7413fbb",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 10243,
+        "outputTokens": 3835,
+        "reasoningOutputTokens": 3089,
+        "totalTokens": 14078
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 9472,
+        "inputTokens": 10243,
+        "outputTokens": 3835,
+        "reasoningOutputTokens": 3089,
+        "totalTokens": 14078
+      }
+    },
+    "turnId": "019ef783-8e2e-71e2-a9f5-adc81a70c818"
+  },
+  "wall_ms": 5065,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

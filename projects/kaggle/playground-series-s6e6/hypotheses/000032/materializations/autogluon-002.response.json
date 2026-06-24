@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.3-codex-spark",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n_REST_BREAK_WAVELENGTH_A = 4000.0\n\n_G_LEFT = 3551.0\n_G_RIGHT = 4686.0\n_GR_LEFT = 4686.0\n_GR_RIGHT = 6165.0\n_RI_LEFT = 6165.0\n_RI_RIGHT = 7481.0\n_IZ_LEFT = 7481.0\n_IZ_RIGHT = 8931.0\n\n_G_WIDTH = 1135.0\n_GR_WIDTH = 1479.0\n_RI_WIDTH = 1316.0\n_IZ_WIDTH = 1450.0\n\n\ndef add_redshifted_4000a_break_curvature(raw, deps, aux):\n    redshift = raw[\"redshift\"].to_numpy(dtype=float)\n    lambda_break = _REST_BREAK_WAVELENGTH_A * (1.0 + redshift)\n\n    u = raw[\"u\"].to_numpy(dtype=float)\n    g = raw[\"g\"].to_numpy(dtype=float)\n    r = raw[\"r\"].to_numpy(dtype=float)\n    i = raw[\"i\"].to_numpy(dtype=float)\n    z = raw[\"z\"].to_numpy(dtype=float)\n\n    c1 = u - g\n    c2 = g - r\n    c3 = r - i\n    c4 = i - z\n\n    regime_G = (lambda_break >= _G_LEFT) & (lambda_break < _G_RIGHT)\n    regime_GR = (lambda_break >= _GR_LEFT) & (lambda_break < _GR_RIGHT)\n    regime_RI = (lambda_break >= _RI_LEFT) & (lambda_break < _RI_RIGHT)\n    regime_IZ = (lambda_break >= _IZ_LEFT) & (lambda_break < _IZ_RIGHT)\n    regime_out_of_band = ~(regime_G | regime_GR | regime_RI | regime_IZ)\n\n    p = np.zeros_like(lambda_break, dtype=float)\n    w = np.zeros_like(lambda_break, dtype=float)\n\n    if regime_G.any():\n        p_g = (lambda_break[regime_G] - _G_LEFT) / _G_WIDTH\n        p[regime_G] = np.clip(p_g, 0.0, 1.0)\n        w[regime_G] = 4.0 * p[regime_G] * (1.0 - p[regime_G])\n\n    if regime_GR.any():\n        p_gr = (lambda_break[regime_GR] - _GR_LEFT) / _GR_WIDTH\n        p[regime_GR] = np.clip(p_gr, 0.0, 1.0)\n        w[regime_GR] = 4.0 * p[regime_GR] * (1.0 - p[regime_GR])\n\n    if regime_RI.any():\n        p_ri = (lambda_break[regime_RI] - _RI_LEFT) / _RI_WIDTH\n        p[regime_RI] = np.clip(p_ri, 0.0, 1.0)\n        w[regime_RI] = 4.0 * p[regime_RI] * (1.0 - p[regime_RI])\n\n    if regime_IZ.any():\n        p_iz = (lambda_break[regime_IZ] - _IZ_LEFT) / _IZ_WIDTH\n        p[regime_IZ] = np.clip(p_iz, 0.0, 1.0)\n        w[regime_IZ] = 4.0 * p[regime_IZ] * (1.0 - p[regime_IZ])\n\n    f_G = regime_G.astype(float)\n    f_GR = regime_GR.astype(float)\n    f_RI = regime_RI.astype(float)\n    f_IZ = regime_IZ.astype(float)\n    f_OOB = regime_out_of_band.astype(float)\n\n    jump_G = c1 - c2\n    asym_G = (c1 - c2) - (c2 - c3)\n\n    jump_GR = c2 - 0.5 * (c1 + c3)\n    asym_GR = (c2 - c1) - (c3 - c2)\n\n    jump_RI = c3 - 0.5 * (c2 + c4)\n    asym_RI = (c3 - c2) - (c4 - c3)\n\n    jump_IZ = c4 - c3\n    asym_IZ = (c4 - c3) - (c3 - c2)\n\n    features = pd.DataFrame(\n        {\n            \"weighted_jump_G\": w * jump_G * f_G,\n            \"weighted_asym_G\": w * asym_G * f_G,\n            \"weighted_jump_GR\": w * jump_GR * f_GR,\n            \"weighted_asym_GR\": w * asym_GR * f_GR,\n            \"weighted_jump_RI\": w * jump_RI * f_RI,\n            \"weighted_asym_RI\": w * asym_RI * f_RI,\n            \"weighted_jump_IZ\": w * jump_IZ * f_IZ,\n            \"weighted_asym_IZ\": w * asym_IZ * f_IZ,\n            \"p\": p,\n            \"w\": w,\n            \"regime_G\": f_G,\n            \"regime_GR\": f_GR,\n            \"regime_RI\": f_RI,\n            \"regime_IZ\": f_IZ,\n            \"regime_out_of_band\": f_OOB,\n        },\n        index=raw.index,\n    )\n    return features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"redshifted_4000a_break_curvature\",\n        \"fn\": add_redshifted_4000a_break_curvature,\n        \"depends_on\": [],\n        \"description\": \"Encodes redshift-localized 4000 \u00c5 break geometry through weighted curvature/jump features and regime flags across ugriz bands.\",\n    }\n]",
+  "usage": {
+    "threadId": "019ef794-c493-7e22-a72e-eb2ef5e6127b",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8960,
+        "inputTokens": 10324,
+        "outputTokens": 5371,
+        "reasoningOutputTokens": 4123,
+        "totalTokens": 15695
+      },
+      "modelContextWindow": 121600,
+      "total": {
+        "cachedInputTokens": 8960,
+        "inputTokens": 10324,
+        "outputTokens": 5371,
+        "reasoningOutputTokens": 4123,
+        "totalTokens": 15695
+      }
+    },
+    "turnId": "019ef794-c4a4-7e40-aa45-9d34a024aa57"
+  },
+  "wall_ms": 5201,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}
