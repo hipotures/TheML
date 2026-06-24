@@ -39,6 +39,7 @@ from tml.db.state import (
     branch_rows,
     materialization_rows,
     mark_submission_submitted,
+    revision_status_rows as db_revision_status_rows,
     root_counts,
     root_hypothesis_rows,
     root_run_rows,
@@ -58,7 +59,7 @@ from tml.hypotheses.generate import (
 from tml.hypotheses.baseline import ensure_root_baseline
 from tml.hypotheses.bugfix import RootBugfixPlan, bugfix_failed_materializations, root_bugfix_plan
 from tml.hypotheses.materialize import RootMaterializationPlan, materialize_missing, root_materialization_plan
-from tml.hypotheses.revise import RootRevisePlan, revise_root_hypothesis, revision_status_rows, root_revise_plan
+from tml.hypotheses.revise import RootRevisePlan, revise_root_hypothesis, root_revise_plan
 from tml.hypotheses.run import RootRunPlan, root_run_plan, run_missing
 from tml.prompts.diff import diff_prompt
 from tml.prompts.probe import probe_prompt, render_prompt
@@ -2038,9 +2039,7 @@ def _print_root_materializations(
 
 
 def _print_root_revision_status(project_dir: Path, *, hypothesis_id: str, mode: str) -> None:
-    config = load_project_config(project_dir)
-    profile_id = active_profile_id(config, mode)
-    rows = revision_status_rows(project_dir, hypothesis_id=hypothesis_id, mode=mode, profile_id=profile_id)
+    rows = db_revision_status_rows(project_dir, hypothesis_id=hypothesis_id, mode=mode)
     table = Table(title=f"ROOT revisions {str(hypothesis_id).zfill(6)}", box=box.SIMPLE_HEAVY)
     table.add_column("Revision", justify="right", no_wrap=True)
     table.add_column("S", justify="center", no_wrap=True)

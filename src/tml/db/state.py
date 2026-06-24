@@ -1582,12 +1582,22 @@ def revision_status_rows(
     *,
     hypothesis_id: str,
     mode: str,
-    profile_id: str,
+    profile_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    db_path = ensure_project_db(project_dir)
+    db_path = project_db_path(project_dir)
+    profile_filter = "AND n.profile_id=?" if profile_id else ""
+    evaluation_profile_filter = "AND e.profile_id=?" if profile_id else ""
+    params: list[Any] = []
+    for _ in range(4):
+        if profile_id:
+            params.append(profile_id)
+    params.extend([mode, mode])
+    if profile_id:
+        params.append(profile_id)
+    params.append(hypothesis_id.zfill(6))
     with connect(db_path) as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT
               r.hypothesis_id,
               r.revision,
@@ -1609,7 +1619,7 @@ def revision_status_rows(
                     AND rc.mode=m.mode
                     AND rc.file=m.file
                     AND rc.code_hash=m.code_hash
-                    AND n.profile_id=?
+                    {profile_filter}
                   ORDER BY
                     CASE n.status
                       WHEN 'failed' THEN 0
@@ -1630,7 +1640,7 @@ def revision_status_rows(
                   AND rc.mode=m.mode
                   AND rc.file=m.file
                   AND rc.code_hash=m.code_hash
-                  AND n.profile_id=?
+                  {profile_filter}
                 ORDER BY
                   CASE n.status
                     WHEN 'failed' THEN 0
@@ -1652,7 +1662,7 @@ def revision_status_rows(
                   AND rc.mode=m.mode
                   AND rc.file=m.file
                   AND rc.code_hash=m.code_hash
-                  AND n.profile_id=?
+                  {profile_filter}
                 ORDER BY
                   CASE n.status
                     WHEN 'failed' THEN 0
@@ -1674,7 +1684,7 @@ def revision_status_rows(
                   AND rc.mode=m.mode
                   AND rc.file=m.file
                   AND rc.code_hash=m.code_hash
-                  AND n.profile_id=?
+                  {profile_filter}
                 ORDER BY
                   CASE n.status
                     WHEN 'failed' THEN 0
@@ -1696,13 +1706,13 @@ def revision_status_rows(
               ON e.hypothesis_id=r.hypothesis_id
              AND e.hypothesis_revision=r.revision
              AND e.mode=?
-             AND e.profile_id=?
+             {evaluation_profile_filter}
              AND COALESCE(e.materialization_file, m.file)=m.file
             LEFT JOIN nodes en ON en.node_id=e.node_id
             WHERE r.hypothesis_id=?
             ORDER BY r.revision, m.file
             """,
-            (profile_id, profile_id, profile_id, profile_id, mode, mode, profile_id, hypothesis_id.zfill(6)),
+            params,
         ).fetchall()
     return [dict(row) for row in rows]
 
