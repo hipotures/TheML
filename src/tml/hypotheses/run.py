@@ -40,6 +40,7 @@ class RootRunPlan:
     profile_id: str
     profile_hash: str
     execution_timeout_seconds: int
+    force: bool
     run_id: str | None
     run_path: str
     next_node_step: int
@@ -56,6 +57,7 @@ def root_run_plan(
     hypothesis_id: str | None = None,
     revision: int | None = None,
     profile_overrides: dict[str, object] | None = None,
+    force: bool = False,
 ) -> RootRunPlan:
     upsert_project(project_dir)
     ensure_root_baseline(project_dir)
@@ -70,7 +72,7 @@ def root_run_plan(
     for record in candidates:
         hid = str(record["hypothesis_id"])
         code_hash = str(record["code_hash"])
-        if already_evaluated(
+        if not force and already_evaluated(
             project_dir,
             hypothesis_id=hid,
             mode=active_run_mode,
@@ -85,6 +87,7 @@ def root_run_plan(
         profile_id=profile_id,
         profile_hash=profile_hash(project_dir, active_run_mode, profile_id),
         execution_timeout_seconds=_execution_timeout_seconds(profile_overrides),
+        force=force,
         run_id=run_id_value,
         run_path=f"runs/{run_id_value}" if run_id_value else "new run on start",
         next_node_step=next_node_step(project_dir, run_id_value) if run_id_value else 1,
@@ -102,6 +105,7 @@ def run_missing(
     hypothesis_id: str | None = None,
     revision: int | None = None,
     profile_overrides: dict[str, object] | None = None,
+    force: bool = False,
     progress: Callable[[str], None] | None = None,
 ) -> list[str]:
     upsert_project(project_dir)
@@ -117,7 +121,8 @@ def run_missing(
     pending_records = [
         record
         for record in records
-        if not already_evaluated(
+        if force
+        or not already_evaluated(
             project_dir,
             hypothesis_id=str(record["hypothesis_id"]),
             mode=mode,

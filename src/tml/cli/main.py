@@ -687,6 +687,7 @@ def _bugfix_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | 
         "  id=<id>            Alias for hypothesis=<id>.\n"
         "  revision=<N>       Run one hypothesis revision.\n"
         "  rev=<N>            Alias for revision=<N>.\n"
+        "  force=true         Run even if an evaluation already exists for the same code hash.\n"
         "  yes=true           Skip the confirmation prompt.\n"
         "Profile override parameters are accepted for the active mode."
     ),
@@ -700,11 +701,12 @@ def root_run_cmd(ctx: typer.Context) -> None:
         mode = str(overrides["mode"]) if "mode" in overrides else None
         config = load_project_config(ref.path)
         active_run_mode = mode or active_mode(config)
-        allowed = {"mode", "hypothesis", "id", "revision", "rev", "yes"} | _profile_override_keys(ref.path, active_run_mode)
+        allowed = {"mode", "hypothesis", "id", "revision", "rev", "force", "yes"} | _profile_override_keys(ref.path, active_run_mode)
         _validate_override_keys(overrides, allowed, "tml root run")
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         hypothesis_id_text = _optional_text(hypothesis_id)
         revision = _revision_override(overrides)
+        force = _bool(overrides.get("force", False))
         if status_only:
             _print_root_run_request_status(ref.path, mode=active_run_mode, hypothesis_id=hypothesis_id_text)
             _print_root_run_summary(
@@ -716,13 +718,14 @@ def root_run_cmd(ctx: typer.Context) -> None:
             )
             return
         assume_yes = _bool(overrides.get("yes", False))
-        run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "hypothesis", "id", "revision", "rev", "yes"}}
+        run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "hypothesis", "id", "revision", "rev", "force", "yes"}}
         plan = root_run_plan(
             ref.path,
             mode=mode,
             hypothesis_id=hypothesis_id_text,
             revision=revision,
             profile_overrides=run_overrides,
+            force=force,
         )
         _print_root_run_plan(ref.slug, plan, hypothesis_id=hypothesis_id_text)
         if plan.iteration_count == 0:
@@ -745,6 +748,7 @@ def root_run_cmd(ctx: typer.Context) -> None:
             hypothesis_id=hypothesis_id_text,
             revision=revision,
             profile_overrides=run_overrides,
+            force=force,
             progress=console.print,
         )
         _print_root_run_request_status(ref.path, mode=active_run_mode, hypothesis_id=hypothesis_id_text)
@@ -1793,6 +1797,7 @@ def _print_root_run_plan(project_slug: str, plan: RootRunPlan, *, hypothesis_id:
     table.add_row("Hypothesis filter", str(hypothesis_id).zfill(6) if hypothesis_id else "all")
     table.add_row("Candidate materializations", str(plan.candidate_count))
     table.add_row("Already evaluated", str(plan.already_evaluated_count))
+    table.add_row("Force", "true" if plan.force else "false")
     table.add_row("Iterations to run", str(plan.iteration_count))
     table.add_row("Hypothesis IDs", id_text)
     console.print(table)
