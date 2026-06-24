@@ -2047,17 +2047,21 @@ def _print_root_revision_status(project_dir: Path, *, hypothesis_id: str, mode: 
     table.add_column("Hypothesis file", no_wrap=True)
     table.add_column("Mat file", no_wrap=True)
     table.add_column("Score", justify="right", no_wrap=True)
-    table.add_column("Change", overflow="fold", min_width=24, ratio=1)
+    show_change = any(row.get("change_summary") for row in rows)
+    if show_change:
+        table.add_column("Change", overflow="fold", min_width=24, ratio=1)
     for row in rows:
         materialization_file = str(row.get("materialization_file") or "none")
-        table.add_row(
+        values = [
             str(row.get("revision") or ""),
             _revision_status_icon(row),
             Path(str(row.get("hypothesis_file") or "")).name,
             materialization_file,
             _format_score(row.get("metric")) or "-",
-            str(row.get("change_summary") or ("initial" if int(row.get("revision") or 0) == 1 else "")),
-        )
+        ]
+        if show_change:
+            values.append(str(row.get("change_summary") or ""))
+        table.add_row(*values)
     console.print(table)
 
 
