@@ -781,35 +781,6 @@ def _component_score(project_dir: Path, component: dict[str, Any], *, mode: str,
                 """,
                 (mode, hypothesis_id, file_name, code_hash),
             ).fetchone()
-        if row is None:
-            row = conn.execute(
-                """
-                SELECT e.metric
-                FROM evaluations e
-                WHERE e.kind='root'
-                  AND e.mode=?
-                  AND e.hypothesis_id=?
-                  AND e.status='complete'
-                  AND e.metric IS NOT NULL
-                ORDER BY e.metric DESC, e.node_id DESC
-                LIMIT 1
-                """,
-                (mode, hypothesis_id),
-            ).fetchone()
-        if row is None:
-            row = conn.execute(
-                """
-                SELECT e.metric
-                FROM evaluations e
-                WHERE e.kind='root'
-                  AND e.hypothesis_id=?
-                  AND e.status='complete'
-                  AND e.metric IS NOT NULL
-                ORDER BY e.metric DESC, e.node_id DESC
-                LIMIT 1
-                """,
-                (hypothesis_id,),
-            ).fetchone()
     if row is None:
         return None
     metric = row["metric"]
