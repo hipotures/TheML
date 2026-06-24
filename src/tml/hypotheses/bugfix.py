@@ -60,11 +60,15 @@ def root_bugfix_plan(
     source_files: list[str] = []
     target_files: list[str] = []
     hypothesis_ids: list[str] = []
+    reserved_targets: dict[str, set[str]] = {}
     for record in candidates:
         hdir = _candidate_hypothesis_dir(project_dir, record)
         source = hdir / "materializations" / str(record["file"])
+        reserved = reserved_targets.setdefault(hdir.name, set())
+        target = _next_materialization_path(project_dir, source.parent, mode, hdir.name, reserved=reserved)
         source_files.append(source.name)
-        target_files.append(_next_materialization_path(project_dir, source.parent, mode, hdir.name).name)
+        target_files.append(target.name)
+        reserved.add(target.name)
         hypothesis_ids.append(str(record["hypothesis_id"]))
     return RootBugfixPlan(
         mode=mode,
@@ -100,12 +104,15 @@ def bugfix_failed_materializations(
     candidates = bugfix_candidates(project_dir, mode, hypothesis_id=hypothesis_id, revision=revision)
     total = len(candidates)
     created = 0
+    reserved_targets: dict[str, set[str]] = {}
     for index, record in enumerate(candidates, start=1):
         hid = str(record["hypothesis_id"])
         hdir = _candidate_hypothesis_dir(project_dir, record)
         mat_dir = hdir / "materializations"
         source = mat_dir / str(record["file"])
-        target = _next_materialization_path(project_dir, mat_dir, mode, hid)
+        reserved = reserved_targets.setdefault(hid, set())
+        target = _next_materialization_path(project_dir, mat_dir, mode, hid, reserved=reserved)
+        reserved.add(target.name)
         progress_prefix = f"ROOT bugfix {hid} {mode} ({index}/{total})"
         if progress is not None:
             progress(f"Fixing {progress_prefix} with {model}...", timeout_seconds)
@@ -198,7 +205,7 @@ def _project_path_text(project_dir: Path, path: Path) -> str:
         return path.name
 
 
-def _next_materialization_path(project_dir: Path, mat_dir: Path, mode: str, hypothesis_id: str) -> Path:
+def _next_materialization_path(project_dir: Path, mat_dir: Path, mode: str, hypothesis_id: str, *, reserved: set[str] | None = None) -> Path:
     highest = 0
     for path in mat_dir.glob(f"{mode}-*.py"):
         try:
@@ -209,6 +216,12 @@ def _next_materialization_path(project_dir: Path, mat_dir: Path, mode: str, hypo
     for row in materialization_rows(project_dir, mode=mode, hypothesis_id=hypothesis_id):
         try:
             number = int(Path(str(row.get("file") or "")).stem.rsplit("-", 1)[-1])
+        except ValueError:
+            continue
+        highest = max(highest, number)
+    for file_name in reserved or set():
+        try:
+            number = int(Path(file_name).stem.rsplit("-", 1)[-1])
         except ValueError:
             continue
         highest = max(highest, number)

@@ -1007,7 +1007,7 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
             n.finished_at,
             n.run_seconds,
             ROW_NUMBER() OVER (
-              PARTITION BY h.hypothesis_id, m.mode, m.file
+              PARTITION BY h.hypothesis_id, m.mode, COALESCE(m.hypothesis_revision, 1)
               ORDER BY COALESCE(n.finished_at, n.created_at, '') DESC, n.step DESC
             ) AS rn
           FROM hypotheses h
@@ -1017,6 +1017,14 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
             AND COALESCE(e.materialization_file, m.file)=m.file
             AND COALESCE(e.hypothesis_revision, m.hypothesis_revision, 1)=COALESCE(m.hypothesis_revision, 1)
           JOIN nodes n ON n.node_id=e.node_id
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM evaluations ce
+            WHERE ce.hypothesis_id=h.hypothesis_id
+              AND ce.mode=m.mode
+              AND ce.status='complete'
+              AND COALESCE(ce.hypothesis_revision, m.hypothesis_revision, 1)=COALESCE(m.hypothesis_revision, 1)
+          )
         )
         WHERE rn=1 AND hypothesis_id<>'000000'
     """
@@ -1046,6 +1054,14 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
         FROM hypotheses h
         JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
         WHERE m.status='failed' AND m.active=0 AND h.hypothesis_id<>'000000'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM evaluations ce
+            WHERE ce.hypothesis_id=h.hypothesis_id
+              AND ce.mode=m.mode
+              AND ce.status='complete'
+              AND COALESCE(ce.hypothesis_revision, m.hypothesis_revision, 1)=COALESCE(m.hypothesis_revision, 1)
+          )
     """
     validation_params: list[Any] = [mode]
     if hypothesis_id:
