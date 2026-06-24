@@ -926,7 +926,7 @@ def run_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = Non
         SELECT h.hypothesis_id, h.path, m.file, m.code_hash, m.hypothesis_revision
         FROM hypotheses h
         JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
-          AND m.status NOT IN ('failed', 'bug', 'superseded')
+          AND m.status='active'
     """
     params: list[Any] = [mode]
     conditions: list[str] = []
