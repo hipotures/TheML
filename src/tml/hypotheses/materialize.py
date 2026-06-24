@@ -75,18 +75,20 @@ def root_materialization_plan(
     pending_ids: list[str] = []
     revisions: list[int] = []
     target_files: list[str] = []
+    reserved_targets: dict[str, set[str]] = {}
     existing_count = 0
     for record in candidates:
         if str(record["hypothesis_id"]) == BASELINE_HYPOTHESIS_ID and mode != BASELINE_MODE:
             continue
         hdir = project_dir / "hypotheses" / str(record["hypothesis_id"])
-        target = _materialization_target(project_dir, hdir, mode, version=version)
         if _revision_has_materialization(hdir, mode, int(record["revision"])):
             existing_count += 1
             continue
+        target = _materialization_target(project_dir, hdir, mode, version=version, reserved=reserved_targets.setdefault(hdir.name, set()))
         pending_ids.append(str(record["hypothesis_id"]))
         revisions.append(int(record["revision"]))
         target_files.append(target.name)
+        reserved_targets[hdir.name].add(target.name)
     return RootMaterializationPlan(
         mode=mode,
         role="materializations",
@@ -125,6 +127,7 @@ def materialize_missing(
     candidates = _materialization_revision_candidates(project_dir, mode, hypothesis_id=hypothesis_id, revision=revision)
     pending_total = sum(1 for record in candidates if not _revision_has_materialization(project_dir / "hypotheses" / str(record["hypothesis_id"]), mode, int(record["revision"])))
     pending_index = 0
+    reserved_targets: dict[str, set[str]] = {}
     for record in candidates:
         if str(record["hypothesis_id"]) == BASELINE_HYPOTHESIS_ID and mode != BASELINE_MODE:
             continue
@@ -132,9 +135,10 @@ def materialize_missing(
         selected_revision = int(record["revision"])
         mat_dir = hdir / "materializations"
         mat_dir.mkdir(parents=True, exist_ok=True)
-        target = _materialization_target(project_dir, hdir, mode, version=version)
         if _revision_has_materialization(hdir, mode, selected_revision):
             continue
+        target = _materialization_target(project_dir, hdir, mode, version=version, reserved=reserved_targets.setdefault(hdir.name, set()))
+        reserved_targets[hdir.name].add(target.name)
         if target.exists():
             active_file = active_materialization_file(hdir, mode)
             is_active_target = active_file is None or active_file == target.name
@@ -284,11 +288,11 @@ def _needs_materialization(
     )
 
 
-def _materialization_target(project_dir: Path, hdir: Path, mode: str, *, version: str | None = None) -> Path:
+def _materialization_target(project_dir: Path, hdir: Path, mode: str, *, version: str | None = None, reserved: set[str] | None = None) -> Path:
     if version is not None:
         text = str(version).strip()
         if text == "new":
-            return _new_materialization_target(project_dir, hdir, mode)
+            return _new_materialization_target(project_dir, hdir, mode, reserved=reserved)
         if text.endswith(".py"):
             return hdir / "materializations" / text
         if text.isdigit():
@@ -296,10 +300,10 @@ def _materialization_target(project_dir: Path, hdir: Path, mode: str, *, version
         if text.startswith(f"{mode}-") and text.removeprefix(f"{mode}-").isdigit():
             return hdir / "materializations" / f"{text}.py"
         raise ValueError("version must be 'new', a number like 2, or a file like autogluon-002.py")
-    return _new_materialization_target(project_dir, hdir, mode)
+    return _new_materialization_target(project_dir, hdir, mode, reserved=reserved)
 
 
-def _new_materialization_target(project_dir: Path, hdir: Path, mode: str) -> Path:
+def _new_materialization_target(project_dir: Path, hdir: Path, mode: str, *, reserved: set[str] | None = None) -> Path:
     mat_dir = hdir / "materializations"
     max_index = 0
     for path in mat_dir.glob(f"{mode}-*.py"):
@@ -308,6 +312,10 @@ def _new_materialization_target(project_dir: Path, hdir: Path, mode: str) -> Pat
             max_index = max(max_index, int(suffix))
     for row in materialization_rows(project_dir, mode=mode, hypothesis_id=hdir.name):
         file_name = str(row.get("file") or "")
+        suffix = Path(file_name).stem.removeprefix(f"{mode}-")
+        if suffix.isdigit():
+            max_index = max(max_index, int(suffix))
+    for file_name in reserved or set():
         suffix = Path(file_name).stem.removeprefix(f"{mode}-")
         if suffix.isdigit():
             max_index = max(max_index, int(suffix))
