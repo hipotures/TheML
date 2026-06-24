@@ -381,7 +381,8 @@ def root_generate_cmd(ctx: typer.Context) -> None:
         "  id=<id>            Alias for hypothesis=<id>.\n"
         "  count=<N>          Maximum number of new revisions.\n"
         "  rev=<N>            Revision to delete.\n"
-        "  revision=<N>       Alias for rev=<N>."
+        "  revision=<N>       Alias for rev=<N>.\n"
+        "  yes=true           Accepted for scripted workflows."
     ),
 )
 def root_revise_cmd(ctx: typer.Context) -> None:
@@ -392,7 +393,7 @@ def root_revise_cmd(ctx: typer.Context) -> None:
         delete_requested = positional in (["delete"], ["del"])
         status_only = False if delete_requested else _command_status_requested(ctx.args, "tml root revise")
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"hypothesis", "id", "count", "mode", "revision", "rev"}, "tml root revise")
+        _validate_override_keys(overrides, {"hypothesis", "id", "count", "mode", "revision", "rev", "yes"}, "tml root revise")
         hypothesis_id = _optional_text(overrides.get("hypothesis") or overrides.get("id"))
         if not hypothesis_id:
             raise TmlError("Missing required parameter: id=<hypothesis>.")
