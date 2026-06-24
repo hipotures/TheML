@@ -2008,8 +2008,8 @@ def _print_branch_rebase_plan(project_slug: str, plan: BranchRebasePlan) -> None
             change.role,
             change.old_file,
             change.new_file,
-            _format_score(change.old_score),
-            _format_score(change.new_score),
+            _format_score(change.old_score) or "n/a",
+            _format_score(change.new_score) or "n/a",
         )
     console.print(change_table)
 
