@@ -1476,8 +1476,9 @@ def root_run_rows(
     db_path = ensure_project_db(project_dir)
     sql = """
         SELECT
-          h.hypothesis_id, h.summary, h.created_at, h.model, h.reasoning_tokens,
-          h.total_tokens, h.generation_seconds, h.enabled,
+          h.hypothesis_id, COALESCE(r.summary, h.summary) AS summary,
+          COALESCE(r.created_at, h.created_at) AS created_at,
+          m.model, m.reasoning_tokens, m.total_tokens, m.generation_seconds, h.enabled,
           m.file AS materialization_file, m.hypothesis_revision, m.code_hash, m.status AS materialization_status,
           n.node_id, n.status AS node_status, n.run_seconds,
           e.metric,
@@ -1572,6 +1573,9 @@ def root_run_rows(
           ) AS component_run_seconds
         FROM hypotheses h
         LEFT JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
+        LEFT JOIN hypothesis_revisions r
+          ON r.hypothesis_id=h.hypothesis_id
+         AND r.revision=COALESCE(m.hypothesis_revision, 1)
         LEFT JOIN evaluations e ON e.hypothesis_id=h.hypothesis_id
           AND e.mode=? AND e.profile_id=? AND e.code_hash=m.code_hash
           AND COALESCE(e.materialization_file, m.file)=m.file
