@@ -48,6 +48,7 @@ class RootRunPlan:
     already_evaluated_count: int
     iteration_count: int
     hypothesis_ids: list[str]
+    files: list[str]
 
 
 def root_run_plan(
@@ -67,6 +68,7 @@ def root_run_plan(
     profile_id = active_profile_id(config, active_run_mode)
     run_id_value = latest_run_id(project_dir)
     pending_ids: list[str] = []
+    pending_files: list[str] = []
     already_done = 0
     candidates = run_candidates(project_dir, active_run_mode, hypothesis_id=hypothesis_id, revision=revision)
     for record in candidates:
@@ -82,6 +84,7 @@ def root_run_plan(
             already_done += 1
             continue
         pending_ids.append(f"{hid}:{record.get('hypothesis_revision') or 1}")
+        pending_files.append(str(record["file"]))
     return RootRunPlan(
         mode=active_run_mode,
         profile_id=profile_id,
@@ -95,6 +98,7 @@ def root_run_plan(
         already_evaluated_count=already_done,
         iteration_count=len(pending_ids),
         hypothesis_ids=pending_ids,
+        files=pending_files,
     )
 
 

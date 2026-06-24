@@ -1793,6 +1793,10 @@ def _print_root_run_plan(project_slug: str, plan: RootRunPlan, *, hypothesis_id:
         id_text = f"{ids[0]}..{ids[-1]}"
     else:
         id_text = ", ".join(ids) if ids else "none"
+    if len(plan.files) > 8:
+        file_text = f"{plan.files[0]} ... {plan.files[-1]}"
+    else:
+        file_text = ", ".join(plan.files) if plan.files else "none"
     table = Table(title="ROOT run plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
     table.add_column("Parameter", style="bold", no_wrap=True)
     table.add_column("Value", overflow="fold")
@@ -1809,6 +1813,7 @@ def _print_root_run_plan(project_slug: str, plan: RootRunPlan, *, hypothesis_id:
     table.add_row("Already evaluated", str(plan.already_evaluated_count))
     table.add_row("Force", "true" if plan.force else "false")
     table.add_row("Iterations to run", str(plan.iteration_count))
+    table.add_row("Files", file_text)
     table.add_row("Hypothesis IDs", id_text)
     console.print(table)
 
