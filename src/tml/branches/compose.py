@@ -8,13 +8,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from tml.core.config import active_mode, load_project_config
+from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.errors import TmlError
 from tml.db.connect import connect
 from tml.db.state import (
     branch_by_composition,
     branch_by_id,
     branch_component_rows,
+    ensure_project_db,
     branch_node_count,
     branch_node_paths,
     delete_branch_records,
@@ -79,6 +80,32 @@ class BranchRebaseTarget:
     step: int | None
     status: str | None
     metric: float | None
+
+
+@dataclass(frozen=True)
+class BranchRebaseComponentChange:
+    role: str
+    source_type: str
+    source_id: str
+    old_file: str
+    new_file: str
+    old_code_hash: str
+    new_code_hash: str
+    old_score: float | None
+    new_score: float | None
+
+
+@dataclass(frozen=True)
+class BranchRebasePlan:
+    source_branch_id: str
+    mode: str
+    source_score: float | None
+    source_node_id: str | None
+    source_step: int | None
+    composition_hash: str
+    existing_branch_id: str | None
+    changed_components: list[BranchRebaseComponentChange]
+    total_components: int
 
 
 @dataclass(frozen=True)
@@ -243,21 +270,11 @@ def branch_rebase_targets(
 
 
 def rebase_branch(project_dir: Path, *, branch_id: str) -> RebasedBranch:
-    normalized = _normalize_branch_id(branch_id)
-    source_row = branch_by_id(project_dir, normalized)
-    if source_row is None:
-        raise TmlError(f"Branch does not exist: {normalized}")
-    mode = str(source_row.get("mode") or "")
-    if not mode:
-        raise TmlError(f"Branch {normalized} has no mode.")
-    original_components = branch_component_rows(project_dir, normalized)
-    if not original_components:
-        raise TmlError(f"Branch {normalized} has no components.")
-
-    components = _active_component_records(project_dir, original_components, mode=mode)
-    composition_hash = _composition_hash(components)
+    normalized, source_row, original_components, components, plan = _branch_rebase_parts(project_dir, branch_id=branch_id)
+    mode = plan.mode
+    composition_hash = plan.composition_hash
     existing = branch_by_composition(project_dir, mode=mode, composition_hash=composition_hash)
-    changed_components = _changed_component_count(original_components, components)
+    changed_count = len(plan.changed_components)
     if existing is not None:
         existing_branch_id = str(existing["branch_id"])
         materialization_path = project_dir / str(existing["path"]).rsplit("/", 1)[0] / "materializations" / str(
@@ -271,7 +288,7 @@ def rebase_branch(project_dir: Path, *, branch_id: str) -> RebasedBranch:
             materialization_path=materialization_path,
             composition_hash=composition_hash,
             existing=True,
-            changed_components=changed_components,
+            changed_components=changed_count,
             total_components=len(components),
         )
 
@@ -312,7 +329,7 @@ def rebase_branch(project_dir: Path, *, branch_id: str) -> RebasedBranch:
             "composition_hash": composition_hash,
             "summary": summary,
             "created_at": created_at,
-            "changed_components": changed_components,
+            "changed_components": changed_count,
             "components": components,
         },
     )
@@ -338,9 +355,14 @@ def rebase_branch(project_dir: Path, *, branch_id: str) -> RebasedBranch:
         materialization_path=materialization_path,
         composition_hash=composition_hash,
         existing=False,
-        changed_components=changed_components,
+        changed_components=changed_count,
         total_components=len(components),
     )
+
+
+def branch_rebase_plan(project_dir: Path, *, branch_id: str, target: BranchRebaseTarget | None = None) -> BranchRebasePlan:
+    _, _, _, _, plan = _branch_rebase_parts(project_dir, branch_id=branch_id, target=target)
+    return plan
 
 
 def branch_delete_plan(project_dir: Path, *, branch_id: str, force: bool = False) -> BranchDeletePlan:
@@ -578,6 +600,79 @@ def _component_records(project_dir: Path, *, parent: BranchSource, source: Branc
     return sorted(unique.values(), key=_component_sort_key)
 
 
+def _branch_rebase_parts(
+    project_dir: Path,
+    *,
+    branch_id: str,
+    target: BranchRebaseTarget | None = None,
+) -> tuple[str, dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], BranchRebasePlan]:
+    normalized = _normalize_branch_id(branch_id)
+    source_row = branch_by_id(project_dir, normalized)
+    if source_row is None:
+        raise TmlError(f"Branch does not exist: {normalized}")
+    mode = str(source_row.get("mode") or "")
+    if not mode:
+        raise TmlError(f"Branch {normalized} has no mode.")
+    config = load_project_config(project_dir)
+    profile_id = active_profile_id(config, mode=mode)
+    original_components = branch_component_rows(project_dir, normalized)
+    if not original_components:
+        raise TmlError(f"Branch {normalized} has no components.")
+    components = _active_component_records(project_dir, original_components, mode=mode)
+    composition_hash = _composition_hash(components)
+    existing = branch_by_composition(project_dir, mode=mode, composition_hash=composition_hash)
+    source_score, source_node_id, source_step = _branch_best_score(project_dir, normalized, mode=mode)
+    if target is not None:
+        source_score = target.metric if target.metric is not None else source_score
+        source_node_id = target.node_id or source_node_id
+        source_step = target.step if target.step is not None else source_step
+    plan = BranchRebasePlan(
+        source_branch_id=normalized,
+        mode=mode,
+        source_score=source_score,
+        source_node_id=source_node_id,
+        source_step=source_step,
+        composition_hash=composition_hash,
+        existing_branch_id=str(existing["branch_id"]) if existing is not None else None,
+        changed_components=_component_changes(
+            original_components,
+            components,
+            project_dir=project_dir,
+            mode=mode,
+            profile_id=profile_id,
+        ),
+        total_components=len(components),
+    )
+    return normalized, source_row, original_components, components, plan
+
+
+def _branch_best_score(project_dir: Path, branch_id: str, *, mode: str) -> tuple[float | None, str | None, int | None]:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT e.metric, n.node_id, n.step
+            FROM evaluations e
+            LEFT JOIN nodes n ON n.node_id=e.node_id
+            WHERE e.kind='branch'
+              AND e.branch_id=?
+              AND e.mode=?
+              AND e.status='complete'
+              AND e.metric IS NOT NULL
+            ORDER BY e.metric DESC, e.node_id DESC
+            LIMIT 1
+            """,
+            (branch_id, mode),
+        ).fetchone()
+    if row is None:
+        return None, None, None
+    return (
+        float(row["metric"]) if isinstance(row["metric"], int | float) else None,
+        str(row["node_id"] or "") or None,
+        int(row["step"]) if row["step"] is not None else None,
+    )
+
+
 def _active_component_records(project_dir: Path, components: list[dict[str, Any]], *, mode: str) -> list[dict[str, Any]]:
     refreshed: list[dict[str, Any]] = []
     for component in components:
@@ -609,16 +704,70 @@ def _dedupe_component_records(components: list[dict[str, Any]]) -> list[dict[str
     return sorted(unique.values(), key=_component_sort_key)
 
 
-def _changed_component_count(original_components: list[dict[str, Any]], refreshed_components: list[dict[str, Any]]) -> int:
+def _component_changes(
+    original_components: list[dict[str, Any]],
+    refreshed_components: list[dict[str, Any]],
+    *,
+    project_dir: Path,
+    mode: str,
+    profile_id: str,
+) -> list[BranchRebaseComponentChange]:
     refreshed_by_logical = {_component_logical_key(component): component for component in refreshed_components}
-    changed = 0
+    changes: list[BranchRebaseComponentChange] = []
     for component in original_components:
         refreshed = refreshed_by_logical.get(_component_logical_key(component))
         if refreshed is None:
             continue
         if _component_version_key(component) != _component_version_key(refreshed):
-            changed += 1
-    return changed
+            old_score = _component_score(project_dir, component, mode=mode, profile_id=profile_id)
+            new_score = _component_score(project_dir, refreshed, mode=mode, profile_id=profile_id)
+            changes.append(
+                BranchRebaseComponentChange(
+                    role=str(component.get("role") or ""),
+                    source_type=str(component.get("source_type") or ""),
+                    source_id=str(component.get("source_id") or ""),
+                    old_file=str(component.get("file") or ""),
+                    new_file=str(refreshed.get("file") or ""),
+                    old_code_hash=str(component.get("code_hash") or ""),
+                    new_code_hash=str(refreshed.get("code_hash") or ""),
+                    old_score=old_score,
+                    new_score=new_score,
+                )
+            )
+    return changes
+
+
+def _component_score(project_dir: Path, component: dict[str, Any], *, mode: str, profile_id: str) -> float | None:
+    if str(component.get("source_type") or "") != "hypothesis":
+        return None
+    hypothesis_id = str(component.get("source_id") or "")
+    file_name = str(component.get("file") or "")
+    code_hash = str(component.get("code_hash") or "")
+    if not hypothesis_id or not file_name or not code_hash:
+        return None
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT e.metric
+            FROM evaluations e
+            WHERE e.kind='root'
+              AND e.mode=?
+              AND e.profile_id=?
+              AND e.hypothesis_id=?
+              AND e.materialization_file=?
+              AND e.code_hash=?
+              AND e.status='complete'
+              AND e.metric IS NOT NULL
+            ORDER BY e.metric DESC, e.node_id DESC
+            LIMIT 1
+            """,
+            (mode, profile_id, hypothesis_id, file_name, code_hash),
+        ).fetchone()
+    if row is None:
+        return None
+    metric = row["metric"]
+    return float(metric) if isinstance(metric, int | float) else None
 
 
 def _component_record(source: BranchSource, *, role: str) -> dict[str, Any]:

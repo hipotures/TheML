@@ -25,11 +25,13 @@ from typer.core import TyperGroup
 from tml.branches.algorithms import BranchAlgorithmResult, branch_add_algorithmic
 from tml.branches.compose import (
     BranchDeletePlan,
+    BranchRebasePlan,
     BranchRebaseTarget,
     CreatedBranch,
     RebasedBranch,
     add_branch,
     branch_delete_plan,
+    branch_rebase_plan,
     branch_rebase_targets,
     delete_branch,
     rebase_branch,
@@ -1227,7 +1229,7 @@ def branch_rebase_cmd(ctx: typer.Context) -> None:
         ref = active_project_ref()
         _reject_positional(ctx.args, "tml branch rebase")
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"id", "node", "step"}, "tml branch rebase")
+        _validate_override_keys(overrides, {"id", "node", "step", "yes"}, "tml branch rebase")
         raw_id = _optional_text(overrides.get("id"))
         raw_node = _optional_text(overrides.get("node"))
         raw_step = _optional_text(overrides.get("step"))
@@ -1241,8 +1243,15 @@ def branch_rebase_cmd(ctx: typer.Context) -> None:
         if len(targets) > 1:
             _print_branch_rebase_ambiguous_targets(targets)
             return
-        rebased = rebase_branch(ref.path, branch_id=targets[0].branch_id)
-        _print_branch_rebase_summary(ref.slug, targets[0], rebased)
+        target = targets[0]
+        plan = branch_rebase_plan(ref.path, branch_id=target.branch_id, target=target)
+        _print_branch_rebase_plan(ref.slug, plan)
+        assume_yes = _bool(overrides.get("yes", False))
+        if not assume_yes and not Confirm.ask("Create rebased BRANCH?", default=False, console=console):
+            console.print("BRANCH rebase cancelled.")
+            return
+        rebased = rebase_branch(ref.path, branch_id=target.branch_id)
+        _print_branch_rebase_summary(ref.slug, target, rebased)
         _print_branch_status(ref.path, mode=rebased.mode, branch_id=rebased.branch_id, executed_ids=set(), executed_count=None)
     except Exception as exc:
         _abort(exc)
@@ -1962,6 +1971,47 @@ def _print_branch_rebase_summary(project_slug: str, target: BranchRebaseTarget, 
     table.add_row("Components", str(rebased.total_components))
     table.add_row("Changed components", str(rebased.changed_components))
     console.print(table)
+
+
+def _print_branch_rebase_plan(project_slug: str, plan: BranchRebasePlan) -> None:
+    table = Table(title="BRANCH rebase plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Source branch", plan.source_branch_id)
+    if plan.source_node_id:
+        table.add_row("Source node", plan.source_node_id)
+    if plan.source_step is not None:
+        table.add_row("Source step", str(plan.source_step))
+    table.add_row("Source score", _format_score(plan.source_score) or "n/a")
+    table.add_row("Mode", plan.mode)
+    table.add_row("Components", str(plan.total_components))
+    table.add_row("Components to update", str(len(plan.changed_components)))
+    table.add_row("Result", f"existing {plan.existing_branch_id}" if plan.existing_branch_id else "new branch")
+    table.add_row("Composition hash", plan.composition_hash[:12])
+    console.print(table)
+
+    if not plan.changed_components:
+        console.print("No component materializations need updating.")
+        return
+
+    change_table = Table(title="Component updates", box=box.SIMPLE_HEAVY)
+    change_table.add_column("ID", no_wrap=True)
+    change_table.add_column("Role", no_wrap=True)
+    change_table.add_column("Old", no_wrap=True)
+    change_table.add_column("New", no_wrap=True)
+    change_table.add_column("Old score", justify="right", no_wrap=True)
+    change_table.add_column("New score", justify="right", no_wrap=True)
+    for change in plan.changed_components:
+        change_table.add_row(
+            change.source_id,
+            change.role,
+            change.old_file,
+            change.new_file,
+            _format_score(change.old_score),
+            _format_score(change.new_score),
+        )
+    console.print(change_table)
 
 
 def _print_branch_rebase_ambiguous_targets(targets: list[BranchRebaseTarget]) -> None:
