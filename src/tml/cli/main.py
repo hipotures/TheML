@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -74,6 +75,7 @@ from tml.utils.yaml_io import read_yaml
 
 
 console = Console(highlight=False)
+DEFAULT_SUBMISSION_TABLE_LIMIT = 20
 
 
 class TmlGroup(TyperGroup):
@@ -1252,13 +1254,17 @@ def reindex_cmd(scope: str | None = None, run_id: str | None = None) -> None:
         _abort(exc)
 
 
-@app.command("submissions", help="List local and synced Kaggle submissions.")
-@app.command("sub", help="Alias for submissions.")
-@app.command("subm", help="Alias for submissions.")
-def submissions_cmd() -> None:
+@app.command("submissions", context_settings=EXTRA, help="List local and synced Kaggle submissions.")
+@app.command("sub", context_settings=EXTRA, help="Alias for submissions.")
+@app.command("subm", context_settings=EXTRA, help="Alias for submissions.")
+def submissions_cmd(ctx: typer.Context) -> None:
     try:
+        _reject_positional(ctx.args, "tml sub")
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"limit"}, "tml sub")
+        limit = _submission_table_limit(overrides.get("limit"))
         ref = active_project_ref()
-        _print_submissions(ref.path)
+        _print_submissions(ref.path, limit=limit)
     except Exception as exc:
         _abort(exc)
 
@@ -2641,9 +2647,14 @@ def _print_root_run_request_status(project_dir: Path, *, mode: str, hypothesis_i
         console.print(f"Run skipped: hypothesis {hid} has no {mode} materialization. Run: uv run tml root materialize id={int(hid)}")
 
 
-def _print_submissions(project_dir: Path) -> None:
+def _print_submissions(project_dir: Path, *, limit: int | None = None) -> None:
     rows = submission_rows(project_dir)
-    table = Table(title="Submission candidates", box=box.SIMPLE_HEAVY)
+    display_rows = _submission_display_rows(rows)
+    shown_rows = display_rows if limit is None else display_rows[:limit]
+    title = "Submission candidates"
+    if display_rows and len(shown_rows) < len(display_rows):
+        title = f"{title} (showing {len(shown_rows)}/{len(display_rows)}; limit=0 for all)"
+    table = Table(title=title, box=box.SIMPLE_HEAVY)
     table.add_column("#", justify="right", no_wrap=True)
     table.add_column("ID", no_wrap=True)
     table.add_column("CV#", justify="right", no_wrap=True)
@@ -2664,8 +2675,7 @@ def _print_submissions(project_dir: Path) -> None:
 
     best_local = _best_numeric(row.get("local_score") for row in rows)
     best_public = _best_numeric(row.get("public_score") for row in rows)
-    display_rows = _submission_display_rows(rows)
-    for marker, row, is_child, group_index in display_rows:
+    for marker, row, is_child, group_index in shown_rows:
         local_score = row.get("local_score")
         public_score = row.get("public_score")
         table.add_row(
@@ -2687,6 +2697,25 @@ def _print_submissions(project_dir: Path) -> None:
         )
     console.print(table)
     _print_submission_actions(rows)
+
+
+def _submission_table_limit(value: object) -> int | None:
+    if value is None:
+        return _adaptive_table_limit(default=DEFAULT_SUBMISSION_TABLE_LIMIT)
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise TmlError(f"Invalid limit: {value!r}. Use a non-negative integer.") from exc
+    if parsed < 0:
+        raise TmlError("Invalid limit: use a non-negative integer.")
+    return None if parsed == 0 else parsed
+
+
+def _adaptive_table_limit(*, default: int) -> int:
+    terminal_rows = shutil.get_terminal_size(fallback=(80, default)).lines
+    if terminal_rows <= 0:
+        return default
+    return max(default, int(terminal_rows * 0.65))
 
 
 def _submission_display_rows(rows: list[dict[str, object]]) -> list[tuple[str, dict[str, object], bool, int]]:
