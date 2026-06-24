@@ -320,7 +320,13 @@ def root_status_cmd(
         console.print(f"Evaluated: {counts['evaluated']}")
         console.print(f"Incomplete nodes: {counts['incomplete']}")
         console.print(f"Best ROOT score: {f'{best:.6f}' if best is not None else 'n/a'}")
-        _print_existing_root_hypotheses(ref.path, created_ids=set(), mode=mode, profile_id=profile_id)
+        _print_existing_root_hypotheses(
+            ref.path,
+            created_ids=set(),
+            mode=mode,
+            profile_id=profile_id,
+            best_score_value=best,
+        )
     except Exception as exc:
         _abort(exc)
 
@@ -2105,6 +2111,7 @@ def _print_existing_root_hypotheses(
     created_ids: set[str],
     mode: str | None = None,
     profile_id: str | None = None,
+    best_score_value: float | None = None,
 ) -> None:
     table = Table(title="Existing ROOT hypotheses", box=box.SIMPLE_HEAVY)
     for column in ROOT_HYPOTHESIS_COLUMNS:
@@ -2118,9 +2125,11 @@ def _print_existing_root_hypotheses(
             ratio=int(column["ratio"]) if column.get("ratio") else None,
         )
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
+    db_rows = root_hypothesis_rows(project_dir, mode=mode, profile_id=profile_id)
+    best = best_score_value if best_score_value is not None else _best_numeric(row.get("best_score") for row in db_rows)
     rows = []
-    for db_row in root_hypothesis_rows(project_dir, mode=mode, profile_id=profile_id):
-        row = _root_hypothesis_row(db_row, created_ids=created_ids)
+    for db_row in db_rows:
+        row = _root_hypothesis_row(db_row, created_ids=created_ids, best_score_value=best)
         if not row:
             continue
         rows.append(
@@ -3068,14 +3077,19 @@ def _root_hypothesis_table_values(row: dict[str, object], *, summary_limit: int)
     return values
 
 
-def _root_hypothesis_row(db_row: dict[str, object], *, created_ids: set[str]) -> dict[str, object]:
+def _root_hypothesis_row(
+    db_row: dict[str, object],
+    *,
+    created_ids: set[str],
+    best_score_value: float | None = None,
+) -> dict[str, object]:
     hypothesis_id = str(db_row.get("hypothesis_id") or "")
     return {
         "id": hypothesis_id,
         "is_new": hypothesis_id in created_ids,
         "status": _hypothesis_status_text(str(db_row.get("status_icon") or "")),
         "revision": str(db_row.get("best_revision") or ""),
-        "score": _format_score(db_row.get("best_score")),
+        "score": _score_text(db_row.get("best_score"), best=best_score_value, style="reverse"),
         "created_at": _short_datetime(db_row.get("created_at")),
         "model": str(db_row.get("model") or ""),
         "reasoning_tokens": _token_summary(db_row),
