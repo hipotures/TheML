@@ -486,7 +486,17 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
             version=version,
             revision=revision,
         )
-        _print_root_materializations(ref.path, mode=mode, created_count=created, hypothesis_id=hypothesis_id_text)
+        shown_targets = {
+            (str(hid).zfill(6), str(file_name))
+            for hid, file_name in zip(plan.hypothesis_ids, plan.target_files, strict=False)
+        }
+        _print_root_materializations(
+            ref.path,
+            mode=mode,
+            created_count=created,
+            hypothesis_id=hypothesis_id_text,
+            only_targets=shown_targets,
+        )
     except Exception as exc:
         _abort(exc)
 
@@ -2050,6 +2060,7 @@ def _print_root_materializations(
     mode: str,
     created_count: int | None,
     hypothesis_id: str | None,
+    only_targets: set[tuple[str, str]] | None = None,
 ) -> None:
     target_id = hypothesis_id.zfill(6) if hypothesis_id else None
     title = "ROOT materializations" if created_count is None else f"ROOT materializations (created: {created_count})"
@@ -2066,6 +2077,8 @@ def _print_root_materializations(
     rows = materialization_rows(project_dir, mode=mode, hypothesis_id=target_id)
     for db_row in rows:
         current_hypothesis_id = str(db_row.get("hypothesis_id") or "")
+        if only_targets is not None and (current_hypothesis_id, str(db_row.get("file") or "")) not in only_targets:
+            continue
         if current_hypothesis_id != previous_hypothesis_id:
             group_index += 1
             previous_hypothesis_id = current_hypothesis_id
