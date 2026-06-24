@@ -1218,6 +1218,7 @@ def branch_run_cmd(
             branch_id=branch_id,
             executed_ids=set(executed_ids),
             executed_count=len(executed_ids),
+            only_executed=True,
         )
     except Exception as exc:
         _abort(exc)
@@ -1251,7 +1252,7 @@ def branch_rebase_cmd(ctx: typer.Context) -> None:
             console.print("BRANCH rebase cancelled.")
             return
         rebased = rebase_branch(ref.path, branch_id=target.branch_id)
-        _print_branch_rebase_summary(ref.slug, target, rebased)
+        _print_branch_rebase_summary(ref.slug, target, plan, rebased)
         _print_branch_status(ref.path, mode=rebased.mode, branch_id=rebased.branch_id, executed_ids=set(), executed_count=None)
     except Exception as exc:
         _abort(exc)
@@ -1953,17 +1954,25 @@ def _print_branch_add_summary(project_slug: str, created: CreatedBranch) -> None
     console.print(table)
 
 
-def _print_branch_rebase_summary(project_slug: str, target: BranchRebaseTarget, rebased: RebasedBranch) -> None:
+def _print_branch_rebase_summary(
+    project_slug: str,
+    target: BranchRebaseTarget,
+    plan: BranchRebasePlan,
+    rebased: RebasedBranch,
+) -> None:
     title = "BRANCH rebase existing" if rebased.existing else "BRANCH rebased"
     table = Table(title=title, box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
     table.add_column("Parameter", style="bold", no_wrap=True)
     table.add_column("Value", overflow="fold")
     table.add_row("Project", project_slug)
     table.add_row("Source branch", rebased.source_branch_id)
-    if target.node_id:
-        table.add_row("Source node", target.node_id)
-    if target.step is not None:
-        table.add_row("Source step", str(target.step))
+    source_node = target.node_id or plan.source_node_id
+    source_step = target.step if target.step is not None else plan.source_step
+    if source_node:
+        table.add_row("Source node", str(source_node))
+    if source_step is not None:
+        table.add_row("Source step", str(source_step))
+    table.add_row("Original score", _format_score(plan.source_score) or "n/a")
     table.add_row("Branch", rebased.branch_id)
     table.add_row("Mode", rebased.mode)
     table.add_row("File", _repo_relative(rebased.branch_path.parent.parent, rebased.materialization_path))
@@ -1983,7 +1992,6 @@ def _print_branch_rebase_plan(project_slug: str, plan: BranchRebasePlan) -> None
         table.add_row("Source node", plan.source_node_id)
     if plan.source_step is not None:
         table.add_row("Source step", str(plan.source_step))
-    table.add_row("Source score", _format_score(plan.source_score) or "n/a")
     table.add_row("Mode", plan.mode)
     table.add_row("Components", str(plan.total_components))
     table.add_row("Components to update", str(len(plan.changed_components)))
@@ -2567,6 +2575,7 @@ def _print_branch_status(
     executed_count: int | None,
     sort_by: str = "score",
     sort_order: str | None = None,
+    only_executed: bool = False,
 ) -> None:
     config = load_project_config(project_dir)
     profile_id = active_profile_id(config, mode)
@@ -2591,6 +2600,8 @@ def _print_branch_status(
         sort_by=sort_by,
         sort_order=sort_order,
     )
+    if only_executed and executed_ids:
+        rows = [row for row in rows if str(row.get("branch_id") or "") in executed_ids]
     displayed_index = 0
     for db_row in rows:
         bid = str(db_row.get("branch_id") or "")
