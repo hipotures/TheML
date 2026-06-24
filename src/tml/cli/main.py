@@ -1714,11 +1714,11 @@ def _print_root_materialization_plan(
     *,
     hypothesis_id: str | None,
 ) -> None:
-    ids = plan.hypothesis_ids
-    if len(ids) > 8:
-        id_text = f"{ids[0]}..{ids[-1]}"
+    id_revisions = [f"{hid}:{rev}" for hid, rev in zip(plan.hypothesis_ids, plan.revisions, strict=False)]
+    if len(id_revisions) > 8:
+        id_rev_text = f"{id_revisions[0]} ... {id_revisions[-1]}"
     else:
-        id_text = ", ".join(ids) if ids else "none"
+        id_rev_text = ", ".join(id_revisions) if id_revisions else "none"
     if len(plan.target_files) == 1:
         target_text = plan.target_files[0]
     elif plan.target_files:
@@ -1744,9 +1744,7 @@ def _print_root_materialization_plan(
     table.add_row("Existing materializations", str(plan.existing_count))
     table.add_row("Iterations to run", str(plan.iteration_count))
     table.add_row("Target file", target_text)
-    table.add_row("Hypothesis IDs", id_text)
-    if plan.revisions:
-        table.add_row("Revisions", ", ".join(str(value) for value in plan.revisions[:8]))
+    table.add_row("Hypothesis revisions", id_rev_text)
     console.print(table)
 
 
