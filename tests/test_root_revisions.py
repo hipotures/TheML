@@ -6,7 +6,7 @@ from pathlib import Path
 from tml.ai.client import AiResponse
 from tml.db.connect import connect
 from tml.db.reindex import reindex_project
-from tml.db.state import materialization_rows, root_run_rows
+from tml.db.state import materialization_rows, revision_status_rows, root_run_rows
 from tml.execution.result import ExecutionResult
 from tml.hypotheses.materialize import materialize_missing
 from tml.hypotheses.revisions import migrate_root_revisions
@@ -165,11 +165,25 @@ def test_reindex_rebuilds_revision_tables(tmp_path: Path) -> None:
             }
         ],
     }
+    _write_group_code(hdir / "materializations" / "autogluon-002.py", suffix="# second materialization")
+    component_hash = sha256_file(hdir / "materializations" / "autogluon-002.py")
+    manifest["materializations"]["autogluon"]["files"].append(
+        {
+            "file": "autogluon-002.py",
+            "revision": 2,
+            "sha256": component_hash,
+            "created_at": "2026-01-01T00:00:00",
+        }
+    )
     write_yaml(hdir / "manifest.yaml", manifest)
     code_hash = sha256_file(hdir / "materializations" / "autogluon-001.py")
     run_dir = project_dir / "runs" / "20260101T000000-test"
     node_dir = run_dir / "artifacts" / "20260101T000001-node"
+    branch_node_dir = run_dir / "artifacts" / "20260101T000002-branch"
+    failed_root_dir = run_dir / "artifacts" / "20260101T000003-root-failed"
     node_dir.mkdir(parents=True)
+    branch_node_dir.mkdir(parents=True)
+    failed_root_dir.mkdir(parents=True)
     write_yaml(run_dir / "run.yaml", {"run_id": run_dir.name})
     write_yaml(
         node_dir / "node.start.yaml",
@@ -196,6 +210,61 @@ def test_reindex_rebuilds_revision_tables(tmp_path: Path) -> None:
             "metric": 0.8,
         },
     )
+    write_yaml(
+        branch_node_dir / "node.start.yaml",
+        {
+            "run_id": run_dir.name,
+            "step": 2,
+            "kind": "branch",
+            "branch_id": "B000001",
+            "mode": "autogluon",
+            "profile_id": "autogluon-root-start-v1",
+            "created_at": "2026-01-01T00:00:20",
+        },
+    )
+    write_yaml(branch_node_dir / "failed.yaml", {"created_at": "2026-01-01T00:00:25", "status": "failed"})
+    write_yaml(
+        branch_node_dir / "01-branch.yaml",
+        {
+            "schema_version": 1,
+            "branch_id": "B000001",
+            "mode": "autogluon",
+            "components": [
+                {
+                    "role": "source",
+                    "source_type": "hypothesis",
+                    "source_id": "000001",
+                    "mode": "autogluon",
+                    "file": "autogluon-002.py",
+                    "code_hash": component_hash,
+                    "path": "hypotheses/000001/materializations/autogluon-002.py",
+                }
+            ],
+        },
+    )
+    write_yaml(
+        failed_root_dir / "node.start.yaml",
+        {
+            "run_id": run_dir.name,
+            "step": 3,
+            "kind": "root",
+            "hypothesis_id": "000001",
+            "mode": "autogluon",
+            "profile_id": "autogluon-root-start-v1",
+            "created_at": "2026-01-01T00:00:30",
+        },
+    )
+    write_yaml(
+        failed_root_dir / "failed.yaml",
+        {
+            "created_at": "2026-01-01T00:00:35",
+            "hypothesis_id": "000001",
+            "mode": "autogluon",
+            "profile_id": "autogluon-root-start-v1",
+            "code_hash": component_hash,
+            "status": "failed",
+        },
+    )
 
     reindex_project(project_dir, project_dir / "tml.db")
 
@@ -208,9 +277,25 @@ def test_reindex_rebuilds_revision_tables(tmp_path: Path) -> None:
         revisions = conn.execute(
             "SELECT hypothesis_id, revision, path FROM hypothesis_revisions ORDER BY revision"
         ).fetchall()
+        run_components = conn.execute(
+            "SELECT node_id, source_id, file, code_hash FROM run_components WHERE source_id='000001'"
+        ).fetchall()
+    status_rows = revision_status_rows(
+        project_dir,
+        hypothesis_id="000001",
+        mode="autogluon",
+        profile_id="autogluon-root-start-v1",
+    )
     assert [(row["hypothesis_revision"], row["materialization_file"], row["metric"]) for row in evaluations] == [
-        (2, "autogluon-001.py", 0.8)
+        (2, "autogluon-001.py", 0.8),
+        (2, "autogluon-002.py", None),
     ]
+    assert [(row["node_id"], row["source_id"], row["file"], row["code_hash"]) for row in run_components] == [
+        ("20260101T000002-branch", "000001", "autogluon-002.py", component_hash)
+    ]
+    component_rows = [row for row in status_rows if row["materialization_file"] == "autogluon-002.py"]
+    assert component_rows[0]["component_status"] == "failed"
+    assert component_rows[0]["component_statuses"] == "failed"
     assert [(row["hypothesis_id"], row["revision"]) for row in revisions] == [("000000", 1), ("000001", 1), ("000001", 2)]
 
 
@@ -283,8 +368,11 @@ def _revision_payload(hypothesis_id: str, revision: int) -> dict[str, object]:
     }
 
 
-def _write_group_code(path: Path) -> None:
-    path.write_text(_group_code(), encoding="utf-8")
+def _write_group_code(path: Path, *, suffix: str = "") -> None:
+    text = _group_code()
+    if suffix:
+        text += f"\n{suffix}\n"
+    path.write_text(text, encoding="utf-8")
 
 
 def _group_code() -> str:

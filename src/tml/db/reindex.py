@@ -35,6 +35,7 @@ def reindex_project(project_dir: Path, db_path: Path) -> dict[str, int]:
             "materializations",
             "branches",
             "branch_components",
+            "run_components",
             "branch_edges",
             "runs",
             "nodes",
@@ -248,6 +249,7 @@ def _index_runs(conn, project_dir: Path) -> None:
             created_at = start.get("created_at")
             finished_at = done.get("created_at") or failed.get("created_at")
             identity = _resolve_node_identity(conn, start=start, done=done, failed=failed, manifest=manifest)
+            branch_payload = read_yaml(node_dir / "01-branch.yaml")
             conn.execute(
                 """
                 INSERT INTO nodes(
@@ -293,10 +295,17 @@ def _index_runs(conn, project_dir: Path) -> None:
                         identity["branch_id"],
                         identity["mode"],
                         identity["profile_id"],
-                        manifest.get("code_hash"),
+                        identity["code_hash"],
                         manifest.get("metric"),
                         status,
                     ),
+                )
+            if str(identity["kind"]) == "branch" and isinstance(branch_payload, dict):
+                _index_run_components(
+                    conn,
+                    node_id=node_id,
+                    branch_id=str(branch_payload.get("branch_id") or identity["branch_id"] or ""),
+                    components=branch_payload.get("components"),
                 )
             for artifact in sorted(node_dir.glob("**/*")):
                 if artifact.is_file():
@@ -313,11 +322,49 @@ def _index_runs(conn, project_dir: Path) -> None:
                     manifest=manifest,
                     status=status,
                     metric=manifest.get("metric"),
-                    code_hash=manifest.get("code_hash"),
+                    code_hash=identity["code_hash"],
                     finished_at=finished_at,
                     run_seconds=_elapsed_seconds(created_at, finished_at),
                 ),
             )
+
+
+def _index_run_components(conn, *, node_id: str, branch_id: str, components: Any) -> None:
+    if not isinstance(components, list):
+        return
+    for component in components:
+        if not isinstance(component, dict):
+            continue
+        conn.execute(
+            """
+            INSERT INTO run_components(
+              node_id, branch_id, role, source_type, source_id, mode, file, code_hash, path
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                node_id,
+                branch_id,
+                _component_text(component, "role"),
+                _component_text(component, "source_type"),
+                _component_source_id(component),
+                _component_text(component, "mode"),
+                _component_text(component, "file"),
+                _component_text(component, "code_hash"),
+                _component_text(component, "path"),
+            ),
+        )
+
+
+def _component_text(component: dict[str, Any], key: str) -> str:
+    return str(component.get(key) or "")
+
+
+def _component_source_id(component: dict[str, Any]) -> str:
+    value = str(component.get("source_id") or "")
+    if str(component.get("source_type") or "") == "hypothesis" and value.isdigit():
+        return value.zfill(6)
+    return value
 
 
 def _resolve_node_identity(
@@ -346,7 +393,7 @@ def _resolve_node_identity(
         or manifest.get("materialization_file")
     )
 
-    code_hash = manifest.get("code_hash")
+    code_hash = manifest.get("code_hash") or failed.get("code_hash") or done.get("code_hash") or start.get("code_hash")
     if code_hash and str(kind) == "root" and hypothesis_id and mode and (not materialization_file or not hypothesis_revision):
         row = conn.execute(
             """
@@ -382,6 +429,7 @@ def _resolve_node_identity(
         "branch_id": branch_id,
         "mode": mode,
         "profile_id": profile_id,
+        "code_hash": code_hash,
     }
 
 

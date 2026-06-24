@@ -78,6 +78,22 @@ def migrate(db_path: Path) -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS run_components (
+              node_id TEXT NOT NULL,
+              branch_id TEXT,
+              role TEXT NOT NULL,
+              source_type TEXT NOT NULL,
+              source_id TEXT NOT NULL,
+              mode TEXT NOT NULL,
+              file TEXT NOT NULL,
+              code_hash TEXT NOT NULL,
+              path TEXT NOT NULL,
+              PRIMARY KEY (node_id, role, source_type, source_id, mode, file)
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_submissions_source_sha256
             ON submissions(source_submission_sha256)
             """

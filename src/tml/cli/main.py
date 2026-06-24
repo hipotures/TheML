@@ -2046,18 +2046,15 @@ def _print_root_revision_status(project_dir: Path, *, hypothesis_id: str, mode: 
     table.add_column("S", justify="center", no_wrap=True)
     table.add_column("Hypothesis file", no_wrap=True)
     table.add_column("Mat file", no_wrap=True)
-    table.add_column("Mat state", no_wrap=True)
     table.add_column("Score", justify="right", no_wrap=True)
     table.add_column("Change", overflow="fold", min_width=24, ratio=1)
     for row in rows:
         materialization_file = str(row.get("materialization_file") or "none")
-        mat_state = _revision_materialization_state(row)
         table.add_row(
             str(row.get("revision") or ""),
             _revision_status_icon(row),
             Path(str(row.get("hypothesis_file") or "")).name,
             materialization_file,
-            mat_state,
             _format_score(row.get("metric")) or "-",
             str(row.get("change_summary") or ("initial" if int(row.get("revision") or 0) == 1 else "")),
         )
@@ -2068,24 +2065,13 @@ def _revision_status_icon(row: dict[str, object]) -> Text:
     evaluation_status = str(row.get("evaluation_status") or "")
     if evaluation_status:
         return _run_status_text(evaluation_status)
+    component_status = str(row.get("component_status") or "")
+    if component_status:
+        return _run_status_text(component_status)
     if row.get("materialization_file"):
         materialization_status = str(row.get("materialization_status") or "")
         return Text("⌘", style="bold yellow" if materialization_status == "fixed" else "cyan")
     return Text("◇", style="dim")
-
-
-def _revision_materialization_state(row: dict[str, object]) -> str:
-    if not row.get("materialization_file"):
-        return "missing"
-    evaluation_status = str(row.get("evaluation_status") or "")
-    if evaluation_status:
-        return evaluation_status
-    materialization_status = str(row.get("materialization_status") or "")
-    if materialization_status in {"bug", "failed", "fixed"}:
-        return materialization_status
-    if bool(row.get("active")):
-        return "active"
-    return "-"
 
 
 def _root_materialization_row(db_row: dict[str, object]) -> list[object]:
@@ -2694,6 +2680,11 @@ def _root_run_row(
         score = _format_score(db_row.get("metric"))
         node = str(db_row.get("node_id") or "")
         run_duration = _seconds_text(db_row.get("run_seconds"))
+    elif db_row.get("component_status"):
+        status = _run_status_text(str(db_row.get("component_status") or ""))
+        score = ""
+        node = str(db_row.get("component_node_id") or "")
+        run_duration = _seconds_text(db_row.get("component_run_seconds"))
     elif db_row.get("code_hash"):
         materialization_status = str(db_row.get("materialization_status") or "")
         status = Text("⌘", style="bold yellow" if materialization_status == "fixed" else "cyan")

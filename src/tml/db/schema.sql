@@ -93,6 +93,19 @@ CREATE TABLE IF NOT EXISTS branch_components (
   PRIMARY KEY (branch_id, role, source_type, source_id, mode, file)
 );
 
+CREATE TABLE IF NOT EXISTS run_components (
+  node_id TEXT NOT NULL,
+  branch_id TEXT,
+  role TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  file TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  path TEXT NOT NULL,
+  PRIMARY KEY (node_id, role, source_type, source_id, mode, file)
+);
+
 CREATE TABLE IF NOT EXISTS branch_edges (
   branch_id TEXT NOT NULL,
   parent_kind TEXT NOT NULL,
