@@ -870,42 +870,74 @@ def hypothesis_records(project_dir: Path) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
-def root_hypothesis_rows(project_dir: Path) -> list[dict[str, Any]]:
+def root_hypothesis_rows(project_dir: Path, *, mode: str | None = None, profile_id: str | None = None) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
-    sql = """
+    complete_filters = ["e.kind='root'", "e.status='complete'", "e.metric IS NOT NULL"]
+    failed_filters = ["e.kind='root'", "e.status='failed'"]
+    materialization_filters = ["m.hypothesis_id=h.hypothesis_id", "m.status IN ('active', 'fixed')"]
+    params: list[Any] = []
+    if mode:
+        complete_filters.append("e.mode=?")
+        failed_filters.append("e.mode=?")
+        materialization_filters.append("m.mode=?")
+        params.append(mode)
+    if profile_id:
+        complete_filters.append("e.profile_id=?")
+        failed_filters.append("e.profile_id=?")
+        params.append(profile_id)
+    complete_where = " AND ".join(complete_filters)
+    failed_where = " AND ".join(failed_filters)
+    materialization_where = " AND ".join(materialization_filters)
+    sql = f"""
+        WITH best_eval AS (
+          SELECT *
+          FROM (
+            SELECT
+              e.hypothesis_id,
+              e.hypothesis_revision,
+              e.materialization_file,
+              e.metric,
+              ROW_NUMBER() OVER (
+                PARTITION BY e.hypothesis_id
+                ORDER BY e.metric DESC, e.node_id DESC
+              ) AS rn
+            FROM evaluations e
+            WHERE {complete_where}
+          )
+          WHERE rn=1
+        )
         SELECT
           h.*,
+          best_eval.hypothesis_revision AS best_revision,
+          best_eval.materialization_file AS best_materialization_file,
+          best_eval.metric AS best_score,
           CASE
             WHEN h.enabled=0 THEN '⊘'
+            WHEN best_eval.metric IS NOT NULL THEN '▶'
             WHEN EXISTS (
               SELECT 1
-              FROM materializations m
-              JOIN evaluations e ON e.hypothesis_id=m.hypothesis_id
-                AND e.mode=m.mode AND e.code_hash=m.code_hash
-              WHERE m.hypothesis_id=h.hypothesis_id
-                AND m.active=1
-                AND e.status='complete'
-            ) THEN '▶'
-            WHEN EXISTS (
-              SELECT 1
-              FROM materializations m
-              JOIN evaluations e ON e.hypothesis_id=m.hypothesis_id
-                AND e.mode=m.mode AND e.code_hash=m.code_hash
-              WHERE m.hypothesis_id=h.hypothesis_id
-                AND m.active=1
-                AND e.status='failed'
+              FROM evaluations e
+              WHERE {failed_where}
+                AND e.hypothesis_id=h.hypothesis_id
             ) THEN '⚠'
             WHEN EXISTS (
               SELECT 1 FROM materializations m
-              WHERE m.hypothesis_id=h.hypothesis_id AND m.active=1
+              WHERE {materialization_where}
             ) THEN '⌘'
             ELSE '◇'
           END AS status_icon
         FROM hypotheses h
+        LEFT JOIN best_eval ON best_eval.hypothesis_id=h.hypothesis_id
         ORDER BY h.hypothesis_id
     """
+    if mode:
+        params.append(mode)
+    if profile_id:
+        params.append(profile_id)
+    if mode:
+        params.append(mode)
     with connect(db_path) as conn:
-        rows = conn.execute(sql).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
 
 

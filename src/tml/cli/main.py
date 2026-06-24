@@ -100,6 +100,8 @@ kaggle_app = typer.Typer(no_args_is_help=True)
 ROOT_HYPOTHESIS_COLUMNS = [
     {"key": "id", "label": "ID", "style": "bold", "no_wrap": True},
     {"key": "status", "label": "S", "justify": "center", "no_wrap": True},
+    {"key": "revision", "label": "Rev", "justify": "right", "no_wrap": True},
+    {"key": "score", "label": "Score", "justify": "right", "no_wrap": True},
     {"key": "created_at", "label": "Created", "no_wrap": True},
     {"key": "model", "label": "Model", "no_wrap": True},
     {"key": "reasoning_tokens", "label": "Res/Tokens", "justify": "right", "no_wrap": True},
@@ -257,10 +259,33 @@ def tree_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@root_app.command("status", context_settings=EXTRA, help="Show ROOT progress, counts, and hypothesis table.")
-def root_status_cmd(ctx: typer.Context) -> None:
-    _ = ctx
+@root_app.command(
+    "status",
+    context_settings=EXTRA,
+    help=(
+        "Show ROOT progress, counts, and hypothesis table.\n\n"
+        "Accepted key=value parameters:\n"
+        "  json=true          Print machine-readable JSON.\n"
+        "  json_output=true   Alias for json=true.\n\n"
+        "Options:\n"
+        "  --json             Print machine-readable JSON.\n"
+        "  --json-output      Alias for --json."
+    ),
+)
+def root_status_cmd(
+    ctx: typer.Context,
+    json_flag: Annotated[bool, typer.Option("--json", help="Print machine-readable JSON.")] = False,
+    json_output_flag: Annotated[bool, typer.Option("--json-output", help="Alias for --json.")] = False,
+) -> None:
     try:
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"json", "json_output"}, "tml root status")
+        json_output = (
+            json_flag
+            or json_output_flag
+            or _bool(overrides.get("json", False))
+            or _bool(overrides.get("json_output", False))
+        )
         ref = active_project_ref()
         ensure_root_baseline(ref.path)
         config = load_project_config(ref.path)
@@ -269,6 +294,18 @@ def root_status_cmd(ctx: typer.Context) -> None:
         profile_id = active_profile_id(config, mode)
         active_hash = profile_hash(ref.path, mode, profile_id)
         best = best_score(ref.path)
+        if json_output:
+            _print_root_status_json(
+                ref.slug,
+                config=config,
+                mode=mode,
+                profile_id=profile_id,
+                profile_hash_value=active_hash,
+                counts=counts,
+                best=best,
+                project_dir=ref.path,
+            )
+            return
         console.print(f"Active project: {ref.slug}")
         console.print(f"Target ROOT count: {config.get('root', {}).get('target_count', 20)}")
         console.print(f"Active mode: {mode}")
@@ -278,7 +315,7 @@ def root_status_cmd(ctx: typer.Context) -> None:
         console.print(f"Evaluated: {counts['evaluated']}")
         console.print(f"Incomplete nodes: {counts['incomplete']}")
         console.print(f"Best ROOT score: {f'{best:.6f}' if best is not None else 'n/a'}")
-        _print_existing_root_hypotheses(ref.path, created_ids=set())
+        _print_existing_root_hypotheses(ref.path, created_ids=set(), mode=mode, profile_id=profile_id)
     except Exception as exc:
         _abort(exc)
 
@@ -2035,7 +2072,13 @@ def _print_generated_hypotheses_json(project_dir: Path, created: list[GeneratedH
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
-def _print_existing_root_hypotheses(project_dir: Path, *, created_ids: set[str]) -> None:
+def _print_existing_root_hypotheses(
+    project_dir: Path,
+    *,
+    created_ids: set[str],
+    mode: str | None = None,
+    profile_id: str | None = None,
+) -> None:
     table = Table(title="Existing ROOT hypotheses", box=box.SIMPLE_HEAVY)
     for column in ROOT_HYPOTHESIS_COLUMNS:
         table.add_column(
@@ -2049,7 +2092,7 @@ def _print_existing_root_hypotheses(project_dir: Path, *, created_ids: set[str])
         )
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
     rows = []
-    for db_row in root_hypothesis_rows(project_dir):
+    for db_row in root_hypothesis_rows(project_dir, mode=mode, profile_id=profile_id):
         row = _root_hypothesis_row(db_row, created_ids=created_ids)
         if not row:
             continue
@@ -2071,6 +2114,33 @@ def _print_existing_root_hypotheses(project_dir: Path, *, created_ids: set[str])
         table.add_row(*row, style=_zebra_style(displayed_index, extra="bold"))
         displayed_index += 1
     console.print(table)
+
+
+def _print_root_status_json(
+    project_slug: str,
+    *,
+    config: dict[object, object],
+    mode: str,
+    profile_id: str,
+    profile_hash_value: str,
+    counts: dict[str, int],
+    best: float | None,
+    project_dir: Path,
+) -> None:
+    payload = {
+        "project": project_slug,
+        "target_root_count": config.get("root", {}).get("target_count", 20) if isinstance(config.get("root"), dict) else 20,
+        "mode": mode,
+        "profile_id": profile_id,
+        "profile_hash": profile_hash_value,
+        "counts": counts,
+        "best_root_score": best,
+        "hypotheses": [
+            _root_hypothesis_json_row(row, created_ids=set())
+            for row in root_hypothesis_rows(project_dir, mode=mode, profile_id=profile_id)
+        ],
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def _print_root_materializations(
@@ -2836,9 +2906,15 @@ def _root_hypothesis_json_row(db_row: dict[str, object], *, created_ids: set[str
     row = _root_hypothesis_row(db_row, created_ids=created_ids)
     if not row:
         return {}
+    status = row.get("status", "")
+    if isinstance(status, Text):
+        status = status.plain
     return {
         "is_new": bool(row["is_new"]),
-        **{str(column["key"]): row.get(str(column["key"]), "") for column in ROOT_HYPOTHESIS_COLUMNS},
+        **{
+            str(column["key"]): status if str(column["key"]) == "status" else row.get(str(column["key"]), "")
+            for column in ROOT_HYPOTHESIS_COLUMNS
+        },
     }
 
 
@@ -2860,6 +2936,8 @@ def _root_hypothesis_row(db_row: dict[str, object], *, created_ids: set[str]) ->
         "id": hypothesis_id,
         "is_new": hypothesis_id in created_ids,
         "status": _hypothesis_status_text(str(db_row.get("status_icon") or "")),
+        "revision": str(db_row.get("best_revision") or ""),
+        "score": _format_score(db_row.get("best_score")),
         "created_at": _short_datetime(db_row.get("created_at")),
         "model": str(db_row.get("model") or ""),
         "reasoning_tokens": _token_summary(db_row),
