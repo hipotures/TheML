@@ -1,28 +1,19 @@
-Edit the hypothesis JSON content shown below. It describes one deterministic
-tabular feature set for the model. Improve that content without changing it into
-a different feature-set idea.
-
 {% set task_context_heading = "Project Context" %}
 {% include "blocks/task-context.md.j2" %}
 
 # Instruction
 
-You are editing the selected hypothesis content shown in this prompt, not
-writing code and not creating a new feature group.
+You are creating the next revision of the selected ROOT hypothesis.
 
-Input:
+You are not writing code. You are not creating a new feature group.
 
-- one selected ROOT hypothesis, identified by `Hypothesis ID`;
-- all previous numbered versions of that same hypothesis.
+Return a revised hypothesis using exactly the same JSON schema as a newly
+generated hypothesis. Keep `group_name` exactly the same and keep the same
+feature-group idea. Improve the hypothesis text, especially `strategy`, so it is
+more concrete, deterministic, robust, and easier to materialize.
 
-Return the next version of the same hypothesis using the exact same JSON schema
-as a newly generated hypothesis. Keep the same `group_name` and semantic goal,
-but make the hypothesis more useful by changing its content. Focus on making
-`strategy` more concrete, deterministic, robust, or better aligned with the
-project metric.
-
-The next version should answer: "How should this same feature group be defined
-better than the previous version?"
+Use previous revisions only as context. Do not merge them mechanically. The
+output must be one coherent revised hypothesis.
 
 # Selected Hypothesis
 
@@ -38,16 +29,6 @@ Previous versions:
   expected_signal={{ revision.get("expected_signal") }}
   risk={{ revision.get("risk") }}
 {% endfor %}
-
-# Rules
-
-- Keep the same semantic feature-group idea.
-- Create a clearer or stronger deterministic strategy for that same idea.
-- Keep `group_name` exactly the same.
-- Keep `depends_on` compatible with previous revisions.
-- Prefer keeping `family` the same.
-- Change `strategy` only when there is a concrete deterministic improvement.
-- Do not output code.
 
 {% include "blocks/output-contract.md.j2" %}
 
