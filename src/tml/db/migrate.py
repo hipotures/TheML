@@ -20,6 +20,7 @@ def migrate(db_path: Path) -> None:
         _ensure_column(conn, "hypotheses", "web_search_has_results", "INTEGER NOT NULL DEFAULT 0")
         _ensure_column(conn, "materializations", "model", "TEXT")
         _ensure_column(conn, "materializations", "hypothesis_revision", "INTEGER")
+        _ensure_column(conn, "materializations", "created_at", "TEXT")
         _ensure_column(conn, "materializations", "status", "TEXT NOT NULL DEFAULT 'active'")
         _ensure_column(conn, "materializations", "active", "INTEGER NOT NULL DEFAULT 1")
         _ensure_column(conn, "materializations", "source_node_id", "TEXT")
