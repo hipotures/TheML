@@ -12,7 +12,7 @@ from tml.hypotheses.revisions import (
     migrate_root_revisions,
     revision_records,
 )
-from tml.utils.hashing import sha256_file
+from tml.utils.hashing import sha256_file, sha256_text
 from tml.utils.yaml_io import read_yaml
 
 from .connect import connect
@@ -154,6 +154,48 @@ def _index_hypotheses(conn, project_dir: Path) -> None:
                     hypothesis_revision,
                     "active" if active else "inactive",
                     1 if active else 0,
+                    mat_summary.get("model"),
+                    mat_summary.get("reasoning_tokens"),
+                    mat_summary.get("total_tokens"),
+                    mat_summary.get("generation_seconds"),
+                ),
+            )
+        for error_path in sorted((path.parent / "materializations").glob("*.error.txt")):
+            stem = error_path.name.removesuffix(".error.txt")
+            file_name = f"{stem}.py"
+            if (error_path.parent / file_name).exists():
+                continue
+            mode = file_name.split("-", 1)[0]
+            request_path = error_path.parent / f"{stem}.request.json"
+            response_path = error_path.parent / f"{stem}.response.json"
+            response_text_path = error_path.parent / f"{stem}.response.md"
+            request_payload = read_yaml(request_path)
+            metadata = request_payload.get("metadata") if isinstance(request_payload.get("metadata"), dict) else {}
+            raw_revision = metadata.get("hypothesis_revision")
+            if raw_revision is None:
+                rel_request_path = request_path.relative_to(project_dir)
+                raise ValueError(f"Missing hypothesis_revision metadata for failed materialization: {rel_request_path}")
+            try:
+                hypothesis_revision = int(raw_revision)
+            except (TypeError, ValueError) as exc:
+                rel_request_path = request_path.relative_to(project_dir)
+                raise ValueError(f"Invalid hypothesis_revision metadata for failed materialization: {rel_request_path}") from exc
+            response_text = response_text_path.read_text(encoding="utf-8", errors="replace") if response_text_path.exists() else error_path.read_text(encoding="utf-8", errors="replace")
+            mat_summary = _run_summary(request_path, response_path)
+            conn.execute(
+                """
+                INSERT INTO materializations(
+                  hypothesis_id, mode, file, code_hash, hypothesis_revision, status, active, model,
+                  reasoning_tokens, total_tokens, generation_seconds
+                )
+                VALUES (?, ?, ?, ?, ?, 'failed', 0, ?, ?, ?, ?)
+                """,
+                (
+                    hid,
+                    mode,
+                    file_name,
+                    sha256_text(response_text),
+                    hypothesis_revision,
                     mat_summary.get("model"),
                     mat_summary.get("reasoning_tokens"),
                     mat_summary.get("total_tokens"),

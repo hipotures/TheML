@@ -1039,6 +1039,8 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
         params.append(int(revision))
     sql += " ORDER BY hypothesis_id"
     validation_sql = """
+        SELECT *
+        FROM (
         SELECT
           h.hypothesis_id,
           h.path,
@@ -1052,7 +1054,11 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
           NULL AS step,
           NULL AS node_path,
           NULL AS finished_at,
-          NULL AS run_seconds
+          NULL AS run_seconds,
+          ROW_NUMBER() OVER (
+            PARTITION BY h.hypothesis_id, m.mode, COALESCE(m.hypothesis_revision, 1)
+            ORDER BY m.file DESC
+          ) AS rn
         FROM hypotheses h
         JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
         WHERE m.status='failed' AND m.active=0 AND h.hypothesis_id<>'000000'
@@ -1064,15 +1070,17 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
               AND ce.status='complete'
               AND COALESCE(ce.hypothesis_revision, m.hypothesis_revision, 1)=COALESCE(m.hypothesis_revision, 1)
           )
+        )
+        WHERE rn=1
     """
     validation_params: list[Any] = [mode]
     if hypothesis_id:
-        validation_sql += " AND h.hypothesis_id=?"
+        validation_sql += " AND hypothesis_id=?"
         validation_params.append(hypothesis_id.zfill(6))
     if revision is not None:
-        validation_sql += " AND COALESCE(m.hypothesis_revision, 1)=?"
+        validation_sql += " AND COALESCE(hypothesis_revision, 1)=?"
         validation_params.append(int(revision))
-    validation_sql += " ORDER BY h.hypothesis_id, m.file"
+    validation_sql += " ORDER BY hypothesis_id, file"
     with connect(db_path) as conn:
         rows = [dict(row) for row in conn.execute(sql, params).fetchall()]
         rows.extend(dict(row) for row in conn.execute(validation_sql, validation_params).fetchall())

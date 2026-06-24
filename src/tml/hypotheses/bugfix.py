@@ -22,7 +22,7 @@ from tml.utils.yaml_io import read_yaml
 
 from .baseline import ensure_root_baseline
 from .materialize import _parse_code, _update_manifest
-from .revisions import load_revision, materialization_revision
+from .revisions import load_revision
 
 
 @dataclass(frozen=True)
@@ -110,7 +110,10 @@ def bugfix_failed_materializations(
         hdir = _candidate_hypothesis_dir(project_dir, record)
         mat_dir = hdir / "materializations"
         source = mat_dir / str(record["file"])
-        source_revision = materialization_revision(hdir, mode, source.name)
+        raw_revision = record.get("hypothesis_revision")
+        if raw_revision is None:
+            raise ValueError(f"Missing hypothesis_revision for bugfix candidate {hid}/{source.name}")
+        source_revision = int(raw_revision)
         reserved = reserved_targets.setdefault(hid, set())
         target = _next_materialization_path(project_dir, mat_dir, mode, hid, reserved=reserved)
         reserved.add(target.name)
@@ -154,6 +157,7 @@ def bugfix_failed_materializations(
                 metadata={
                     "mode": mode,
                     "hypothesis_id": hid,
+                    "hypothesis_revision": source_revision,
                     "bugfix_source_file": source.name,
                     "bugfix_source_node_id": bugfix_context["node_id"],
                 },
