@@ -987,7 +987,7 @@ def pending_branch_run_candidates(project_dir: Path, *, mode: str, profile_id: s
     return [dict(row) for row in rows]
 
 
-def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = None) -> list[dict[str, Any]]:
+def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = None, revision: int | None = None) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
     sql = """
         SELECT *
@@ -998,6 +998,7 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
             h.summary,
             m.file,
             m.code_hash,
+            m.hypothesis_revision,
             m.status AS materialization_status,
             n.node_id,
             n.run_id,
@@ -1010,9 +1011,11 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
               ORDER BY COALESCE(n.finished_at, n.created_at, '') DESC, n.step DESC
             ) AS rn
           FROM hypotheses h
-          JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=? AND m.active=1
+          JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
           JOIN evaluations e ON e.hypothesis_id=h.hypothesis_id
             AND e.mode=m.mode AND e.code_hash=m.code_hash AND e.status='failed'
+            AND COALESCE(e.materialization_file, m.file)=m.file
+            AND COALESCE(e.hypothesis_revision, m.hypothesis_revision, 1)=COALESCE(m.hypothesis_revision, 1)
           JOIN nodes n ON n.node_id=e.node_id
         )
         WHERE rn=1 AND hypothesis_id<>'000000'
@@ -1021,6 +1024,9 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
     if hypothesis_id:
         sql += " AND hypothesis_id=?"
         params.append(hypothesis_id.zfill(6))
+    if revision is not None:
+        sql += " AND COALESCE(hypothesis_revision, 1)=?"
+        params.append(int(revision))
     sql += " ORDER BY hypothesis_id"
     validation_sql = """
         SELECT
@@ -1029,6 +1035,7 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
           h.summary,
           m.file,
           m.code_hash,
+          m.hypothesis_revision,
           m.status AS materialization_status,
           NULL AS node_id,
           NULL AS run_id,
@@ -1044,6 +1051,9 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
     if hypothesis_id:
         validation_sql += " AND h.hypothesis_id=?"
         validation_params.append(hypothesis_id.zfill(6))
+    if revision is not None:
+        validation_sql += " AND COALESCE(m.hypothesis_revision, 1)=?"
+        validation_params.append(int(revision))
     validation_sql += " ORDER BY h.hypothesis_id, m.file"
     with connect(db_path) as conn:
         rows = [dict(row) for row in conn.execute(sql, params).fetchall()]

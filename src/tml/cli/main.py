@@ -512,6 +512,8 @@ def root_materialize_cmd(ctx: typer.Context) -> None:
         "  mode=<name>        Materialization mode; defaults to the active mode.\n"
         "  hypothesis=<id>    Fix only one hypothesis.\n"
         "  id=<id>            Alias for hypothesis=<id>.\n"
+        "  revision=<N>       Fix only one hypothesis revision.\n"
+        "  rev=<N>            Alias for revision=<N>.\n"
         "  yes=true           Skip the confirmation prompt."
     ),
 )
@@ -522,15 +524,16 @@ def root_bugfix_cmd(ctx: typer.Context) -> None:
         status_only = _command_status_requested(ctx.args, "tml root bugfix")
         config = load_project_config(ref.path)
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"mode", "hypothesis", "id", "yes"}, "tml root bugfix")
+        _validate_override_keys(overrides, {"mode", "hypothesis", "id", "revision", "rev", "yes"}, "tml root bugfix")
         mode = str(overrides.get("mode") or active_mode(config))
         hypothesis_id = overrides.get("hypothesis") or overrides.get("id")
         hypothesis_id_text = _optional_text(hypothesis_id)
+        revision = _revision_override(overrides)
         if status_only:
             _print_root_materializations(ref.path, mode=mode, created_count=None, hypothesis_id=hypothesis_id_text)
             return
         assume_yes = _bool(overrides.get("yes", False))
-        plan = root_bugfix_plan(ref.path, mode=mode, hypothesis_id=hypothesis_id_text)
+        plan = root_bugfix_plan(ref.path, mode=mode, hypothesis_id=hypothesis_id_text, revision=revision)
         _print_root_bugfix_plan(ref.slug, plan, hypothesis_id=hypothesis_id_text)
         if plan.iteration_count == 0:
             console.print("No failed ROOT materializations to fix.")
@@ -543,6 +546,7 @@ def root_bugfix_cmd(ctx: typer.Context) -> None:
             ref.path,
             mode=mode,
             hypothesis_id=hypothesis_id_text,
+            revision=revision,
         )
         _print_root_materializations(ref.path, mode=mode, created_count=created, hypothesis_id=hypothesis_id_text)
     except Exception as exc:
@@ -615,7 +619,7 @@ def _materialize_with_progress(project_dir: Path, *, mode: str, hypothesis_id: s
     return created
 
 
-def _bugfix_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | None) -> int:
+def _bugfix_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | None, revision: int | None = None) -> int:
     state: dict[str, object] = {
         "message": "Preparing bugfix...",
         "timeout": 1,
@@ -633,7 +637,13 @@ def _bugfix_with_progress(project_dir: Path, *, mode: str, hypothesis_id: str | 
 
     def run() -> None:
         try:
-            created = bugfix_failed_materializations(project_dir, mode=mode, hypothesis_id=hypothesis_id, progress=report)
+            created = bugfix_failed_materializations(
+                project_dir,
+                mode=mode,
+                hypothesis_id=hypothesis_id,
+                revision=revision,
+                progress=report,
+            )
             with lock:
                 state["created"] = created
         except Exception as exc:  # pragma: no cover - re-raised in caller thread

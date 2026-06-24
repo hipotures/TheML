@@ -47,6 +47,7 @@ def root_bugfix_plan(
     project_dir: Path,
     mode: str,
     hypothesis_id: str | None = None,
+    revision: int | None = None,
 ) -> RootBugfixPlan:
     upsert_project(project_dir)
     ensure_root_baseline(project_dir)
@@ -55,7 +56,7 @@ def root_bugfix_plan(
     providers = repo_providers_for_project(project_dir)
     spec = resolve_model_spec(model, providers)
     provider_config = {**(spec.provider_config or {}), **role_options}
-    candidates = bugfix_candidates(project_dir, mode, hypothesis_id=hypothesis_id)
+    candidates = bugfix_candidates(project_dir, mode, hypothesis_id=hypothesis_id, revision=revision)
     source_files: list[str] = []
     target_files: list[str] = []
     hypothesis_ids: list[str] = []
@@ -87,6 +88,7 @@ def bugfix_failed_materializations(
     project_dir: Path,
     mode: str,
     hypothesis_id: str | None = None,
+    revision: int | None = None,
     progress: Callable[[str, int | None], None] | None = None,
 ) -> int:
     upsert_project(project_dir)
@@ -95,7 +97,7 @@ def bugfix_failed_materializations(
     model, role_options = resolve_role_model(models, "materializations", fallback_role="code")
     providers = repo_providers_for_project(project_dir)
     timeout_seconds = int(role_options.get("timeout_seconds") or 900)
-    candidates = bugfix_candidates(project_dir, mode, hypothesis_id=hypothesis_id)
+    candidates = bugfix_candidates(project_dir, mode, hypothesis_id=hypothesis_id, revision=revision)
     total = len(candidates)
     created = 0
     for index, record in enumerate(candidates, start=1):
