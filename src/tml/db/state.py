@@ -223,9 +223,11 @@ def upsert_failed_materialization(
     file_name: str,
     *,
     code_text: str,
+    hypothesis_revision: int | None = None,
 ) -> None:
     db_path = ensure_project_db(project_dir)
     hid = hdir.name
+    revision = int(hypothesis_revision or materialization_revision(hdir, mode, file_name))
     stem = Path(file_name).stem
     summary = _run_summary(
         hdir / "materializations" / f"{stem}.request.json",
@@ -258,7 +260,7 @@ def upsert_failed_materialization(
                 mode,
                 file_name,
                 sha256_text(code_text),
-                materialization_revision(hdir, mode, file_name),
+                revision,
                 summary.get("model"),
                 summary.get("reasoning_tokens"),
                 summary.get("total_tokens"),

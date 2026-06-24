@@ -110,6 +110,7 @@ def bugfix_failed_materializations(
         hdir = _candidate_hypothesis_dir(project_dir, record)
         mat_dir = hdir / "materializations"
         source = mat_dir / str(record["file"])
+        source_revision = materialization_revision(hdir, mode, source.name)
         reserved = reserved_targets.setdefault(hid, set())
         target = _next_materialization_path(project_dir, mat_dir, mode, hid, reserved=reserved)
         reserved.add(target.name)
@@ -170,12 +171,18 @@ def bugfix_failed_materializations(
                 f"response={_project_path_text(project_dir, response_path)}: {exc}"
             )
             atomic_write_text(mat_dir / f"{target.stem}.error.txt", error_text + "\n")
-            upsert_failed_materialization(project_dir, hdir, mode, target.name, code_text=group_code)
+            upsert_failed_materialization(
+                project_dir,
+                hdir,
+                mode,
+                target.name,
+                code_text=group_code,
+                hypothesis_revision=source_revision,
+            )
             if progress is not None:
                 progress(f"{progress_prefix}: failed validation: {exc}", None)
             continue
         atomic_write_text(target, group_code)
-        source_revision = materialization_revision(hdir, mode, source.name)
         hypothesis = load_revision(hdir, source_revision).payload
         _update_manifest(hdir, mode, target, hypothesis, revision=source_revision)
         upsert_materialization(

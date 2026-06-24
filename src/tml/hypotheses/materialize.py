@@ -199,7 +199,14 @@ def materialize_missing(
                 f"response={_project_path_text(project_dir, response_path)}: {exc}"
             )
             atomic_write_text(mat_dir / f"{target.stem}.error.txt", error_text + "\n")
-            upsert_failed_materialization(project_dir, hdir, mode, target.name, code_text=group_code)
+            upsert_failed_materialization(
+                project_dir,
+                hdir,
+                mode,
+                target.name,
+                code_text=group_code,
+                hypothesis_revision=selected_revision,
+            )
             if progress is not None:
                 progress(f"{progress_prefix}: failed validation: {exc}", None)
             continue
