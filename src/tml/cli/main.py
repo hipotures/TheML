@@ -476,7 +476,8 @@ def root_revise_cmd(ctx: typer.Context) -> None:
             _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={hid})
             return
         if not hid:
-            raise TmlError("Missing required parameter: id=<hypothesis>.")
+            _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id)
+            return
         if "count" not in overrides:
             plan = root_revise_plan(ref.path, hypothesis_id=hid, count=0)
             _print_root_revise_plan(ref.slug, plan)
