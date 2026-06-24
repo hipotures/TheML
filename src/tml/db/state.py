@@ -1396,6 +1396,21 @@ def root_run_rows(
 ) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
     sql = """
+        WITH latest_root_evaluations AS (
+          SELECT *
+          FROM (
+            SELECT
+              e.*,
+              ROW_NUMBER() OVER (
+                PARTITION BY e.hypothesis_id, e.mode, e.profile_id, e.code_hash
+                ORDER BY COALESCE(n.finished_at, n.created_at, '') DESC, n.step DESC, e.node_id DESC
+              ) AS rn
+            FROM evaluations e
+            LEFT JOIN nodes n ON n.node_id=e.node_id
+            WHERE e.kind='root'
+          )
+          WHERE rn=1
+        )
         SELECT
           h.hypothesis_id, h.summary, h.created_at, h.model, h.reasoning_tokens,
           h.total_tokens, h.generation_seconds, h.enabled,
@@ -1404,7 +1419,7 @@ def root_run_rows(
           e.metric
         FROM hypotheses h
         LEFT JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=? AND m.active=1
-        LEFT JOIN evaluations e ON e.hypothesis_id=h.hypothesis_id
+        LEFT JOIN latest_root_evaluations e ON e.hypothesis_id=h.hypothesis_id
           AND e.mode=? AND e.profile_id=? AND e.code_hash=m.code_hash
         LEFT JOIN nodes n ON n.node_id=e.node_id
     """
@@ -1484,6 +1499,21 @@ def solution_tree_root_rows(project_dir: Path, *, mode: str, profile_id: str) ->
     with connect(db_path) as conn:
         rows = conn.execute(
             """
+            WITH latest_root_evaluations AS (
+              SELECT *
+              FROM (
+                SELECT
+                  e.*,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY e.hypothesis_id, e.mode, e.profile_id, e.code_hash
+                    ORDER BY COALESCE(n.finished_at, n.created_at, '') DESC, n.step DESC, e.node_id DESC
+                  ) AS rn
+                FROM evaluations e
+                LEFT JOIN nodes n ON n.node_id=e.node_id
+                WHERE e.kind='root'
+              )
+              WHERE rn=1
+            )
             SELECT
               h.hypothesis_id, h.summary, h.created_at, h.model,
               h.reasoning_tokens, h.total_tokens, h.generation_seconds,
@@ -1493,7 +1523,7 @@ def solution_tree_root_rows(project_dir: Path, *, mode: str, profile_id: str) ->
             FROM hypotheses h
             LEFT JOIN materializations m
               ON m.hypothesis_id=h.hypothesis_id AND m.mode=? AND m.active=1
-            LEFT JOIN evaluations e
+            LEFT JOIN latest_root_evaluations e
               ON e.kind='root'
              AND e.hypothesis_id=h.hypothesis_id
              AND e.mode=?
