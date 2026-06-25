@@ -1,0 +1,40 @@
+{
+  "created_at": "2026-06-26T00:43:24",
+  "cv_score_count": 406,
+  "dataset_csv": "projects/kaggle/playground-series-s6e6/meta_models/datasets/latest/meta_dataset.csv",
+  "dataset_fingerprint": "35b7154634384cc7f0a17eb59f41bebc1e2e64654fac445ae7e67c22755aabd3",
+  "dataset_parquet": "projects/kaggle/playground-series-s6e6/meta_models/datasets/latest/meta_dataset.parquet",
+  "kind": "tml_meta_model_dataset",
+  "missing_fields": {
+    "branch_id": 192,
+    "cv_score": 71,
+    "parent_id": 192,
+    "profile_fold_config": 2,
+    "profile_hash": 0,
+    "profile_seed": 471,
+    "public_score": 437,
+    "root_id": 0
+  },
+  "project_dir": "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6",
+  "public_score_count": 40,
+  "record_count": 477,
+  "schema_version": 1,
+  "source_structures": {
+    "primary": "project SQLite tml.db",
+    "tables": [
+      "nodes",
+      "evaluations",
+      "submissions",
+      "branches",
+      "branch_components",
+      "branch_edges",
+      "hypothesis_revisions",
+      "materializations",
+      "profiles"
+    ],
+    "yaml_fallbacks": [
+      "branches/*/branch.yaml",
+      "hypotheses/*/manifest.yaml"
+    ]
+  }
+}

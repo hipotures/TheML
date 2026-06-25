@@ -1,0 +1,1098 @@
+Training target=public_score path=/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_score/split_models/random_01/AutoGluonModels time_limit=20 presets=medium_quality
+/home/xai/DEV/TheML/.venv/lib/python3.12/site-packages/sklearn/compose/_column_transformer.py:975: FutureWarning: The parameter `force_int_remainder_cols` is deprecated and will be removed in 1.9. It has no effect. Leave it to its default value to avoid this warning.
+  warnings.warn(
+32
+Pytorch Version:    2.9.1+cu128
+CUDA Version:       12.8
+GPU Memory:         GPU 0: 11.59/11.59 GB
+Total GPU Memory:   Free: 11.59 GB, Allocated: 0.00 GB, Total: 11.59 GB
+GPU Count:          1
+Memory Avail:       150.74 GB / 187.58 GB (80.4%)
+Disk Space Avail:   294.68 GB / 3725.72 GB (7.9%)
+===================================================
+Presets specified: ['medium_quality']
+Using hyperparameters preset: hyperparameters='default'
+Beginning AutoGluon training ... Time limit = 20s
+AutoGluon will save models to "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_score/split_models/random_01/AutoGluonModels"
+Train Data Rows:    30
+Train Data Columns: 151
+Label Column:       public_score
+Problem Type:       regression
+Preprocessing data ...
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    154340.03 MB
+	Train Data (Original)  Memory Usage: 0.07 MB (0.0% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 46 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Stage 5 Generators:
+		Fitting DropDuplicatesFeatureGenerator...
+	Useless Original Features (Count: 92): ['mode', 'dataset_fingerprint', 'profile_class_balance', 'profile_use_gpu', 'n_removed_groups_vs_parent', 'has_unseen_group', 'n_unseen_groups', 'known_group_coverage', 'group__hypothesis_000000', 'revision__hypothesis_000000', 'group__hypothesis_000001', 'revision__hypothesis_000001', 'group__hypothesis_000002', 'revision__hypothesis_000002', 'group__hypothesis_000003', 'revision__hypothesis_000003', 'group__hypothesis_000008', 'revision__hypothesis_000008', 'group__hypothesis_000011', 'revision__hypothesis_000011', 'group__hypothesis_000014', 'revision__hypothesis_000014', 'group__hypothesis_000017', 'revision__hypothesis_000017', 'group__hypothesis_000019', 'revision__hypothesis_000019', 'group__hypothesis_000020', 'revision__hypothesis_000020', 'group__hypothesis_000021', 'revision__hypothesis_000021', 'group__hypothesis_000022', 'revision__hypothesis_000022', 'group__hypothesis_000023', 'revision__hypothesis_000023', 'group__hypothesis_000024', 'revision__hypothesis_000024', 'group__hypothesis_000025', 'revision__hypothesis_000025', 'group__hypothesis_000026', 'revision__hypothesis_000026', 'group__hypothesis_000027', 'revision__hypothesis_000027', 'group__hypothesis_000030', 'revision__hypothesis_000030', 'group__hypothesis_000031', 'revision__hypothesis_000031', 'group__hypothesis_000033', 'revision__hypothesis_000033', 'group__hypothesis_000034', 'revision__hypothesis_000034', 'group__hypothesis_000036', 'revision__hypothesis_000036', 'group__hypothesis_000037', 'revision__hypothesis_000037', 'group__hypothesis_000038', 'revision__hypothesis_000038', 'group__hypothesis_000039', 'revision__hypothesis_000039', 'group__hypothesis_000041', 'revision__hypothesis_000041', 'group__hypothesis_000042', 'revision__hypothesis_000042', 'group__hypothesis_000043', 'revision__hypothesis_000043', 'group__hypothesis_000044', 'revision__hypothesis_000044', 'group__hypothesis_000045', 'revision__hypothesis_000045', 'group__hypothesis_000046', 'revision__hypothesis_000046', 'group__hypothesis_000047', 'revision__hypothesis_000047', 'group__hypothesis_000048', 'revision__hypothesis_000048', 'group__hypothesis_000049', 'revision__hypothesis_000049', 'group__hypothesis_000050', 'revision__hypothesis_000050', 'group__hypothesis_000051', 'revision__hypothesis_000051', 'group__hypothesis_000052', 'revision__hypothesis_000052', 'group__hypothesis_000053', 'revision__hypothesis_000053', 'group__hypothesis_000054', 'revision__hypothesis_000054', 'group__hypothesis_000057', 'revision__hypothesis_000057', 'group__hypothesis_000058', 'revision__hypothesis_000058', 'group__hypothesis_000059', 'revision__hypothesis_000059']
+		These features carry no predictive signal and should be manually investigated.
+		This is typically a feature which has the same value for all rows.
+		These features do not need to be present at inference time.
+	Unused Original Features (Count: 25): ['profile_seed', 'profile_time_limit', 'profile_presets', 'profile_validation_strategy', 'profile_fold_config', 'component_group_names', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000007', 'revision__hypothesis_000009', 'revision__hypothesis_000010', 'revision__hypothesis_000012', 'revision__hypothesis_000013', 'revision__hypothesis_000015', 'revision__hypothesis_000016', 'revision__hypothesis_000018', 'revision__hypothesis_000028', 'revision__hypothesis_000029', 'revision__hypothesis_000032', 'revision__hypothesis_000035', 'revision__hypothesis_000040', 'revision__hypothesis_000055', 'revision__hypothesis_000056', 'revision__hypothesis_000060']
+		These features were not used to generate any of the output features. Add a feature generator compatible with these features to utilize them.
+		Features can also be unused if they carry very little information, such as being categorical but having almost entirely unique values or being duplicates of other features.
+		These features do not need to be present at inference time.
+		('float', [])        :  1 | ['profile_seed']
+		('int', [])          : 20 | ['profile_time_limit', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000007', ...]
+		('object', [])       :  3 | ['profile_presets', 'profile_validation_strategy', 'component_group_names']
+		('object', ['text']) :  1 | ['profile_fold_config']
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  :  8 | ['n_new_groups_vs_parent', 'n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', ...]
+		('int', [])    : 23 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum', 'group__hypothesis_000004', ...]
+		('object', []) :  3 | ['profile_id', 'profile_hash', 'component_families']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :  1 | ['component_families']
+		('float', [])     :  7 | ['n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', 'hist_group_max_cv', ...]
+		('int', [])       :  4 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum']
+		('int', ['bool']) : 22 | ['profile_id', 'profile_hash', 'n_new_groups_vs_parent', 'group__hypothesis_000004', 'group__hypothesis_000005', ...]
+	0.0s = Fit runtime
+	34 features in original data used to generate 34 features in processed data.
+	Train Data (Processed) Memory Usage: 0.00 MB (0.0% of available memory)
+Data preprocessing and feature engineering runtime = 0.05s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'mean_absolute_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.2, Train Rows: 24, Val Rows: 6
+User-specified model hyperparameters to be fit:
+{
+	'NN_TORCH': [{}],
+	'GBM': [{'extra_trees': True, 'ag_args': {'name_suffix': 'XT'}}, {}, {'learning_rate': 0.03, 'num_leaves': 128, 'feature_fraction': 0.9, 'min_data_in_leaf': 3, 'ag_args': {'name_suffix': 'Large', 'priority': 0, 'hyperparameter_tune_kwargs': None}}],
+	'CAT': [{}],
+	'XGB': [{}],
+	'FASTAI': [{}],
+	'RF': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+	'XT': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+}
+Fitting 9 L1 models, fit_strategy="sequential" ...
+Fitting model: LightGBMXT ... Training model for up to 19.95s of the 19.95s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.7 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.28s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 19.67s of the 19.67s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/151.0 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.24s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 19.43s of the 19.43s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.18s	 = Training   runtime
+	0.02s	 = Validation runtime
+Fitting model: CatBoost ... Training model for up to 19.22s of the 19.22s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.27s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: ExtraTreesMSE ... Training model for up to 18.94s of the 18.94s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.18s	 = Training   runtime
+	0.03s	 = Validation runtime
+Fitting model: NeuralNetFastAI ... Training model for up to 18.73s of the 18.73s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+No improvement since epoch 0: early stopping
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.07s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: XGBoost ... Training model for up to 18.66s of the 18.66s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.04s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: NeuralNetTorch ... Training model for up to 18.62s of the 18.62s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.25s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBMLarge ... Training model for up to 18.36s of the 18.36s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.1/150.9 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.29s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 19.95s of the 18.06s of remaining time.
+	Fitting 1 model on all data | Fitting with cpus=32, gpus=0, mem=0.0/150.9 GB
+	Ensemble Weights: {'NeuralNetTorch': 1.0}
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.02s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 1.96s ... Best model: WeightedEnsemble_L2 | Estimated inference throughput: 1161.6 rows/s (6 batch size)
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_score/split_models/random_01/AutoGluonModels")
+Verbosity: 2 (Standard Logging)
+=================== System Info ===================
+AutoGluon Version:  1.5.0
+Python Version:     3.12.9
+Operating System:   Linux
+Platform Machine:   x86_64
+Platform Version:   #1 SMP PREEMPT_DYNAMIC Sun, 24 May 2026 04:47:00 +0000
+CPU Count:          32
+Pytorch Version:    2.9.1+cu128
+CUDA Version:       12.8
+GPU Memory:         GPU 0: 11.59/11.59 GB
+Total GPU Memory:   Free: 11.59 GB, Allocated: 0.00 GB, Total: 11.59 GB
+GPU Count:          1
+Memory Avail:       150.89 GB / 187.58 GB (80.4%)
+Disk Space Avail:   294.68 GB / 3725.72 GB (7.9%)
+===================================================
+Presets specified: ['medium_quality']
+Using hyperparameters preset: hyperparameters='default'
+Beginning AutoGluon training ... Time limit = 20s
+AutoGluon will save models to "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_score/split_models/random_02/AutoGluonModels"
+Train Data Rows:    30
+Train Data Columns: 151
+Label Column:       public_score
+Problem Type:       regression
+Preprocessing data ...
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    154506.65 MB
+	Train Data (Original)  Memory Usage: 0.07 MB (0.0% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 42 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Stage 5 Generators:
+		Fitting DropDuplicatesFeatureGenerator...
+	Useless Original Features (Count: 96): ['mode', 'dataset_fingerprint', 'profile_class_balance', 'profile_use_gpu', 'n_removed_groups_vs_parent', 'has_unseen_group', 'n_unseen_groups', 'known_group_coverage', 'group__hypothesis_000000', 'revision__hypothesis_000000', 'group__hypothesis_000001', 'revision__hypothesis_000001', 'group__hypothesis_000002', 'revision__hypothesis_000002', 'group__hypothesis_000003', 'revision__hypothesis_000003', 'group__hypothesis_000009', 'revision__hypothesis_000009', 'group__hypothesis_000011', 'revision__hypothesis_000011', 'group__hypothesis_000014', 'revision__hypothesis_000014', 'group__hypothesis_000017', 'revision__hypothesis_000017', 'group__hypothesis_000019', 'revision__hypothesis_000019', 'group__hypothesis_000020', 'revision__hypothesis_000020', 'group__hypothesis_000021', 'revision__hypothesis_000021', 'group__hypothesis_000022', 'revision__hypothesis_000022', 'group__hypothesis_000023', 'revision__hypothesis_000023', 'group__hypothesis_000024', 'revision__hypothesis_000024', 'group__hypothesis_000025', 'revision__hypothesis_000025', 'group__hypothesis_000026', 'revision__hypothesis_000026', 'group__hypothesis_000027', 'revision__hypothesis_000027', 'group__hypothesis_000030', 'revision__hypothesis_000030', 'group__hypothesis_000031', 'revision__hypothesis_000031', 'group__hypothesis_000033', 'revision__hypothesis_000033', 'group__hypothesis_000034', 'revision__hypothesis_000034', 'group__hypothesis_000036', 'revision__hypothesis_000036', 'group__hypothesis_000037', 'revision__hypothesis_000037', 'group__hypothesis_000038', 'revision__hypothesis_000038', 'group__hypothesis_000039', 'revision__hypothesis_000039', 'group__hypothesis_000040', 'revision__hypothesis_000040', 'group__hypothesis_000041', 'revision__hypothesis_000041', 'group__hypothesis_000042', 'revision__hypothesis_000042', 'group__hypothesis_000043', 'revision__hypothesis_000043', 'group__hypothesis_000044', 'revision__hypothesis_000044', 'group__hypothesis_000045', 'revision__hypothesis_000045', 'group__hypothesis_000046', 'revision__hypothesis_000046', 'group__hypothesis_000047', 'revision__hypothesis_000047', 'group__hypothesis_000048', 'revision__hypothesis_000048', 'group__hypothesis_000049', 'revision__hypothesis_000049', 'group__hypothesis_000050', 'revision__hypothesis_000050', 'group__hypothesis_000051', 'revision__hypothesis_000051', 'group__hypothesis_000052', 'revision__hypothesis_000052', 'group__hypothesis_000053', 'revision__hypothesis_000053', 'group__hypothesis_000054', 'revision__hypothesis_000054', 'group__hypothesis_000055', 'revision__hypothesis_000055', 'group__hypothesis_000057', 'revision__hypothesis_000057', 'group__hypothesis_000058', 'revision__hypothesis_000058', 'group__hypothesis_000059', 'revision__hypothesis_000059']
+		These features carry no predictive signal and should be manually investigated.
+		This is typically a feature which has the same value for all rows.
+		These features do not need to be present at inference time.
+	Unused Original Features (Count: 24): ['profile_seed', 'profile_time_limit', 'profile_presets', 'profile_validation_strategy', 'profile_fold_config', 'component_group_names', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000007', 'revision__hypothesis_000008', 'revision__hypothesis_000010', 'revision__hypothesis_000012', 'revision__hypothesis_000013', 'revision__hypothesis_000015', 'revision__hypothesis_000016', 'revision__hypothesis_000018', 'revision__hypothesis_000028', 'group__hypothesis_000029', 'revision__hypothesis_000029', 'revision__hypothesis_000032', 'revision__hypothesis_000035', 'revision__hypothesis_000056', 'revision__hypothesis_000060']
+		These features were not used to generate any of the output features. Add a feature generator compatible with these features to utilize them.
+		Features can also be unused if they carry very little information, such as being categorical but having almost entirely unique values or being duplicates of other features.
+		These features do not need to be present at inference time.
+		('float', [])        :  1 | ['profile_seed']
+		('int', [])          : 19 | ['profile_time_limit', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000007', ...]
+		('object', [])       :  3 | ['profile_presets', 'profile_validation_strategy', 'component_group_names']
+		('object', ['text']) :  1 | ['profile_fold_config']
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  :  8 | ['n_new_groups_vs_parent', 'n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', ...]
+		('int', [])    : 20 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum', 'group__hypothesis_000004', ...]
+		('object', []) :  3 | ['profile_id', 'profile_hash', 'component_families']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :  1 | ['component_families']
+		('float', [])     :  7 | ['n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', 'hist_group_max_cv', ...]
+		('int', [])       :  4 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum']
+		('int', ['bool']) : 19 | ['profile_id', 'profile_hash', 'n_new_groups_vs_parent', 'group__hypothesis_000004', 'group__hypothesis_000005', ...]
+	0.0s = Fit runtime
+	31 features in original data used to generate 31 features in processed data.
+	Train Data (Processed) Memory Usage: 0.00 MB (0.0% of available memory)
+Data preprocessing and feature engineering runtime = 0.05s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'mean_absolute_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.2, Train Rows: 24, Val Rows: 6
+User-specified model hyperparameters to be fit:
+{
+	'NN_TORCH': [{}],
+	'GBM': [{'extra_trees': True, 'ag_args': {'name_suffix': 'XT'}}, {}, {'learning_rate': 0.03, 'num_leaves': 128, 'feature_fraction': 0.9, 'min_data_in_leaf': 3, 'ag_args': {'name_suffix': 'Large', 'priority': 0, 'hyperparameter_tune_kwargs': None}}],
+	'CAT': [{}],
+	'XGB': [{}],
+	'FASTAI': [{}],
+	'RF': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+	'XT': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+}
+Fitting 9 L1 models, fit_strategy="sequential" ...
+Fitting model: LightGBMXT ... Training model for up to 19.95s of the 19.95s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.24s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 19.71s of the 19.71s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.23s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 19.47s of the 19.47s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.19s	 = Training   runtime
+	0.03s	 = Validation runtime
+Fitting model: CatBoost ... Training model for up to 19.25s of the 19.25s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.28s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: ExtraTreesMSE ... Training model for up to 18.96s of the 18.96s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.17s	 = Training   runtime
+	0.03s	 = Validation runtime
+Fitting model: NeuralNetFastAI ... Training model for up to 18.76s of the 18.76s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+No improvement since epoch 0: early stopping
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.06s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: XGBoost ... Training model for up to 18.69s of the 18.69s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.04s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: NeuralNetTorch ... Training model for up to 18.65s of the 18.65s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.1s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBMLarge ... Training model for up to 18.54s of the 18.54s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.1/150.9 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.27s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 19.95s of the 18.27s of remaining time.
+	Fitting 1 model on all data | Fitting with cpus=32, gpus=0, mem=0.0/151.0 GB
+	Ensemble Weights: {'CatBoost': 0.833, 'LightGBMLarge': 0.167}
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.02s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 1.76s ... Best model: WeightedEnsemble_L2 | Estimated inference throughput: 1971.6 rows/s (6 batch size)
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_score/split_models/random_02/AutoGluonModels")
+Verbosity: 2 (Standard Logging)
+=================== System Info ===================
+AutoGluon Version:  1.5.0
+Python Version:     3.12.9
+Operating System:   Linux
+Platform Machine:   x86_64
+Platform Version:   #1 SMP PREEMPT_DYNAMIC Sun, 24 May 2026 04:47:00 +0000
+CPU Count:          32
+Pytorch Version:    2.9.1+cu128
+CUDA Version:       12.8
+GPU Memory:         GPU 0: 11.59/11.59 GB
+Total GPU Memory:   Free: 11.59 GB, Allocated: 0.00 GB, Total: 11.59 GB
+GPU Count:          1
+Memory Avail:       150.97 GB / 187.58 GB (80.5%)
+Disk Space Avail:   294.68 GB / 3725.72 GB (7.9%)
+===================================================
+Presets specified: ['medium_quality']
+Using hyperparameters preset: hyperparameters='default'
+Beginning AutoGluon training ... Time limit = 20s
+AutoGluon will save models to "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_score/split_models/random_03/AutoGluonModels"
+Train Data Rows:    30
+Train Data Columns: 151
+Label Column:       public_score
+Problem Type:       regression
+Preprocessing data ...
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    154583.22 MB
+	Train Data (Original)  Memory Usage: 0.07 MB (0.0% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 45 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Stage 5 Generators:
+		Fitting DropDuplicatesFeatureGenerator...
+	Useless Original Features (Count: 92): ['mode', 'dataset_fingerprint', 'profile_class_balance', 'profile_use_gpu', 'n_removed_groups_vs_parent', 'has_unseen_group', 'n_unseen_groups', 'known_group_coverage', 'group__hypothesis_000000', 'revision__hypothesis_000000', 'group__hypothesis_000001', 'revision__hypothesis_000001', 'group__hypothesis_000002', 'revision__hypothesis_000002', 'group__hypothesis_000003', 'revision__hypothesis_000003', 'group__hypothesis_000007', 'revision__hypothesis_000007', 'group__hypothesis_000011', 'revision__hypothesis_000011', 'group__hypothesis_000014', 'revision__hypothesis_000014', 'group__hypothesis_000017', 'revision__hypothesis_000017', 'group__hypothesis_000019', 'revision__hypothesis_000019', 'group__hypothesis_000020', 'revision__hypothesis_000020', 'group__hypothesis_000021', 'revision__hypothesis_000021', 'group__hypothesis_000022', 'revision__hypothesis_000022', 'group__hypothesis_000023', 'revision__hypothesis_000023', 'group__hypothesis_000024', 'revision__hypothesis_000024', 'group__hypothesis_000025', 'revision__hypothesis_000025', 'group__hypothesis_000026', 'revision__hypothesis_000026', 'group__hypothesis_000027', 'revision__hypothesis_000027', 'group__hypothesis_000030', 'revision__hypothesis_000030', 'group__hypothesis_000031', 'revision__hypothesis_000031', 'group__hypothesis_000033', 'revision__hypothesis_000033', 'group__hypothesis_000034', 'revision__hypothesis_000034', 'group__hypothesis_000036', 'revision__hypothesis_000036', 'group__hypothesis_000037', 'revision__hypothesis_000037', 'group__hypothesis_000038', 'revision__hypothesis_000038', 'group__hypothesis_000039', 'revision__hypothesis_000039', 'group__hypothesis_000040', 'revision__hypothesis_000040', 'group__hypothesis_000041', 'revision__hypothesis_000041', 'group__hypothesis_000042', 'revision__hypothesis_000042', 'group__hypothesis_000043', 'revision__hypothesis_000043', 'group__hypothesis_000044', 'revision__hypothesis_000044', 'group__hypothesis_000045', 'revision__hypothesis_000045', 'group__hypothesis_000046', 'revision__hypothesis_000046', 'group__hypothesis_000047', 'revision__hypothesis_000047', 'group__hypothesis_000048', 'revision__hypothesis_000048', 'group__hypothesis_000049', 'revision__hypothesis_000049', 'group__hypothesis_000050', 'revision__hypothesis_000050', 'group__hypothesis_000051', 'revision__hypothesis_000051', 'group__hypothesis_000052', 'revision__hypothesis_000052', 'group__hypothesis_000054', 'revision__hypothesis_000054', 'group__hypothesis_000057', 'revision__hypothesis_000057', 'group__hypothesis_000058', 'revision__hypothesis_000058', 'group__hypothesis_000059', 'revision__hypothesis_000059']
+		These features carry no predictive signal and should be manually investigated.
+		This is typically a feature which has the same value for all rows.
+		These features do not need to be present at inference time.
+	Unused Original Features (Count: 24): ['profile_seed', 'profile_time_limit', 'profile_presets', 'profile_validation_strategy', 'profile_fold_config', 'component_group_names', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000009', 'revision__hypothesis_000010', 'revision__hypothesis_000012', 'revision__hypothesis_000013', 'revision__hypothesis_000015', 'revision__hypothesis_000016', 'revision__hypothesis_000018', 'revision__hypothesis_000028', 'revision__hypothesis_000029', 'revision__hypothesis_000032', 'revision__hypothesis_000035', 'revision__hypothesis_000053', 'revision__hypothesis_000055', 'revision__hypothesis_000056', 'revision__hypothesis_000060']
+		These features were not used to generate any of the output features. Add a feature generator compatible with these features to utilize them.
+		Features can also be unused if they carry very little information, such as being categorical but having almost entirely unique values or being duplicates of other features.
+		These features do not need to be present at inference time.
+		('float', [])        :  1 | ['profile_seed']
+		('int', [])          : 19 | ['profile_time_limit', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000009', ...]
+		('object', [])       :  3 | ['profile_presets', 'profile_validation_strategy', 'component_group_names']
+		('object', ['text']) :  1 | ['profile_fold_config']
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  :  8 | ['n_new_groups_vs_parent', 'n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', ...]
+		('int', [])    : 24 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum', 'group__hypothesis_000004', ...]
+		('object', []) :  3 | ['profile_id', 'profile_hash', 'component_families']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :  1 | ['component_families']
+		('float', [])     :  7 | ['n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', 'hist_group_max_cv', ...]
+		('int', [])       :  5 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum', 'revision__hypothesis_000008']
+		('int', ['bool']) : 22 | ['profile_id', 'profile_hash', 'n_new_groups_vs_parent', 'group__hypothesis_000004', 'group__hypothesis_000005', ...]
+	0.0s = Fit runtime
+	35 features in original data used to generate 35 features in processed data.
+	Train Data (Processed) Memory Usage: 0.00 MB (0.0% of available memory)
+Data preprocessing and feature engineering runtime = 0.05s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'mean_absolute_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.2, Train Rows: 24, Val Rows: 6
+User-specified model hyperparameters to be fit:
+{
+	'NN_TORCH': [{}],
+	'GBM': [{'extra_trees': True, 'ag_args': {'name_suffix': 'XT'}}, {}, {'learning_rate': 0.03, 'num_leaves': 128, 'feature_fraction': 0.9, 'min_data_in_leaf': 3, 'ag_args': {'name_suffix': 'Large', 'priority': 0, 'hyperparameter_tune_kwargs': None}}],
+	'CAT': [{}],
+	'XGB': [{}],
+	'FASTAI': [{}],
+	'RF': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+	'XT': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+}
+Fitting 9 L1 models, fit_strategy="sequential" ...
+Fitting model: LightGBMXT ... Training model for up to 19.95s of the 19.95s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/151.0 GB
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.24s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 19.71s of the 19.71s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.23s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 19.48s of the 19.48s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.16s	 = Training   runtime
+	0.03s	 = Validation runtime
+Fitting model: CatBoost ... Training model for up to 19.28s of the 19.28s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.22s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: ExtraTreesMSE ... Training model for up to 19.06s of the 19.06s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.18s	 = Training   runtime
+	0.03s	 = Validation runtime
+Fitting model: NeuralNetFastAI ... Training model for up to 18.85s of the 18.85s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+No improvement since epoch 0: early stopping
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.06s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: XGBoost ... Training model for up to 18.77s of the 18.77s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.04s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: NeuralNetTorch ... Training model for up to 18.73s of the 18.73s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.17s	 = Training   runtime
+	0.01s	 = Validation runtime
+Fitting model: LightGBMLarge ... Training model for up to 18.55s of the 18.55s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.1/150.9 GB
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.28s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 19.95s of the 18.26s of remaining time.
+	Fitting 1 model on all data | Fitting with cpus=32, gpus=0, mem=0.0/151.0 GB
+	Ensemble Weights: {'NeuralNetTorch': 1.0}
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.02s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 1.76s ... Best model: WeightedEnsemble_L2 | Estimated inference throughput: 1134.0 rows/s (6 batch size)
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_score/split_models/random_03/AutoGluonModels")
+Verbosity: 2 (Standard Logging)
+=================== System Info ===================
+AutoGluon Version:  1.5.0
+Python Version:     3.12.9
+Operating System:   Linux
+Platform Machine:   x86_64
+Platform Version:   #1 SMP PREEMPT_DYNAMIC Sun, 24 May 2026 04:47:00 +0000
+CPU Count:          32
+Pytorch Version:    2.9.1+cu128
+CUDA Version:       12.8
+GPU Memory:         GPU 0: 11.59/11.59 GB
+Total GPU Memory:   Free: 11.59 GB, Allocated: 0.00 GB, Total: 11.59 GB
+GPU Count:          1
+Memory Avail:       150.96 GB / 187.58 GB (80.5%)
+Disk Space Avail:   294.68 GB / 3725.72 GB (7.9%)
+===================================================
+Presets specified: ['medium_quality']
+Using hyperparameters preset: hyperparameters='default'
+Beginning AutoGluon training ... Time limit = 30s
+AutoGluon will save models to "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_score/final/AutoGluonModels"
+Train Data Rows:    40
+Train Data Columns: 151
+Label Column:       public_score
+Problem Type:       regression
+Preprocessing data ...
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    154573.86 MB
+	Train Data (Original)  Memory Usage: 0.09 MB (0.0% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 49 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Stage 5 Generators:
+		Fitting DropDuplicatesFeatureGenerator...
+	Useless Original Features (Count: 88): ['mode', 'dataset_fingerprint', 'profile_class_balance', 'profile_use_gpu', 'n_removed_groups_vs_parent', 'has_unseen_group', 'n_unseen_groups', 'known_group_coverage', 'group__hypothesis_000000', 'revision__hypothesis_000000', 'group__hypothesis_000001', 'revision__hypothesis_000001', 'group__hypothesis_000002', 'revision__hypothesis_000002', 'group__hypothesis_000003', 'revision__hypothesis_000003', 'group__hypothesis_000011', 'revision__hypothesis_000011', 'group__hypothesis_000014', 'revision__hypothesis_000014', 'group__hypothesis_000017', 'revision__hypothesis_000017', 'group__hypothesis_000019', 'revision__hypothesis_000019', 'group__hypothesis_000020', 'revision__hypothesis_000020', 'group__hypothesis_000021', 'revision__hypothesis_000021', 'group__hypothesis_000022', 'revision__hypothesis_000022', 'group__hypothesis_000023', 'revision__hypothesis_000023', 'group__hypothesis_000024', 'revision__hypothesis_000024', 'group__hypothesis_000025', 'revision__hypothesis_000025', 'group__hypothesis_000026', 'revision__hypothesis_000026', 'group__hypothesis_000027', 'revision__hypothesis_000027', 'group__hypothesis_000030', 'revision__hypothesis_000030', 'group__hypothesis_000031', 'revision__hypothesis_000031', 'group__hypothesis_000033', 'revision__hypothesis_000033', 'group__hypothesis_000034', 'revision__hypothesis_000034', 'group__hypothesis_000036', 'revision__hypothesis_000036', 'group__hypothesis_000037', 'revision__hypothesis_000037', 'group__hypothesis_000038', 'revision__hypothesis_000038', 'group__hypothesis_000039', 'revision__hypothesis_000039', 'group__hypothesis_000041', 'revision__hypothesis_000041', 'group__hypothesis_000042', 'revision__hypothesis_000042', 'group__hypothesis_000043', 'revision__hypothesis_000043', 'group__hypothesis_000044', 'revision__hypothesis_000044', 'group__hypothesis_000045', 'revision__hypothesis_000045', 'group__hypothesis_000046', 'revision__hypothesis_000046', 'group__hypothesis_000047', 'revision__hypothesis_000047', 'group__hypothesis_000048', 'revision__hypothesis_000048', 'group__hypothesis_000049', 'revision__hypothesis_000049', 'group__hypothesis_000050', 'revision__hypothesis_000050', 'group__hypothesis_000051', 'revision__hypothesis_000051', 'group__hypothesis_000052', 'revision__hypothesis_000052', 'group__hypothesis_000054', 'revision__hypothesis_000054', 'group__hypothesis_000057', 'revision__hypothesis_000057', 'group__hypothesis_000058', 'revision__hypothesis_000058', 'group__hypothesis_000059', 'revision__hypothesis_000059']
+		These features carry no predictive signal and should be manually investigated.
+		This is typically a feature which has the same value for all rows.
+		These features do not need to be present at inference time.
+	Unused Original Features (Count: 26): ['profile_seed', 'profile_time_limit', 'profile_presets', 'profile_validation_strategy', 'profile_fold_config', 'component_group_names', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000007', 'revision__hypothesis_000009', 'revision__hypothesis_000010', 'revision__hypothesis_000012', 'revision__hypothesis_000013', 'revision__hypothesis_000015', 'revision__hypothesis_000016', 'revision__hypothesis_000018', 'revision__hypothesis_000028', 'revision__hypothesis_000029', 'revision__hypothesis_000032', 'revision__hypothesis_000035', 'revision__hypothesis_000040', 'revision__hypothesis_000053', 'revision__hypothesis_000055', 'revision__hypothesis_000056', 'revision__hypothesis_000060']
+		These features were not used to generate any of the output features. Add a feature generator compatible with these features to utilize them.
+		Features can also be unused if they carry very little information, such as being categorical but having almost entirely unique values or being duplicates of other features.
+		These features do not need to be present at inference time.
+		('float', [])        :  1 | ['profile_seed']
+		('int', [])          : 21 | ['profile_time_limit', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000007', ...]
+		('object', [])       :  3 | ['profile_presets', 'profile_validation_strategy', 'component_group_names']
+		('object', ['text']) :  1 | ['profile_fold_config']
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  :  8 | ['n_new_groups_vs_parent', 'n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', ...]
+		('int', [])    : 26 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum', 'group__hypothesis_000004', ...]
+		('object', []) :  3 | ['profile_id', 'profile_hash', 'component_families']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :  1 | ['component_families']
+		('float', [])     :  7 | ['n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', 'hist_group_max_cv', ...]
+		('int', [])       :  5 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum', 'revision__hypothesis_000008']
+		('int', ['bool']) : 24 | ['profile_id', 'profile_hash', 'n_new_groups_vs_parent', 'group__hypothesis_000004', 'group__hypothesis_000005', ...]
+	0.0s = Fit runtime
+	37 features in original data used to generate 37 features in processed data.
+	Train Data (Processed) Memory Usage: 0.01 MB (0.0% of available memory)
+Data preprocessing and feature engineering runtime = 0.05s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'mean_absolute_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.2, Train Rows: 32, Val Rows: 8
+User-specified model hyperparameters to be fit:
+{
+	'NN_TORCH': [{}],
+	'GBM': [{'extra_trees': True, 'ag_args': {'name_suffix': 'XT'}}, {}, {'learning_rate': 0.03, 'num_leaves': 128, 'feature_fraction': 0.9, 'min_data_in_leaf': 3, 'ag_args': {'name_suffix': 'Large', 'priority': 0, 'hyperparameter_tune_kwargs': None}}],
+	'CAT': [{}],
+	'XGB': [{}],
+	'FASTAI': [{}],
+	'RF': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+	'XT': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+}
+Fitting 9 L1 models, fit_strategy="sequential" ...
+Fitting model: LightGBMXT ... Training model for up to 29.95s of the 29.95s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.24s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 29.70s of the 29.70s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.24s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 29.46s of the 29.46s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.18s	 = Training   runtime
+	0.03s	 = Validation runtime
+Fitting model: CatBoost ... Training model for up to 29.25s of the 29.25s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.44s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: ExtraTreesMSE ... Training model for up to 28.80s of the 28.80s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.21s	 = Training   runtime
+	0.03s	 = Validation runtime
+Fitting model: NeuralNetFastAI ... Training model for up to 28.55s of the 28.55s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.2s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: XGBoost ... Training model for up to 28.35s of the 28.35s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.04s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: NeuralNetTorch ... Training model for up to 28.31s of the 28.30s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.49s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBMLarge ... Training model for up to 27.80s of the 27.80s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.1/150.9 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.35s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 29.95s of the 27.45s of remaining time.
+	Fitting 1 model on all data | Fitting with cpus=32, gpus=0, mem=0.0/150.9 GB
+	Ensemble Weights: {'CatBoost': 0.4, 'NeuralNetTorch': 0.4, 'NeuralNetFastAI': 0.2}
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.02s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 2.57s ... Best model: WeightedEnsemble_L2 | Estimated inference throughput: 721.1 rows/s (8 batch size)
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_score/final/AutoGluonModels")
+These features in provided data are not utilized by the predictor and will be ignored: ['mode', 'dataset_fingerprint', 'profile_seed', 'profile_time_limit', 'profile_presets', 'profile_validation_strategy', 'profile_class_balance', 'profile_use_gpu', 'profile_fold_config', 'n_removed_groups_vs_parent', 'has_unseen_group', 'n_unseen_groups', 'known_group_coverage', 'component_group_names', 'group__hypothesis_000000', 'revision__hypothesis_000000', 'group__hypothesis_000001', 'revision__hypothesis_000001', 'group__hypothesis_000002', 'revision__hypothesis_000002', 'group__hypothesis_000003', 'revision__hypothesis_000003', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000007', 'revision__hypothesis_000009', 'revision__hypothesis_000010', 'group__hypothesis_000011', 'revision__hypothesis_000011', 'revision__hypothesis_000012', 'revision__hypothesis_000013', 'group__hypothesis_000014', 'revision__hypothesis_000014', 'revision__hypothesis_000015', 'revision__hypothesis_000016', 'group__hypothesis_000017', 'revision__hypothesis_000017', 'revision__hypothesis_000018', 'group__hypothesis_000019', 'revision__hypothesis_000019', 'group__hypothesis_000020', 'revision__hypothesis_000020', 'group__hypothesis_000021', 'revision__hypothesis_000021', 'group__hypothesis_000022', 'revision__hypothesis_000022', 'group__hypothesis_000023', 'revision__hypothesis_000023', 'group__hypothesis_000024', 'revision__hypothesis_000024', 'group__hypothesis_000025', 'revision__hypothesis_000025', 'group__hypothesis_000026', 'revision__hypothesis_000026', 'group__hypothesis_000027', 'revision__hypothesis_000027', 'revision__hypothesis_000028', 'revision__hypothesis_000029', 'group__hypothesis_000030', 'revision__hypothesis_000030', 'group__hypothesis_000031', 'revision__hypothesis_000031', 'revision__hypothesis_000032', 'group__hypothesis_000033', 'revision__hypothesis_000033', 'group__hypothesis_000034', 'revision__hypothesis_000034', 'revision__hypothesis_000035', 'group__hypothesis_000036', 'revision__hypothesis_000036', 'group__hypothesis_000037', 'revision__hypothesis_000037', 'group__hypothesis_000038', 'revision__hypothesis_000038', 'group__hypothesis_000039', 'revision__hypothesis_000039', 'revision__hypothesis_000040', 'group__hypothesis_000041', 'revision__hypothesis_000041', 'group__hypothesis_000042', 'revision__hypothesis_000042', 'group__hypothesis_000043', 'revision__hypothesis_000043', 'group__hypothesis_000044', 'revision__hypothesis_000044', 'group__hypothesis_000045', 'revision__hypothesis_000045', 'group__hypothesis_000046', 'revision__hypothesis_000046', 'group__hypothesis_000047', 'revision__hypothesis_000047', 'group__hypothesis_000048', 'revision__hypothesis_000048', 'group__hypothesis_000049', 'revision__hypothesis_000049', 'group__hypothesis_000050', 'revision__hypothesis_000050', 'group__hypothesis_000051', 'revision__hypothesis_000051', 'group__hypothesis_000052', 'revision__hypothesis_000052', 'revision__hypothesis_000053', 'group__hypothesis_000054', 'revision__hypothesis_000054', 'revision__hypothesis_000055', 'revision__hypothesis_000056', 'group__hypothesis_000057', 'revision__hypothesis_000057', 'group__hypothesis_000058', 'revision__hypothesis_000058', 'group__hypothesis_000059', 'revision__hypothesis_000059', 'revision__hypothesis_000060']
+Computing feature importance via permutation shuffling for 37 features using 40 rows with 5 shuffle sets...
+	3.32s	= Expected runtime (0.66s per shuffle set)
+	0.39s	= Actual runtime (Completed 5 of 5 shuffle sets)
+Verbosity: 2 (Standard Logging)
+=================== System Info ===================
+AutoGluon Version:  1.5.0
+Python Version:     3.12.9
+Operating System:   Linux
+Platform Machine:   x86_64
+Platform Version:   #1 SMP PREEMPT_DYNAMIC Sun, 24 May 2026 04:47:00 +0000
+CPU Count:          32
+Pytorch Version:    2.9.1+cu128
+CUDA Version:       12.8
+GPU Memory:         GPU 0: 11.59/11.59 GB
+Total GPU Memory:   Free: 11.59 GB, Allocated: 0.00 GB, Total: 11.59 GB
+GPU Count:          1
+Memory Avail:       150.94 GB / 187.58 GB (80.5%)
+Disk Space Avail:   294.68 GB / 3725.72 GB (7.9%)
+===================================================
+Presets specified: ['medium_quality']
+Using hyperparameters preset: hyperparameters='default'
+Beginning AutoGluon training ... Time limit = 20s
+AutoGluon will save models to "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_gap/split_models/random_01/AutoGluonModels"
+Train Data Rows:    30
+Train Data Columns: 151
+Label Column:       public_gap
+Problem Type:       regression
+Preprocessing data ...
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    154558.00 MB
+	Train Data (Original)  Memory Usage: 0.07 MB (0.0% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 46 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Stage 5 Generators:
+		Fitting DropDuplicatesFeatureGenerator...
+	Useless Original Features (Count: 92): ['mode', 'dataset_fingerprint', 'profile_class_balance', 'profile_use_gpu', 'n_removed_groups_vs_parent', 'has_unseen_group', 'n_unseen_groups', 'known_group_coverage', 'group__hypothesis_000000', 'revision__hypothesis_000000', 'group__hypothesis_000001', 'revision__hypothesis_000001', 'group__hypothesis_000002', 'revision__hypothesis_000002', 'group__hypothesis_000003', 'revision__hypothesis_000003', 'group__hypothesis_000008', 'revision__hypothesis_000008', 'group__hypothesis_000011', 'revision__hypothesis_000011', 'group__hypothesis_000014', 'revision__hypothesis_000014', 'group__hypothesis_000017', 'revision__hypothesis_000017', 'group__hypothesis_000019', 'revision__hypothesis_000019', 'group__hypothesis_000020', 'revision__hypothesis_000020', 'group__hypothesis_000021', 'revision__hypothesis_000021', 'group__hypothesis_000022', 'revision__hypothesis_000022', 'group__hypothesis_000023', 'revision__hypothesis_000023', 'group__hypothesis_000024', 'revision__hypothesis_000024', 'group__hypothesis_000025', 'revision__hypothesis_000025', 'group__hypothesis_000026', 'revision__hypothesis_000026', 'group__hypothesis_000027', 'revision__hypothesis_000027', 'group__hypothesis_000030', 'revision__hypothesis_000030', 'group__hypothesis_000031', 'revision__hypothesis_000031', 'group__hypothesis_000033', 'revision__hypothesis_000033', 'group__hypothesis_000034', 'revision__hypothesis_000034', 'group__hypothesis_000036', 'revision__hypothesis_000036', 'group__hypothesis_000037', 'revision__hypothesis_000037', 'group__hypothesis_000038', 'revision__hypothesis_000038', 'group__hypothesis_000039', 'revision__hypothesis_000039', 'group__hypothesis_000041', 'revision__hypothesis_000041', 'group__hypothesis_000042', 'revision__hypothesis_000042', 'group__hypothesis_000043', 'revision__hypothesis_000043', 'group__hypothesis_000044', 'revision__hypothesis_000044', 'group__hypothesis_000045', 'revision__hypothesis_000045', 'group__hypothesis_000046', 'revision__hypothesis_000046', 'group__hypothesis_000047', 'revision__hypothesis_000047', 'group__hypothesis_000048', 'revision__hypothesis_000048', 'group__hypothesis_000049', 'revision__hypothesis_000049', 'group__hypothesis_000050', 'revision__hypothesis_000050', 'group__hypothesis_000051', 'revision__hypothesis_000051', 'group__hypothesis_000052', 'revision__hypothesis_000052', 'group__hypothesis_000053', 'revision__hypothesis_000053', 'group__hypothesis_000054', 'revision__hypothesis_000054', 'group__hypothesis_000057', 'revision__hypothesis_000057', 'group__hypothesis_000058', 'revision__hypothesis_000058', 'group__hypothesis_000059', 'revision__hypothesis_000059']
+		These features carry no predictive signal and should be manually investigated.
+		This is typically a feature which has the same value for all rows.
+		These features do not need to be present at inference time.
+	Unused Original Features (Count: 25): ['profile_seed', 'profile_time_limit', 'profile_presets', 'profile_validation_strategy', 'profile_fold_config', 'component_group_names', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000007', 'revision__hypothesis_000009', 'revision__hypothesis_000010', 'revision__hypothesis_000012', 'revision__hypothesis_000013', 'revision__hypothesis_000015', 'revision__hypothesis_000016', 'revision__hypothesis_000018', 'revision__hypothesis_000028', 'revision__hypothesis_000029', 'revision__hypothesis_000032', 'revision__hypothesis_000035', 'revision__hypothesis_000040', 'revision__hypothesis_000055', 'revision__hypothesis_000056', 'revision__hypothesis_000060']
+		These features were not used to generate any of the output features. Add a feature generator compatible with these features to utilize them.
+		Features can also be unused if they carry very little information, such as being categorical but having almost entirely unique values or being duplicates of other features.
+		These features do not need to be present at inference time.
+		('float', [])        :  1 | ['profile_seed']
+		('int', [])          : 20 | ['profile_time_limit', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000007', ...]
+		('object', [])       :  3 | ['profile_presets', 'profile_validation_strategy', 'component_group_names']
+		('object', ['text']) :  1 | ['profile_fold_config']
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  :  8 | ['n_new_groups_vs_parent', 'n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', ...]
+		('int', [])    : 23 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum', 'group__hypothesis_000004', ...]
+		('object', []) :  3 | ['profile_id', 'profile_hash', 'component_families']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :  1 | ['component_families']
+		('float', [])     :  7 | ['n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', 'hist_group_max_cv', ...]
+		('int', [])       :  4 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum']
+		('int', ['bool']) : 22 | ['profile_id', 'profile_hash', 'n_new_groups_vs_parent', 'group__hypothesis_000004', 'group__hypothesis_000005', ...]
+	0.0s = Fit runtime
+	34 features in original data used to generate 34 features in processed data.
+	Train Data (Processed) Memory Usage: 0.00 MB (0.0% of available memory)
+Data preprocessing and feature engineering runtime = 0.05s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'mean_absolute_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.2, Train Rows: 24, Val Rows: 6
+User-specified model hyperparameters to be fit:
+{
+	'NN_TORCH': [{}],
+	'GBM': [{'extra_trees': True, 'ag_args': {'name_suffix': 'XT'}}, {}, {'learning_rate': 0.03, 'num_leaves': 128, 'feature_fraction': 0.9, 'min_data_in_leaf': 3, 'ag_args': {'name_suffix': 'Large', 'priority': 0, 'hyperparameter_tune_kwargs': None}}],
+	'CAT': [{}],
+	'XGB': [{}],
+	'FASTAI': [{}],
+	'RF': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+	'XT': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+}
+Fitting 9 L1 models, fit_strategy="sequential" ...
+Fitting model: LightGBMXT ... Training model for up to 19.95s of the 19.95s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.24s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 19.71s of the 19.71s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.24s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 19.48s of the 19.48s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.16s	 = Training   runtime
+	0.02s	 = Validation runtime
+Fitting model: CatBoost ... Training model for up to 19.29s of the 19.29s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.25s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: ExtraTreesMSE ... Training model for up to 19.04s of the 19.03s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.18s	 = Training   runtime
+	0.01s	 = Validation runtime
+Fitting model: NeuralNetFastAI ... Training model for up to 18.83s of the 18.83s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+No improvement since epoch 0: early stopping
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.07s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: XGBoost ... Training model for up to 18.76s of the 18.76s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.03s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: NeuralNetTorch ... Training model for up to 18.72s of the 18.72s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.28s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBMLarge ... Training model for up to 18.44s of the 18.44s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.1/150.9 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.29s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 19.95s of the 18.15s of remaining time.
+	Fitting 1 model on all data | Fitting with cpus=32, gpus=0, mem=0.0/151.0 GB
+	Ensemble Weights: {'NeuralNetTorch': 1.0}
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.02s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 1.88s ... Best model: WeightedEnsemble_L2 | Estimated inference throughput: 1477.6 rows/s (6 batch size)
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_gap/split_models/random_01/AutoGluonModels")
+Verbosity: 2 (Standard Logging)
+=================== System Info ===================
+AutoGluon Version:  1.5.0
+Python Version:     3.12.9
+Operating System:   Linux
+Platform Machine:   x86_64
+Platform Version:   #1 SMP PREEMPT_DYNAMIC Sun, 24 May 2026 04:47:00 +0000
+CPU Count:          32
+Pytorch Version:    2.9.1+cu128
+CUDA Version:       12.8
+GPU Memory:         GPU 0: 11.59/11.59 GB
+Total GPU Memory:   Free: 11.59 GB, Allocated: 0.00 GB, Total: 11.59 GB
+GPU Count:          1
+Memory Avail:       150.95 GB / 187.58 GB (80.5%)
+Disk Space Avail:   294.68 GB / 3725.72 GB (7.9%)
+===================================================
+Presets specified: ['medium_quality']
+Using hyperparameters preset: hyperparameters='default'
+Beginning AutoGluon training ... Time limit = 20s
+AutoGluon will save models to "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_gap/split_models/random_02/AutoGluonModels"
+Train Data Rows:    30
+Train Data Columns: 151
+Label Column:       public_gap
+Problem Type:       regression
+Preprocessing data ...
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    154576.53 MB
+	Train Data (Original)  Memory Usage: 0.07 MB (0.0% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 42 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Stage 5 Generators:
+		Fitting DropDuplicatesFeatureGenerator...
+	Useless Original Features (Count: 96): ['mode', 'dataset_fingerprint', 'profile_class_balance', 'profile_use_gpu', 'n_removed_groups_vs_parent', 'has_unseen_group', 'n_unseen_groups', 'known_group_coverage', 'group__hypothesis_000000', 'revision__hypothesis_000000', 'group__hypothesis_000001', 'revision__hypothesis_000001', 'group__hypothesis_000002', 'revision__hypothesis_000002', 'group__hypothesis_000003', 'revision__hypothesis_000003', 'group__hypothesis_000009', 'revision__hypothesis_000009', 'group__hypothesis_000011', 'revision__hypothesis_000011', 'group__hypothesis_000014', 'revision__hypothesis_000014', 'group__hypothesis_000017', 'revision__hypothesis_000017', 'group__hypothesis_000019', 'revision__hypothesis_000019', 'group__hypothesis_000020', 'revision__hypothesis_000020', 'group__hypothesis_000021', 'revision__hypothesis_000021', 'group__hypothesis_000022', 'revision__hypothesis_000022', 'group__hypothesis_000023', 'revision__hypothesis_000023', 'group__hypothesis_000024', 'revision__hypothesis_000024', 'group__hypothesis_000025', 'revision__hypothesis_000025', 'group__hypothesis_000026', 'revision__hypothesis_000026', 'group__hypothesis_000027', 'revision__hypothesis_000027', 'group__hypothesis_000030', 'revision__hypothesis_000030', 'group__hypothesis_000031', 'revision__hypothesis_000031', 'group__hypothesis_000033', 'revision__hypothesis_000033', 'group__hypothesis_000034', 'revision__hypothesis_000034', 'group__hypothesis_000036', 'revision__hypothesis_000036', 'group__hypothesis_000037', 'revision__hypothesis_000037', 'group__hypothesis_000038', 'revision__hypothesis_000038', 'group__hypothesis_000039', 'revision__hypothesis_000039', 'group__hypothesis_000040', 'revision__hypothesis_000040', 'group__hypothesis_000041', 'revision__hypothesis_000041', 'group__hypothesis_000042', 'revision__hypothesis_000042', 'group__hypothesis_000043', 'revision__hypothesis_000043', 'group__hypothesis_000044', 'revision__hypothesis_000044', 'group__hypothesis_000045', 'revision__hypothesis_000045', 'group__hypothesis_000046', 'revision__hypothesis_000046', 'group__hypothesis_000047', 'revision__hypothesis_000047', 'group__hypothesis_000048', 'revision__hypothesis_000048', 'group__hypothesis_000049', 'revision__hypothesis_000049', 'group__hypothesis_000050', 'revision__hypothesis_000050', 'group__hypothesis_000051', 'revision__hypothesis_000051', 'group__hypothesis_000052', 'revision__hypothesis_000052', 'group__hypothesis_000053', 'revision__hypothesis_000053', 'group__hypothesis_000054', 'revision__hypothesis_000054', 'group__hypothesis_000055', 'revision__hypothesis_000055', 'group__hypothesis_000057', 'revision__hypothesis_000057', 'group__hypothesis_000058', 'revision__hypothesis_000058', 'group__hypothesis_000059', 'revision__hypothesis_000059']
+		These features carry no predictive signal and should be manually investigated.
+		This is typically a feature which has the same value for all rows.
+		These features do not need to be present at inference time.
+	Unused Original Features (Count: 24): ['profile_seed', 'profile_time_limit', 'profile_presets', 'profile_validation_strategy', 'profile_fold_config', 'component_group_names', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000007', 'revision__hypothesis_000008', 'revision__hypothesis_000010', 'revision__hypothesis_000012', 'revision__hypothesis_000013', 'revision__hypothesis_000015', 'revision__hypothesis_000016', 'revision__hypothesis_000018', 'revision__hypothesis_000028', 'group__hypothesis_000029', 'revision__hypothesis_000029', 'revision__hypothesis_000032', 'revision__hypothesis_000035', 'revision__hypothesis_000056', 'revision__hypothesis_000060']
+		These features were not used to generate any of the output features. Add a feature generator compatible with these features to utilize them.
+		Features can also be unused if they carry very little information, such as being categorical but having almost entirely unique values or being duplicates of other features.
+		These features do not need to be present at inference time.
+		('float', [])        :  1 | ['profile_seed']
+		('int', [])          : 19 | ['profile_time_limit', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000007', ...]
+		('object', [])       :  3 | ['profile_presets', 'profile_validation_strategy', 'component_group_names']
+		('object', ['text']) :  1 | ['profile_fold_config']
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  :  8 | ['n_new_groups_vs_parent', 'n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', ...]
+		('int', [])    : 20 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum', 'group__hypothesis_000004', ...]
+		('object', []) :  3 | ['profile_id', 'profile_hash', 'component_families']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :  1 | ['component_families']
+		('float', [])     :  7 | ['n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', 'hist_group_max_cv', ...]
+		('int', [])       :  4 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum']
+		('int', ['bool']) : 19 | ['profile_id', 'profile_hash', 'n_new_groups_vs_parent', 'group__hypothesis_000004', 'group__hypothesis_000005', ...]
+	0.0s = Fit runtime
+	31 features in original data used to generate 31 features in processed data.
+	Train Data (Processed) Memory Usage: 0.00 MB (0.0% of available memory)
+Data preprocessing and feature engineering runtime = 0.05s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'mean_absolute_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.2, Train Rows: 24, Val Rows: 6
+User-specified model hyperparameters to be fit:
+{
+	'NN_TORCH': [{}],
+	'GBM': [{'extra_trees': True, 'ag_args': {'name_suffix': 'XT'}}, {}, {'learning_rate': 0.03, 'num_leaves': 128, 'feature_fraction': 0.9, 'min_data_in_leaf': 3, 'ag_args': {'name_suffix': 'Large', 'priority': 0, 'hyperparameter_tune_kwargs': None}}],
+	'CAT': [{}],
+	'XGB': [{}],
+	'FASTAI': [{}],
+	'RF': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+	'XT': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+}
+Fitting 9 L1 models, fit_strategy="sequential" ...
+Fitting model: LightGBMXT ... Training model for up to 19.95s of the 19.95s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/151.0 GB
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.24s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 19.72s of the 19.72s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.24s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 19.48s of the 19.48s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.16s	 = Training   runtime
+	0.02s	 = Validation runtime
+Fitting model: CatBoost ... Training model for up to 19.29s of the 19.29s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.31s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: ExtraTreesMSE ... Training model for up to 18.98s of the 18.97s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.16s	 = Training   runtime
+	0.02s	 = Validation runtime
+Fitting model: NeuralNetFastAI ... Training model for up to 18.79s of the 18.79s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+No improvement since epoch 0: early stopping
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.06s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: XGBoost ... Training model for up to 18.72s of the 18.72s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.03s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: NeuralNetTorch ... Training model for up to 18.68s of the 18.68s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.18s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBMLarge ... Training model for up to 18.50s of the 18.50s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.1/150.9 GB
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.29s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 19.95s of the 18.21s of remaining time.
+	Fitting 1 model on all data | Fitting with cpus=32, gpus=0, mem=0.0/150.9 GB
+	Ensemble Weights: {'CatBoost': 1.0}
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.02s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 1.82s ... Best model: WeightedEnsemble_L2 | Estimated inference throughput: 3362.2 rows/s (6 batch size)
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_gap/split_models/random_02/AutoGluonModels")
+Verbosity: 2 (Standard Logging)
+=================== System Info ===================
+AutoGluon Version:  1.5.0
+Python Version:     3.12.9
+Operating System:   Linux
+Platform Machine:   x86_64
+Platform Version:   #1 SMP PREEMPT_DYNAMIC Sun, 24 May 2026 04:47:00 +0000
+CPU Count:          32
+Pytorch Version:    2.9.1+cu128
+CUDA Version:       12.8
+GPU Memory:         GPU 0: 11.59/11.59 GB
+Total GPU Memory:   Free: 11.59 GB, Allocated: 0.00 GB, Total: 11.59 GB
+GPU Count:          1
+Memory Avail:       150.91 GB / 187.58 GB (80.4%)
+Disk Space Avail:   294.68 GB / 3725.72 GB (7.9%)
+===================================================
+Presets specified: ['medium_quality']
+Using hyperparameters preset: hyperparameters='default'
+Beginning AutoGluon training ... Time limit = 20s
+AutoGluon will save models to "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_gap/split_models/random_03/AutoGluonModels"
+Train Data Rows:    30
+Train Data Columns: 151
+Label Column:       public_gap
+Problem Type:       regression
+Preprocessing data ...
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    154526.84 MB
+	Train Data (Original)  Memory Usage: 0.07 MB (0.0% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 45 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Stage 5 Generators:
+		Fitting DropDuplicatesFeatureGenerator...
+	Useless Original Features (Count: 92): ['mode', 'dataset_fingerprint', 'profile_class_balance', 'profile_use_gpu', 'n_removed_groups_vs_parent', 'has_unseen_group', 'n_unseen_groups', 'known_group_coverage', 'group__hypothesis_000000', 'revision__hypothesis_000000', 'group__hypothesis_000001', 'revision__hypothesis_000001', 'group__hypothesis_000002', 'revision__hypothesis_000002', 'group__hypothesis_000003', 'revision__hypothesis_000003', 'group__hypothesis_000007', 'revision__hypothesis_000007', 'group__hypothesis_000011', 'revision__hypothesis_000011', 'group__hypothesis_000014', 'revision__hypothesis_000014', 'group__hypothesis_000017', 'revision__hypothesis_000017', 'group__hypothesis_000019', 'revision__hypothesis_000019', 'group__hypothesis_000020', 'revision__hypothesis_000020', 'group__hypothesis_000021', 'revision__hypothesis_000021', 'group__hypothesis_000022', 'revision__hypothesis_000022', 'group__hypothesis_000023', 'revision__hypothesis_000023', 'group__hypothesis_000024', 'revision__hypothesis_000024', 'group__hypothesis_000025', 'revision__hypothesis_000025', 'group__hypothesis_000026', 'revision__hypothesis_000026', 'group__hypothesis_000027', 'revision__hypothesis_000027', 'group__hypothesis_000030', 'revision__hypothesis_000030', 'group__hypothesis_000031', 'revision__hypothesis_000031', 'group__hypothesis_000033', 'revision__hypothesis_000033', 'group__hypothesis_000034', 'revision__hypothesis_000034', 'group__hypothesis_000036', 'revision__hypothesis_000036', 'group__hypothesis_000037', 'revision__hypothesis_000037', 'group__hypothesis_000038', 'revision__hypothesis_000038', 'group__hypothesis_000039', 'revision__hypothesis_000039', 'group__hypothesis_000040', 'revision__hypothesis_000040', 'group__hypothesis_000041', 'revision__hypothesis_000041', 'group__hypothesis_000042', 'revision__hypothesis_000042', 'group__hypothesis_000043', 'revision__hypothesis_000043', 'group__hypothesis_000044', 'revision__hypothesis_000044', 'group__hypothesis_000045', 'revision__hypothesis_000045', 'group__hypothesis_000046', 'revision__hypothesis_000046', 'group__hypothesis_000047', 'revision__hypothesis_000047', 'group__hypothesis_000048', 'revision__hypothesis_000048', 'group__hypothesis_000049', 'revision__hypothesis_000049', 'group__hypothesis_000050', 'revision__hypothesis_000050', 'group__hypothesis_000051', 'revision__hypothesis_000051', 'group__hypothesis_000052', 'revision__hypothesis_000052', 'group__hypothesis_000054', 'revision__hypothesis_000054', 'group__hypothesis_000057', 'revision__hypothesis_000057', 'group__hypothesis_000058', 'revision__hypothesis_000058', 'group__hypothesis_000059', 'revision__hypothesis_000059']
+		These features carry no predictive signal and should be manually investigated.
+		This is typically a feature which has the same value for all rows.
+		These features do not need to be present at inference time.
+	Unused Original Features (Count: 24): ['profile_seed', 'profile_time_limit', 'profile_presets', 'profile_validation_strategy', 'profile_fold_config', 'component_group_names', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000009', 'revision__hypothesis_000010', 'revision__hypothesis_000012', 'revision__hypothesis_000013', 'revision__hypothesis_000015', 'revision__hypothesis_000016', 'revision__hypothesis_000018', 'revision__hypothesis_000028', 'revision__hypothesis_000029', 'revision__hypothesis_000032', 'revision__hypothesis_000035', 'revision__hypothesis_000053', 'revision__hypothesis_000055', 'revision__hypothesis_000056', 'revision__hypothesis_000060']
+		These features were not used to generate any of the output features. Add a feature generator compatible with these features to utilize them.
+		Features can also be unused if they carry very little information, such as being categorical but having almost entirely unique values or being duplicates of other features.
+		These features do not need to be present at inference time.
+		('float', [])        :  1 | ['profile_seed']
+		('int', [])          : 19 | ['profile_time_limit', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000009', ...]
+		('object', [])       :  3 | ['profile_presets', 'profile_validation_strategy', 'component_group_names']
+		('object', ['text']) :  1 | ['profile_fold_config']
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  :  8 | ['n_new_groups_vs_parent', 'n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', ...]
+		('int', [])    : 24 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum', 'group__hypothesis_000004', ...]
+		('object', []) :  3 | ['profile_id', 'profile_hash', 'component_families']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :  1 | ['component_families']
+		('float', [])     :  7 | ['n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', 'hist_group_max_cv', ...]
+		('int', [])       :  5 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum', 'revision__hypothesis_000008']
+		('int', ['bool']) : 22 | ['profile_id', 'profile_hash', 'n_new_groups_vs_parent', 'group__hypothesis_000004', 'group__hypothesis_000005', ...]
+	0.0s = Fit runtime
+	35 features in original data used to generate 35 features in processed data.
+	Train Data (Processed) Memory Usage: 0.00 MB (0.0% of available memory)
+Data preprocessing and feature engineering runtime = 0.05s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'mean_absolute_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.2, Train Rows: 24, Val Rows: 6
+User-specified model hyperparameters to be fit:
+{
+	'NN_TORCH': [{}],
+	'GBM': [{'extra_trees': True, 'ag_args': {'name_suffix': 'XT'}}, {}, {'learning_rate': 0.03, 'num_leaves': 128, 'feature_fraction': 0.9, 'min_data_in_leaf': 3, 'ag_args': {'name_suffix': 'Large', 'priority': 0, 'hyperparameter_tune_kwargs': None}}],
+	'CAT': [{}],
+	'XGB': [{}],
+	'FASTAI': [{}],
+	'RF': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+	'XT': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+}
+Fitting 9 L1 models, fit_strategy="sequential" ...
+Fitting model: LightGBMXT ... Training model for up to 19.95s of the 19.95s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.24s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 19.70s of the 19.70s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/150.9 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.25s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 19.46s of the 19.46s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.17s	 = Training   runtime
+	0.03s	 = Validation runtime
+Fitting model: CatBoost ... Training model for up to 19.26s of the 19.26s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.25s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: ExtraTreesMSE ... Training model for up to 19.01s of the 19.01s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.19s	 = Training   runtime
+	0.03s	 = Validation runtime
+Fitting model: NeuralNetFastAI ... Training model for up to 18.78s of the 18.78s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/151.0 GB
+No improvement since epoch 0: early stopping
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.07s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: XGBoost ... Training model for up to 18.71s of the 18.71s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.04s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: NeuralNetTorch ... Training model for up to 18.67s of the 18.67s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/151.0 GB
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.23s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBMLarge ... Training model for up to 18.43s of the 18.43s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.1/151.1 GB
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.27s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 19.95s of the 18.15s of remaining time.
+	Fitting 1 model on all data | Fitting with cpus=32, gpus=0, mem=0.0/151.1 GB
+	Ensemble Weights: {'LightGBMLarge': 0.6, 'NeuralNetTorch': 0.4}
+	-0.0001	 = Validation score   (-mean_absolute_error)
+	0.02s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 1.87s ... Best model: WeightedEnsemble_L2 | Estimated inference throughput: 1045.3 rows/s (6 batch size)
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_gap/split_models/random_03/AutoGluonModels")
+Verbosity: 2 (Standard Logging)
+=================== System Info ===================
+AutoGluon Version:  1.5.0
+Python Version:     3.12.9
+Operating System:   Linux
+Platform Machine:   x86_64
+Platform Version:   #1 SMP PREEMPT_DYNAMIC Sun, 24 May 2026 04:47:00 +0000
+CPU Count:          32
+Pytorch Version:    2.9.1+cu128
+CUDA Version:       12.8
+GPU Memory:         GPU 0: 11.59/11.59 GB
+Total GPU Memory:   Free: 11.59 GB, Allocated: 0.00 GB, Total: 11.59 GB
+GPU Count:          1
+Memory Avail:       151.06 GB / 187.58 GB (80.5%)
+Disk Space Avail:   294.56 GB / 3725.72 GB (7.9%)
+===================================================
+Presets specified: ['medium_quality']
+Using hyperparameters preset: hyperparameters='default'
+Beginning AutoGluon training ... Time limit = 30s
+AutoGluon will save models to "/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_gap/final/AutoGluonModels"
+Train Data Rows:    40
+Train Data Columns: 151
+Label Column:       public_gap
+Problem Type:       regression
+Preprocessing data ...
+Using Feature Generators to preprocess the data ...
+Fitting AutoMLPipelineFeatureGenerator...
+	Available Memory:                    154680.51 MB
+	Train Data (Original)  Memory Usage: 0.09 MB (0.0% of available memory)
+	Inferring data type of each feature based on column values. Set feature_metadata_in to manually specify special dtypes of the features.
+	Stage 1 Generators:
+		Fitting AsTypeFeatureGenerator...
+			Note: Converting 49 features to boolean dtype as they only contain 2 unique values.
+	Stage 2 Generators:
+		Fitting FillNaFeatureGenerator...
+	Stage 3 Generators:
+		Fitting IdentityFeatureGenerator...
+		Fitting CategoryFeatureGenerator...
+			Fitting CategoryMemoryMinimizeFeatureGenerator...
+	Stage 4 Generators:
+		Fitting DropUniqueFeatureGenerator...
+	Stage 5 Generators:
+		Fitting DropDuplicatesFeatureGenerator...
+	Useless Original Features (Count: 88): ['mode', 'dataset_fingerprint', 'profile_class_balance', 'profile_use_gpu', 'n_removed_groups_vs_parent', 'has_unseen_group', 'n_unseen_groups', 'known_group_coverage', 'group__hypothesis_000000', 'revision__hypothesis_000000', 'group__hypothesis_000001', 'revision__hypothesis_000001', 'group__hypothesis_000002', 'revision__hypothesis_000002', 'group__hypothesis_000003', 'revision__hypothesis_000003', 'group__hypothesis_000011', 'revision__hypothesis_000011', 'group__hypothesis_000014', 'revision__hypothesis_000014', 'group__hypothesis_000017', 'revision__hypothesis_000017', 'group__hypothesis_000019', 'revision__hypothesis_000019', 'group__hypothesis_000020', 'revision__hypothesis_000020', 'group__hypothesis_000021', 'revision__hypothesis_000021', 'group__hypothesis_000022', 'revision__hypothesis_000022', 'group__hypothesis_000023', 'revision__hypothesis_000023', 'group__hypothesis_000024', 'revision__hypothesis_000024', 'group__hypothesis_000025', 'revision__hypothesis_000025', 'group__hypothesis_000026', 'revision__hypothesis_000026', 'group__hypothesis_000027', 'revision__hypothesis_000027', 'group__hypothesis_000030', 'revision__hypothesis_000030', 'group__hypothesis_000031', 'revision__hypothesis_000031', 'group__hypothesis_000033', 'revision__hypothesis_000033', 'group__hypothesis_000034', 'revision__hypothesis_000034', 'group__hypothesis_000036', 'revision__hypothesis_000036', 'group__hypothesis_000037', 'revision__hypothesis_000037', 'group__hypothesis_000038', 'revision__hypothesis_000038', 'group__hypothesis_000039', 'revision__hypothesis_000039', 'group__hypothesis_000041', 'revision__hypothesis_000041', 'group__hypothesis_000042', 'revision__hypothesis_000042', 'group__hypothesis_000043', 'revision__hypothesis_000043', 'group__hypothesis_000044', 'revision__hypothesis_000044', 'group__hypothesis_000045', 'revision__hypothesis_000045', 'group__hypothesis_000046', 'revision__hypothesis_000046', 'group__hypothesis_000047', 'revision__hypothesis_000047', 'group__hypothesis_000048', 'revision__hypothesis_000048', 'group__hypothesis_000049', 'revision__hypothesis_000049', 'group__hypothesis_000050', 'revision__hypothesis_000050', 'group__hypothesis_000051', 'revision__hypothesis_000051', 'group__hypothesis_000052', 'revision__hypothesis_000052', 'group__hypothesis_000054', 'revision__hypothesis_000054', 'group__hypothesis_000057', 'revision__hypothesis_000057', 'group__hypothesis_000058', 'revision__hypothesis_000058', 'group__hypothesis_000059', 'revision__hypothesis_000059']
+		These features carry no predictive signal and should be manually investigated.
+		This is typically a feature which has the same value for all rows.
+		These features do not need to be present at inference time.
+	Unused Original Features (Count: 26): ['profile_seed', 'profile_time_limit', 'profile_presets', 'profile_validation_strategy', 'profile_fold_config', 'component_group_names', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000007', 'revision__hypothesis_000009', 'revision__hypothesis_000010', 'revision__hypothesis_000012', 'revision__hypothesis_000013', 'revision__hypothesis_000015', 'revision__hypothesis_000016', 'revision__hypothesis_000018', 'revision__hypothesis_000028', 'revision__hypothesis_000029', 'revision__hypothesis_000032', 'revision__hypothesis_000035', 'revision__hypothesis_000040', 'revision__hypothesis_000053', 'revision__hypothesis_000055', 'revision__hypothesis_000056', 'revision__hypothesis_000060']
+		These features were not used to generate any of the output features. Add a feature generator compatible with these features to utilize them.
+		Features can also be unused if they carry very little information, such as being categorical but having almost entirely unique values or being duplicates of other features.
+		These features do not need to be present at inference time.
+		('float', [])        :  1 | ['profile_seed']
+		('int', [])          : 21 | ['profile_time_limit', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000007', ...]
+		('object', [])       :  3 | ['profile_presets', 'profile_validation_strategy', 'component_group_names']
+		('object', ['text']) :  1 | ['profile_fold_config']
+	Types of features in original data (raw dtype, special dtypes):
+		('float', [])  :  8 | ['n_new_groups_vs_parent', 'n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', ...]
+		('int', [])    : 26 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum', 'group__hypothesis_000004', ...]
+		('object', []) :  3 | ['profile_id', 'profile_hash', 'component_families']
+	Types of features in processed data (raw dtype, special dtypes):
+		('category', [])  :  1 | ['component_families']
+		('float', [])     :  7 | ['n_changed_groups_vs_parent', 'parent_cv_score', 'parent_delta_vs_grandparent', 'hist_group_mean_cv', 'hist_group_max_cv', ...]
+		('int', [])       :  5 | ['graph_depth', 'n_active_groups', 'n_component_versions', 'hist_group_use_count_sum', 'revision__hypothesis_000008']
+		('int', ['bool']) : 24 | ['profile_id', 'profile_hash', 'n_new_groups_vs_parent', 'group__hypothesis_000004', 'group__hypothesis_000005', ...]
+	0.0s = Fit runtime
+	37 features in original data used to generate 37 features in processed data.
+	Train Data (Processed) Memory Usage: 0.01 MB (0.0% of available memory)
+Data preprocessing and feature engineering runtime = 0.05s ...
+AutoGluon will gauge predictive performance using evaluation metric: 'mean_absolute_error'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+	To change this, specify the eval_metric parameter of Predictor()
+Automatically generating train/validation split with holdout_frac=0.2, Train Rows: 32, Val Rows: 8
+User-specified model hyperparameters to be fit:
+{
+	'NN_TORCH': [{}],
+	'GBM': [{'extra_trees': True, 'ag_args': {'name_suffix': 'XT'}}, {}, {'learning_rate': 0.03, 'num_leaves': 128, 'feature_fraction': 0.9, 'min_data_in_leaf': 3, 'ag_args': {'name_suffix': 'Large', 'priority': 0, 'hyperparameter_tune_kwargs': None}}],
+	'CAT': [{}],
+	'XGB': [{}],
+	'FASTAI': [{}],
+	'RF': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+	'XT': [{'criterion': 'gini', 'ag_args': {'name_suffix': 'Gini', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'entropy', 'ag_args': {'name_suffix': 'Entr', 'problem_types': ['binary', 'multiclass']}}, {'criterion': 'squared_error', 'ag_args': {'name_suffix': 'MSE', 'problem_types': ['regression', 'quantile']}}],
+}
+Fitting 9 L1 models, fit_strategy="sequential" ...
+Fitting model: LightGBMXT ... Training model for up to 29.95s of the 29.95s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/151.1 GB
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.26s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBM ... Training model for up to 29.69s of the 29.69s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/151.8 GB
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.23s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: RandomForestMSE ... Training model for up to 29.46s of the 29.45s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.17s	 = Training   runtime
+	0.03s	 = Validation runtime
+Fitting model: CatBoost ... Training model for up to 29.25s of the 29.25s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	26.0s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: ExtraTreesMSE ... Training model for up to 3.23s of the 3.23s of remaining time.
+	Fitting with cpus=32, gpus=0
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.18s	 = Training   runtime
+	0.02s	 = Validation runtime
+Fitting model: NeuralNetFastAI ... Training model for up to 3.03s of the 3.02s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/151.7 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.18s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: XGBoost ... Training model for up to 2.84s of the 2.84s of remaining time.
+	Fitting with cpus=16, gpus=0
+	-0.0003	 = Validation score   (-mean_absolute_error)
+	0.04s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: NeuralNetTorch ... Training model for up to 2.79s of the 2.79s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.0/151.7 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.43s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: LightGBMLarge ... Training model for up to 2.36s of the 2.36s of remaining time.
+	Fitting with cpus=16, gpus=0, mem=0.1/151.7 GB
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.44s	 = Training   runtime
+	0.0s	 = Validation runtime
+Fitting model: WeightedEnsemble_L2 ... Training model for up to 29.95s of the 1.91s of remaining time.
+	Fitting 1 model on all data | Fitting with cpus=32, gpus=0, mem=0.0/151.7 GB
+	Ensemble Weights: {'NeuralNetTorch': 0.5, 'LightGBMLarge': 0.5}
+	-0.0002	 = Validation score   (-mean_absolute_error)
+	0.02s	 = Training   runtime
+	0.0s	 = Validation runtime
+AutoGluon training complete, total runtime = 28.11s ... Best model: WeightedEnsemble_L2 | Estimated inference throughput: 1310.4 rows/s (8 batch size)
+TabularPredictor saved. To load, use: predictor = TabularPredictor.load("/home/xai/DEV/TheML/projects/kaggle/playground-series-s6e6/meta_models/meta_runs/20260626T004731-quick/targets/public_gap/final/AutoGluonModels")
+These features in provided data are not utilized by the predictor and will be ignored: ['mode', 'dataset_fingerprint', 'profile_seed', 'profile_time_limit', 'profile_presets', 'profile_validation_strategy', 'profile_class_balance', 'profile_use_gpu', 'profile_fold_config', 'n_removed_groups_vs_parent', 'has_unseen_group', 'n_unseen_groups', 'known_group_coverage', 'component_group_names', 'group__hypothesis_000000', 'revision__hypothesis_000000', 'group__hypothesis_000001', 'revision__hypothesis_000001', 'group__hypothesis_000002', 'revision__hypothesis_000002', 'group__hypothesis_000003', 'revision__hypothesis_000003', 'revision__hypothesis_000004', 'revision__hypothesis_000005', 'revision__hypothesis_000006', 'revision__hypothesis_000007', 'revision__hypothesis_000009', 'revision__hypothesis_000010', 'group__hypothesis_000011', 'revision__hypothesis_000011', 'revision__hypothesis_000012', 'revision__hypothesis_000013', 'group__hypothesis_000014', 'revision__hypothesis_000014', 'revision__hypothesis_000015', 'revision__hypothesis_000016', 'group__hypothesis_000017', 'revision__hypothesis_000017', 'revision__hypothesis_000018', 'group__hypothesis_000019', 'revision__hypothesis_000019', 'group__hypothesis_000020', 'revision__hypothesis_000020', 'group__hypothesis_000021', 'revision__hypothesis_000021', 'group__hypothesis_000022', 'revision__hypothesis_000022', 'group__hypothesis_000023', 'revision__hypothesis_000023', 'group__hypothesis_000024', 'revision__hypothesis_000024', 'group__hypothesis_000025', 'revision__hypothesis_000025', 'group__hypothesis_000026', 'revision__hypothesis_000026', 'group__hypothesis_000027', 'revision__hypothesis_000027', 'revision__hypothesis_000028', 'revision__hypothesis_000029', 'group__hypothesis_000030', 'revision__hypothesis_000030', 'group__hypothesis_000031', 'revision__hypothesis_000031', 'revision__hypothesis_000032', 'group__hypothesis_000033', 'revision__hypothesis_000033', 'group__hypothesis_000034', 'revision__hypothesis_000034', 'revision__hypothesis_000035', 'group__hypothesis_000036', 'revision__hypothesis_000036', 'group__hypothesis_000037', 'revision__hypothesis_000037', 'group__hypothesis_000038', 'revision__hypothesis_000038', 'group__hypothesis_000039', 'revision__hypothesis_000039', 'revision__hypothesis_000040', 'group__hypothesis_000041', 'revision__hypothesis_000041', 'group__hypothesis_000042', 'revision__hypothesis_000042', 'group__hypothesis_000043', 'revision__hypothesis_000043', 'group__hypothesis_000044', 'revision__hypothesis_000044', 'group__hypothesis_000045', 'revision__hypothesis_000045', 'group__hypothesis_000046', 'revision__hypothesis_000046', 'group__hypothesis_000047', 'revision__hypothesis_000047', 'group__hypothesis_000048', 'revision__hypothesis_000048', 'group__hypothesis_000049', 'revision__hypothesis_000049', 'group__hypothesis_000050', 'revision__hypothesis_000050', 'group__hypothesis_000051', 'revision__hypothesis_000051', 'group__hypothesis_000052', 'revision__hypothesis_000052', 'revision__hypothesis_000053', 'group__hypothesis_000054', 'revision__hypothesis_000054', 'revision__hypothesis_000055', 'revision__hypothesis_000056', 'group__hypothesis_000057', 'revision__hypothesis_000057', 'group__hypothesis_000058', 'revision__hypothesis_000058', 'group__hypothesis_000059', 'revision__hypothesis_000059', 'revision__hypothesis_000060']
+Computing feature importance via permutation shuffling for 37 features using 40 rows with 5 shuffle sets...
+	3.1s	= Expected runtime (0.62s per shuffle set)
+	0.18s	= Actual runtime (Completed 5 of 5 shuffle sets)

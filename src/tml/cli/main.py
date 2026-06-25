@@ -80,6 +80,7 @@ from tml.hypotheses.materialize import RootMaterializationPlan, materialize_miss
 from tml.hypotheses.revise import RootRevisePlan, revise_root_hypothesis, root_revise_plan
 from tml.hypotheses.revisions import delete_revision, normalize_hypothesis_id, set_active_materialization
 from tml.hypotheses.run import RootRunPlan, root_run_plan, run_missing
+from tml.metamodel.cli import meta_app
 from tml.prompts.diff import diff_prompt
 from tml.prompts.probe import probe_prompt, render_prompt
 from tml.rerun import RerunPlan, rerun_plan, rerun_submission
@@ -224,6 +225,7 @@ app.add_typer(root_app, name="root", help="Generate, materialize, fix, and run R
 app.add_typer(branch_app, name="branch", help="Compose, run, inspect, and delete BRANCH artifacts.")
 app.add_typer(prompt_app, name="prompt", help="Render, probe, and compare model prompts.")
 app.add_typer(kaggle_app, name="kaggle", help="Download data, sync submissions, and submit to Kaggle.")
+app.add_typer(meta_app, name="meta", help="Standalone experiment meta-model diagnostics.")
 
 EXTRA = {"allow_extra_args": True, "ignore_unknown_options": True}
 
@@ -2624,13 +2626,11 @@ def _branch_status_row(db_row: dict[str, object], *, summary_limit: int) -> list
     elif str(db_row.get("branch_status") or "") == "materialized":
         status = Text("⌘", style="cyan")
         score = ""
-        source_score = ""
         node = ""
         run_duration = ""
     else:
         status = Text("◇", style="dim")
         score = ""
-        source_score = ""
         node = ""
         run_duration = ""
     return [
