@@ -2145,23 +2145,25 @@ def _print_branch_grow_summary(result: BranchGrowResult) -> None:
 
     item_table = Table(title="Processed branches", box=box.SIMPLE_HEAVY, show_header=True, pad_edge=False)
     item_table.add_column("Step", justify="right", no_wrap=True)
-    item_table.add_column("Action", no_wrap=True)
     item_table.add_column("Branch", no_wrap=True)
     item_table.add_column("Parent", no_wrap=True)
     item_table.add_column("Source", no_wrap=True)
     item_table.add_column("Run", no_wrap=True)
     item_table.add_column("Score", justify="right", no_wrap=True)
+    item_table.add_column("Δ Parent", justify="right", no_wrap=True)
+    item_table.add_column("Time", justify="right", no_wrap=True)
     item_table.add_column("Node", no_wrap=True)
     best_metric = _best_numeric(item.metric for item in result.items)
     for item in result.items:
         item_table.add_row(
             str(item.step_index),
-            item.action,
             item.branch_id,
             item.parent_ref or "-",
             item.source_ref or "-",
             item.run_status,
             _score_text(item.metric, best=best_metric, style="reverse"),
+            _format_score_delta(item.parent_score, item.metric),
+            _seconds_text(item.run_seconds),
             item.node_id or "",
         )
     if result.items:
