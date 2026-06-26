@@ -13,6 +13,7 @@ from tml.core.paths import active_project_ref
 from tml.metamodel.features import build_candidate_frame, write_feature_artifacts
 from tml.metamodel.importer import build_meta_dataset, load_records_from_csv
 from tml.metamodel.reporting import write_report
+from tml.metamodel.search import CandidateSearchConfig, generate_candidate_suggestions
 from tml.metamodel.training import predict_with_uncertainty, run_meta_modeling, train_target_from_dataset
 
 
@@ -170,6 +171,64 @@ def predict_cmd(
         _abort(exc)
 
 
+@meta_app.command("suggest", context_settings=EXTRA, help="Generate advisory hypothesis-set candidates ranked by the meta-model.")
+def suggest_cmd(
+    ctx: typer.Context,
+    json_flag: Annotated[bool, typer.Option("--json", help="Print machine-readable JSON.")] = False,
+) -> None:
+    try:
+        overrides = _overrides(ctx.args)
+        _validate_keys(
+            overrides,
+            {
+                "run",
+                "target",
+                "top",
+                "candidates",
+                "beam",
+                "depth",
+                "exploration",
+                "seed",
+                "max_groups",
+                "include-tested",
+                "include_tested",
+                "buildable",
+                "mode",
+                "out",
+                "json",
+            },
+            "tml meta suggest",
+        )
+        ref = active_project_ref()
+        run_dir = Path(str(overrides.get("run") or ""))
+        if not run_dir:
+            raise ValueError("Missing run=<path>.")
+        run_dir = _resolve_existing_or_project_path(ref.path, run_dir)
+        target = str(overrides.get("target") or "cv_score")
+        output_dir = _resolve_existing_or_project_path(ref.path, overrides["out"]) if "out" in overrides else None
+        include_tested = _bool(overrides.get("include-tested", overrides.get("include_tested", False)))
+        config = CandidateSearchConfig(
+            target=target,
+            top=_int(overrides.get("top", 25), "top"),
+            candidates=_int(overrides.get("candidates", 2000), "candidates"),
+            beam=_int(overrides.get("beam", 50), "beam"),
+            depth=_int(overrides.get("depth", 3), "depth"),
+            exploration=_float(overrides.get("exploration", 0.10), "exploration"),
+            seed=_int(overrides.get("seed", 42), "seed"),
+            max_groups=_optional_int(overrides.get("max_groups"), "max_groups"),
+            include_tested=include_tested,
+            buildable=_bool(overrides.get("buildable", True)),
+            mode=str(overrides.get("mode") or "autogluon"),
+        )
+        result = generate_candidate_suggestions(ref.path, run_dir, config=config, output_dir=output_dir)
+        if json_flag or _bool(overrides.get("json", False)):
+            console.print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+            return
+        _print_suggest_summary(result)
+    except Exception as exc:
+        _abort(exc)
+
+
 def _print_run_summary(slug: str, output_dir: Path, targets, report_md: Path, report_json: Path) -> None:
     table = Table(title="Meta-model run", box=box.SIMPLE_HEAVY, show_header=False)
     table.add_column("Field", style="bold", no_wrap=True)
@@ -181,6 +240,41 @@ def _print_run_summary(slug: str, output_dir: Path, targets, report_md: Path, re
     table.add_row("Report MD", str(report_md))
     table.add_row("Report JSON", str(report_json))
     console.print(table)
+
+
+def _print_suggest_summary(result) -> None:
+    table = Table(title="Meta-model candidate suggestions", box=box.SIMPLE_HEAVY)
+    table.add_column("#", justify="right", no_wrap=True)
+    table.add_column("Pred", justify="right", no_wrap=True)
+    table.add_column("Std", justify="right", no_wrap=True)
+    table.add_column("Groups", justify="right", no_wrap=True)
+    table.add_column("Added", overflow="fold")
+    table.add_column("Removed", overflow="fold")
+    table.add_column("Nearest", overflow="fold")
+    table.add_column("First build command", overflow="fold")
+    for item in result.suggestions:
+        first_command = item.branch_add_commands[0] if item.branch_add_commands else "n/a"
+        table.add_row(
+            str(item.rank),
+            f"{item.prediction:.6f}",
+            _first_float(item.split_prediction_std),
+            str(item.group_count),
+            ",".join(item.added_groups) or "none",
+            ",".join(item.removed_groups) or "none",
+            f"{item.nearest_ref or 'n/a'} ({item.nearest_jaccard:.3f})",
+            first_command,
+        )
+    console.print(table)
+    artifacts = Table(title="Candidate search artifacts", box=box.SIMPLE_HEAVY, show_header=False)
+    artifacts.add_column("Field", style="bold", no_wrap=True)
+    artifacts.add_column("Value", overflow="fold")
+    artifacts.add_row("Output", str(result.output_dir))
+    artifacts.add_row("JSON", str(result.json_path))
+    artifacts.add_row("CSV", str(result.csv_path))
+    artifacts.add_row("Markdown", str(result.markdown_path))
+    artifacts.add_row("Generated", str(result.generated_count))
+    artifacts.add_row("Scored", str(result.scored_count))
+    console.print(artifacts)
 
 
 def _overrides(args: list[str]) -> dict[str, object]:
@@ -223,6 +317,32 @@ def _bool(value: object) -> bool:
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() == "true"
+
+
+def _int(value: object, label: str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} must be an integer.") from exc
+    if parsed <= 0:
+        raise ValueError(f"{label} must be positive.")
+    return parsed
+
+
+def _optional_int(value: object, label: str) -> int | None:
+    if value is None or value == "":
+        return None
+    return _int(value, label)
+
+
+def _float(value: object, label: str) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} must be a number.") from exc
+    if parsed < 0:
+        raise ValueError(f"{label} must be non-negative.")
+    return parsed
 
 
 def _optional_str(value: object) -> str | None:

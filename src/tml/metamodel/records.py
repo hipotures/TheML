@@ -251,7 +251,11 @@ def _optional_int(value: object) -> int | None:
     try:
         return int(value)
     except (TypeError, ValueError):
-        return None
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return int(number) if number.is_integer() else None
 
 
 def _optional_float(value: object) -> float | None:

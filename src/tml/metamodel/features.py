@@ -54,8 +54,49 @@ class FeatureBuildResult:
 
 def build_feature_frame(records: list[MetaRecord]):
     pd = _require_pandas()
+    rows = _build_feature_rows(records, candidate_records=[], include_record_rows=True)
+    return pd.DataFrame(rows)
+
+
+def build_candidate_frames(
+    project_dir: Path,
+    records: list[MetaRecord],
+    *,
+    candidates: list[tuple[list[str], str | None]],
+    mode: str,
+    profile_id: str | None,
+    feature_columns: list[str],
+):
+    pd = _require_pandas()
+    candidate_records = [
+        _candidate_record(
+            project_dir,
+            records,
+            groups=groups,
+            parent=parent,
+            mode=mode,
+            profile_id=profile_id,
+            node_id=f"candidate-{index:06d}",
+        )
+        for index, (groups, parent) in enumerate(candidates)
+    ]
+    rows = _build_feature_rows(records, candidate_records=candidate_records, include_record_rows=False)
+    frame = pd.DataFrame(rows)
+    for column in feature_columns:
+        if column not in frame.columns:
+            frame[column] = None
+    return pd.DataFrame(frame[feature_columns])
+
+
+def _build_feature_rows(
+    records: list[MetaRecord],
+    *,
+    candidate_records: list[MetaRecord],
+    include_record_rows: bool,
+) -> list[dict[str, Any]]:
     ordered = sorted(records, key=_record_sort_key)
-    all_group_keys = sorted({component.logical_key for record in ordered for component in record.components})
+    all_records = [*ordered, *candidate_records]
+    all_group_keys = sorted({component.logical_key for record in all_records for component in record.components})
     rows: list[dict[str, Any]] = []
     seen_groups: set[str] = set()
     prior_scores_by_group: dict[str, list[float]] = {}
@@ -63,107 +104,162 @@ def build_feature_frame(records: list[MetaRecord]):
     best_score_by_entity: dict[str, float] = {}
     group_to_column = {key: f"group__{_safe_feature_name(key)}" for key in all_group_keys}
     revision_to_column = {key: f"revision__{_safe_feature_name(key)}" for key in all_group_keys}
+    components_by_entity = _components_by_entity(ordered)
 
     for record in ordered:
-        group_keys = [component.logical_key for component in record.components]
-        version_keys = [component.version_key for component in record.components]
-        group_set = set(group_keys)
-        unseen = sorted(group_set - seen_groups)
-        parent_score = best_score_by_entity.get(record.parent_key or "")
-        grandparent_score = best_score_by_entity.get(record.grandparent_key or "")
-        parent_delta = (
-            parent_score - grandparent_score
-            if parent_score is not None and grandparent_score is not None
-            else None
+        row = _feature_row(
+            record,
+            all_group_keys=all_group_keys,
+            group_to_column=group_to_column,
+            revision_to_column=revision_to_column,
+            components_by_entity=components_by_entity,
+            seen_groups=seen_groups,
+            prior_scores_by_group=prior_scores_by_group,
+            prior_effects_by_group=prior_effects_by_group,
+            best_score_by_entity=best_score_by_entity,
         )
-        parent_components = _components_by_entity(ordered).get(record.parent_key or "", [])
-        parent_logic = {component.logical_key: component for component in parent_components}
-        current_logic = {component.logical_key: component for component in record.components}
-        new_groups = [key for key in current_logic if key not in parent_logic]
-        changed_groups = [
-            key
-            for key, component in current_logic.items()
-            if key in parent_logic and component.version_key != parent_logic[key].version_key
-        ]
-        removed_groups = [key for key in parent_logic if key not in current_logic]
-        historical_scores = [score for key in group_set for score in prior_scores_by_group.get(key, [])]
-        historical_effects = [effect for key in group_set for effect in prior_effects_by_group.get(key, [])]
-        historical_counts = [len(prior_scores_by_group.get(key, [])) for key in group_set]
+        if include_record_rows:
+            rows.append(row)
+        _update_feature_state(record, row, seen_groups, prior_scores_by_group, prior_effects_by_group, best_score_by_entity)
 
-        row: dict[str, Any] = {
-            "node_id": record.node_id,
-            "kind": record.kind,
-            "run_id": record.run_id,
-            "step": record.step,
-            "mode": record.mode,
-            "profile_id": record.profile_id,
-            "profile_hash": record.profile_hash,
-            "status": record.status,
-            "created_at": record.created_at,
-            "finished_at": record.finished_at,
-            "run_seconds": record.run_seconds,
-            "hypothesis_id": record.hypothesis_id,
-            "branch_id": record.branch_id,
-            "parent_kind": record.parent_kind,
-            "parent_id": record.parent_id,
-            "grandparent_kind": record.grandparent_kind,
-            "grandparent_id": record.grandparent_id,
-            "root_id": record.root_id,
-            "graph_depth": record.graph_depth,
-            "materialization_file": record.materialization_file,
-            "code_hash": record.code_hash,
-            "cv_score": record.cv_score,
-            "public_score": record.public_score,
-            "public_gap": record.public_score - record.cv_score if record.public_score is not None and record.cv_score is not None else None,
-            "metric_name": record.metric_name,
-            "submit_status": record.submit_status,
-            "dataset_fingerprint": record.dataset_fingerprint,
-            "profile_seed": record.profile_seed,
-            "profile_time_limit": record.profile_time_limit,
-            "profile_presets": record.profile_presets,
-            "profile_validation_strategy": record.profile_validation_strategy,
-            "profile_class_balance": record.profile_class_balance,
-            "profile_use_gpu": record.profile_use_gpu,
-            "profile_fold_config": record.profile_fold_config,
-            "n_active_groups": len(group_set),
-            "n_component_versions": len(set(version_keys)),
-            "n_new_groups_vs_parent": len(new_groups) if parent_components else None,
-            "n_changed_groups_vs_parent": len(changed_groups) if parent_components else None,
-            "n_removed_groups_vs_parent": len(removed_groups) if parent_components else None,
-            "parent_cv_score": parent_score,
-            "parent_delta_vs_grandparent": parent_delta,
-            "has_unseen_group": int(bool(unseen)),
-            "n_unseen_groups": len(unseen),
-            "known_group_coverage": 1.0 - (len(unseen) / len(group_set)) if group_set else None,
-            "hist_group_mean_cv": mean(historical_scores) if historical_scores else None,
-            "hist_group_max_cv": max(historical_scores) if historical_scores else None,
-            "hist_group_use_count_sum": sum(historical_counts) if historical_counts else 0,
-            "hist_group_use_count_mean": mean(historical_counts) if historical_counts else 0,
-            "hist_group_effect_mean": mean(historical_effects) if historical_effects else None,
-            "component_families": ";".join(sorted({component.family or "" for component in record.components if component.family})),
-            "component_group_names": ";".join(sorted({component.group_name or "" for component in record.components if component.group_name})),
-            "active_groups": ";".join(group_keys),
-            "active_group_versions": ";".join(version_keys),
-        }
-        revision_by_group = {component.logical_key: component.revision for component in record.components}
-        for group_key in all_group_keys:
-            row[group_to_column[group_key]] = int(group_key in group_set)
-            row[revision_to_column[group_key]] = revision_by_group.get(group_key) or 0
-        rows.append(row)
+    for record in candidate_records:
+        rows.append(
+            _feature_row(
+                record,
+                all_group_keys=all_group_keys,
+                group_to_column=group_to_column,
+                revision_to_column=revision_to_column,
+                components_by_entity=components_by_entity,
+                seen_groups=seen_groups,
+                prior_scores_by_group=prior_scores_by_group,
+                prior_effects_by_group=prior_effects_by_group,
+                best_score_by_entity=best_score_by_entity,
+            )
+        )
 
-        if record.cv_score is not None:
+    return rows
+
+
+def _feature_row(
+    record: MetaRecord,
+    *,
+    all_group_keys: list[str],
+    group_to_column: dict[str, str],
+    revision_to_column: dict[str, str],
+    components_by_entity: dict[str, list[MetaComponent]],
+    seen_groups: set[str],
+    prior_scores_by_group: dict[str, list[float]],
+    prior_effects_by_group: dict[str, list[float]],
+    best_score_by_entity: dict[str, float],
+) -> dict[str, Any]:
+    group_keys = [component.logical_key for component in record.components]
+    version_keys = [component.version_key for component in record.components]
+    group_set = set(group_keys)
+    unseen = sorted(group_set - seen_groups)
+    parent_score = best_score_by_entity.get(record.parent_key or "")
+    grandparent_score = best_score_by_entity.get(record.grandparent_key or "")
+    parent_delta = (
+        parent_score - grandparent_score
+        if parent_score is not None and grandparent_score is not None
+        else None
+    )
+    parent_components = components_by_entity.get(record.parent_key or "", [])
+    parent_logic = {component.logical_key: component for component in parent_components}
+    current_logic = {component.logical_key: component for component in record.components}
+    new_groups = [key for key in current_logic if key not in parent_logic]
+    changed_groups = [
+        key
+        for key, component in current_logic.items()
+        if key in parent_logic and component.version_key != parent_logic[key].version_key
+    ]
+    removed_groups = [key for key in parent_logic if key not in current_logic]
+    historical_scores = [score for key in group_set for score in prior_scores_by_group.get(key, [])]
+    historical_effects = [effect for key in group_set for effect in prior_effects_by_group.get(key, [])]
+    historical_counts = [len(prior_scores_by_group.get(key, [])) for key in group_set]
+
+    row: dict[str, Any] = {
+        "node_id": record.node_id,
+        "kind": record.kind,
+        "run_id": record.run_id,
+        "step": record.step,
+        "mode": record.mode,
+        "profile_id": record.profile_id,
+        "profile_hash": record.profile_hash,
+        "status": record.status,
+        "created_at": record.created_at,
+        "finished_at": record.finished_at,
+        "run_seconds": record.run_seconds,
+        "hypothesis_id": record.hypothesis_id,
+        "branch_id": record.branch_id,
+        "parent_kind": record.parent_kind,
+        "parent_id": record.parent_id,
+        "grandparent_kind": record.grandparent_kind,
+        "grandparent_id": record.grandparent_id,
+        "root_id": record.root_id,
+        "graph_depth": record.graph_depth,
+        "materialization_file": record.materialization_file,
+        "code_hash": record.code_hash,
+        "cv_score": record.cv_score,
+        "public_score": record.public_score,
+        "public_gap": record.public_score - record.cv_score if record.public_score is not None and record.cv_score is not None else None,
+        "metric_name": record.metric_name,
+        "submit_status": record.submit_status,
+        "dataset_fingerprint": record.dataset_fingerprint,
+        "profile_seed": record.profile_seed,
+        "profile_time_limit": record.profile_time_limit,
+        "profile_presets": record.profile_presets,
+        "profile_validation_strategy": record.profile_validation_strategy,
+        "profile_class_balance": record.profile_class_balance,
+        "profile_use_gpu": record.profile_use_gpu,
+        "profile_fold_config": record.profile_fold_config,
+        "n_active_groups": len(group_set),
+        "n_component_versions": len(set(version_keys)),
+        "n_new_groups_vs_parent": len(new_groups) if parent_components else None,
+        "n_changed_groups_vs_parent": len(changed_groups) if parent_components else None,
+        "n_removed_groups_vs_parent": len(removed_groups) if parent_components else None,
+        "parent_cv_score": parent_score,
+        "parent_delta_vs_grandparent": parent_delta,
+        "has_unseen_group": int(bool(unseen)),
+        "n_unseen_groups": len(unseen),
+        "known_group_coverage": 1.0 - (len(unseen) / len(group_set)) if group_set else None,
+        "hist_group_mean_cv": mean(historical_scores) if historical_scores else None,
+        "hist_group_max_cv": max(historical_scores) if historical_scores else None,
+        "hist_group_use_count_sum": sum(historical_counts) if historical_counts else 0,
+        "hist_group_use_count_mean": mean(historical_counts) if historical_counts else 0,
+        "hist_group_effect_mean": mean(historical_effects) if historical_effects else None,
+        "component_families": ";".join(sorted({component.family or "" for component in record.components if component.family})),
+        "component_group_names": ";".join(sorted({component.group_name or "" for component in record.components if component.group_name})),
+        "active_groups": ";".join(group_keys),
+        "active_group_versions": ";".join(version_keys),
+    }
+    revision_by_group = {component.logical_key: component.revision for component in record.components}
+    for group_key in all_group_keys:
+        row[group_to_column[group_key]] = int(group_key in group_set)
+        row[revision_to_column[group_key]] = revision_by_group.get(group_key) or 0
+    return row
+
+
+def _update_feature_state(
+    record: MetaRecord,
+    row: dict[str, Any],
+    seen_groups: set[str],
+    prior_scores_by_group: dict[str, list[float]],
+    prior_effects_by_group: dict[str, list[float]],
+    best_score_by_entity: dict[str, float],
+) -> None:
+    group_set = {component.logical_key for component in record.components}
+    parent_score = row.get("parent_cv_score")
+    if record.cv_score is not None:
+        for group_key in group_set:
+            prior_scores_by_group.setdefault(group_key, []).append(record.cv_score)
+        if isinstance(parent_score, int | float):
+            effect = record.cv_score - float(parent_score)
             for group_key in group_set:
-                prior_scores_by_group.setdefault(group_key, []).append(record.cv_score)
-            if parent_score is not None:
-                effect = record.cv_score - parent_score
-                for group_key in group_set:
-                    prior_effects_by_group.setdefault(group_key, []).append(effect)
-            previous = best_score_by_entity.get(record.entity_key)
-            if previous is None or record.cv_score > previous:
-                best_score_by_entity[record.entity_key] = record.cv_score
-        seen_groups.update(group_set)
-
-    return pd.DataFrame(rows)
+                prior_effects_by_group.setdefault(group_key, []).append(effect)
+        previous = best_score_by_entity.get(record.entity_key)
+        if previous is None or record.cv_score > previous:
+            best_score_by_entity[record.entity_key] = record.cv_score
+    seen_groups.update(group_set)
 
 
 def write_feature_artifacts(records: list[MetaRecord], output_dir: Path) -> tuple[Any, FeatureBuildResult]:
@@ -212,12 +308,39 @@ def build_candidate_frame(
     feature_columns: list[str],
 ):
     pd = _require_pandas()
+    candidate = _candidate_record(
+        project_dir,
+        records,
+        groups=groups,
+        parent=parent,
+        mode=mode,
+        profile_id=profile_id,
+        node_id="candidate",
+    )
+    full = build_feature_frame([*records, candidate])
+    row = full[full["node_id"] == "candidate"].copy()
+    for column in feature_columns:
+        if column not in row.columns:
+            row[column] = None
+    return pd.DataFrame(row[feature_columns])
+
+
+def _candidate_record(
+    project_dir: Path,
+    records: list[MetaRecord],
+    *,
+    groups: list[str],
+    parent: str | None,
+    mode: str,
+    profile_id: str | None,
+    node_id: str,
+) -> MetaRecord:
     components = _candidate_components(project_dir, groups, mode=mode)
     parent_kind, parent_id = _candidate_parent(parent)
     root_id, graph_depth, grandparent_kind, grandparent_id = _candidate_graph_context(records, parent_kind, parent_id)
     profile_id = profile_id or _latest_profile_id(records, mode)
-    candidate = MetaRecord(
-        node_id="candidate",
+    return MetaRecord(
+        node_id=node_id,
         kind="candidate",
         run_id="",
         step=None,
@@ -246,12 +369,6 @@ def build_candidate_frame(
         dataset_fingerprint=dataset_fingerprint(project_dir),
         components=components,
     )
-    full = build_feature_frame([*records, candidate])
-    row = full[full["node_id"] == "candidate"].copy()
-    for column in feature_columns:
-        if column not in row.columns:
-            row[column] = None
-    return pd.DataFrame(row[feature_columns])
 
 
 def _candidate_components(project_dir: Path, groups: list[str], *, mode: str) -> list[MetaComponent]:
