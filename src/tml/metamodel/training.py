@@ -65,17 +65,17 @@ PROFILES = {
         min_public_examples=30,
         include_group_split=True,
     ),
-    "rerun": MetaTrainingProfile(
-        name="rerun",
-        split_count=5,
-        holdout_fraction=0.25,
-        split_time_limit=90,
-        final_time_limit=240,
+    "best": MetaTrainingProfile(
+        name="best",
+        split_count=0,
+        holdout_fraction=0.0,
+        split_time_limit=0,
+        final_time_limit=1800,
         presets="best_quality",
         random_seed=42,
         min_cv_examples=30,
         min_public_examples=30,
-        include_group_split=True,
+        include_group_split=False,
     ),
 }
 
