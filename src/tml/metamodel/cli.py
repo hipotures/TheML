@@ -9,6 +9,8 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
+from tml.branches.compose import add_branch
+from tml.branches.run import run_missing_branches
 from tml.core.paths import active_project_ref
 from tml.metamodel.features import build_candidate_frame, write_feature_artifacts
 from tml.metamodel.importer import build_meta_dataset, load_records_from_csv
@@ -229,6 +231,59 @@ def suggest_cmd(
         _abort(exc)
 
 
+@meta_app.command("build", context_settings=EXTRA, help="Materialize one meta-model candidate suggestion as BRANCH steps.")
+def build_cmd(ctx: typer.Context) -> None:
+    try:
+        overrides = _overrides(ctx.args)
+        _validate_keys(overrides, {"search", "rank", "run", "mode"}, "tml meta build")
+        ref = active_project_ref()
+        if "search" not in overrides:
+            raise ValueError("Missing search=<candidate_search_dir_or_json>.")
+        search_json = _candidate_search_json(ref.path, overrides["search"])
+        rank = _int(overrides.get("rank", 1), "rank")
+        run_after_build = _bool(overrides.get("run", False))
+        mode_override = _optional_str(overrides.get("mode"))
+        payload = json.loads(search_json.read_text(encoding="utf-8"))
+        suggestion = _candidate_suggestion(payload, rank)
+        steps = _candidate_branch_steps(suggestion)
+        if not steps:
+            raise ValueError(f"Suggestion rank={rank} has no branch-add steps to build.")
+
+        created_rows = []
+        current_parent: str | None = None
+        final_mode = mode_override
+        for step_index, step in enumerate(steps, start=1):
+            parent_ref = current_parent or step["parent"] or _optional_str(suggestion.get("parent_ref"))
+            if not parent_ref or parent_ref == "<BRANCH_FROM_PREVIOUS_STEP>":
+                raise ValueError(f"Suggestion rank={rank} step {step_index} has no concrete parent branch.")
+            mode = mode_override or step["mode"] or str((payload.get("config") or {}).get("mode") or "autogluon")
+            created = add_branch(ref.path, parent_ref=parent_ref, source_ref=step["source"], mode=mode)
+            current_parent = created.branch_id
+            final_mode = created.parent.mode
+            created_rows.append(
+                {
+                    "step": step_index,
+                    "parent": parent_ref,
+                    "source": step["source"],
+                    "branch": created.branch_id,
+                    "file": created.materialization_path,
+                }
+            )
+
+        executed_ids: list[str] = []
+        if run_after_build and current_parent:
+            executed_ids = run_missing_branches(
+                ref.path,
+                mode=final_mode,
+                branch_id=current_parent,
+                profile_overrides={},
+                progress=console.print,
+            )
+        _print_candidate_build_summary(ref.slug, search_json, suggestion, created_rows, current_parent, executed_ids)
+    except Exception as exc:
+        _abort(exc)
+
+
 def _print_run_summary(slug: str, output_dir: Path, targets, report_md: Path, report_json: Path) -> None:
     table = Table(title="Meta-model run", box=box.SIMPLE_HEAVY, show_header=False)
     table.add_column("Field", style="bold", no_wrap=True)
@@ -251,9 +306,8 @@ def _print_suggest_summary(result) -> None:
     table.add_column("Added", overflow="fold")
     table.add_column("Removed", overflow="fold")
     table.add_column("Nearest", overflow="fold")
-    table.add_column("First build command", overflow="fold")
+    table.add_column("Build", no_wrap=True)
     for item in result.suggestions:
-        first_command = item.branch_add_commands[0] if item.branch_add_commands else "n/a"
         table.add_row(
             str(item.rank),
             f"{item.prediction:.6f}",
@@ -262,7 +316,7 @@ def _print_suggest_summary(result) -> None:
             ",".join(item.added_groups) or "none",
             ",".join(item.removed_groups) or "none",
             f"{item.nearest_ref or 'n/a'} ({item.nearest_jaccard:.3f})",
-            first_command,
+            f"rank={item.rank}",
         )
     console.print(table)
     artifacts = Table(title="Candidate search artifacts", box=box.SIMPLE_HEAVY, show_header=False)
@@ -274,7 +328,85 @@ def _print_suggest_summary(result) -> None:
     artifacts.add_row("Markdown", str(result.markdown_path))
     artifacts.add_row("Generated", str(result.generated_count))
     artifacts.add_row("Scored", str(result.scored_count))
+    artifacts.add_row("Build rank", f"uv run tml meta build search={result.output_dir} rank=<rank>")
+    artifacts.add_row("Build and run", f"uv run tml meta build search={result.output_dir} rank=<rank> run=true")
     console.print(artifacts)
+
+
+def _print_candidate_build_summary(
+    slug: str,
+    search_json: Path,
+    suggestion: dict[str, object],
+    created_rows: list[dict[str, object]],
+    final_branch: str | None,
+    executed_ids: list[str],
+) -> None:
+    table = Table(title="Meta-model candidate build", box=box.SIMPLE_HEAVY, show_header=False)
+    table.add_column("Field", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", slug)
+    table.add_row("Search", str(search_json))
+    table.add_row("Rank", str(suggestion.get("rank") or "n/a"))
+    prediction = suggestion.get("prediction")
+    table.add_row("Prediction", f"{prediction:.6f}" if isinstance(prediction, int | float) else "n/a")
+    table.add_row("Final branch", final_branch or "n/a")
+    if final_branch and not executed_ids:
+        table.add_row("Run", f"uv run tml branch run branch={final_branch}")
+    if executed_ids:
+        table.add_row("Executed nodes", ",".join(executed_ids))
+    console.print(table)
+
+    steps = Table(title="Materialized BRANCH steps", box=box.SIMPLE_HEAVY)
+    steps.add_column("#", justify="right", no_wrap=True)
+    steps.add_column("Parent", overflow="fold")
+    steps.add_column("Source", overflow="fold")
+    steps.add_column("Branch", no_wrap=True)
+    for row in created_rows:
+        steps.add_row(str(row["step"]), str(row["parent"]), str(row["source"]), str(row["branch"]))
+    console.print(steps)
+
+
+def _candidate_search_json(project_dir: Path, value: object) -> Path:
+    path = _resolve_existing_or_project_path(project_dir, value)
+    if path.is_dir():
+        path = path / "candidate_search.json"
+    if not path.exists():
+        raise ValueError(f"Candidate search JSON not found: {path}")
+    return path
+
+
+def _candidate_suggestion(payload: dict[str, object], rank: int) -> dict[str, object]:
+    suggestions = payload.get("suggestions")
+    if not isinstance(suggestions, list):
+        raise ValueError("Candidate search JSON does not contain suggestions.")
+    for item in suggestions:
+        if isinstance(item, dict) and item.get("rank") == rank:
+            return item
+    raise ValueError(f"Candidate suggestion rank={rank} not found.")
+
+
+def _candidate_branch_steps(suggestion: dict[str, object]) -> list[dict[str, str]]:
+    commands = suggestion.get("branch_add_commands")
+    if not isinstance(commands, list):
+        return []
+    steps = []
+    for command in commands:
+        fields = _command_fields(str(command))
+        source = fields.get("source")
+        if not source:
+            raise ValueError(f"Invalid branch-add command in suggestion: {command}")
+        steps.append({"parent": fields.get("parent") or "", "source": source, "mode": fields.get("mode") or ""})
+    return steps
+
+
+def _command_fields(command: str) -> dict[str, str]:
+    fields = {}
+    for token in command.split():
+        if "=" not in token:
+            continue
+        key, value = token.split("=", 1)
+        fields[key] = value
+    return fields
 
 
 def _overrides(args: list[str]) -> dict[str, object]:

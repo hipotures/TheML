@@ -621,6 +621,8 @@ def _write_artifacts(result: CandidateSearchResult) -> None:
         f"- Generated: {result.generated_count}",
         f"- Scored: {result.scored_count}",
         f"- Suggestions: {len(result.suggestions)}",
+        f"- Build a candidate: `uv run tml meta build search={result.output_dir} rank=<rank>`",
+        f"- Build and run a candidate: `uv run tml meta build search={result.output_dir} rank=<rank> run=true`",
         "",
         "## Top Candidates",
         "",
@@ -636,7 +638,9 @@ def _write_artifacts(result: CandidateSearchResult) -> None:
                 f"- Anchor: `{item.anchor_ref}`",
                 f"- Added: `{','.join(item.added_groups) or 'none'}`",
                 f"- Removed: `{','.join(item.removed_groups) or 'none'}`",
-                "- Build commands:",
+                f"- Build: `uv run tml meta build search={result.output_dir} rank={item.rank}`",
+                f"- Build and run: `uv run tml meta build search={result.output_dir} rank={item.rank} run=true`",
+                "- Low-level branch-add steps:",
                 "",
             ]
         )
