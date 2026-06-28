@@ -127,6 +127,7 @@ def branch_add_algorithmic_one(
     algo_id: str,
     mode: str | None = None,
     preferred_parent_ref: str | None = None,
+    require_preferred_parent: bool = False,
 ) -> BranchAlgorithmItem | None:
     config = load_project_config(project_dir)
     active_run_mode = mode or active_mode(config)
@@ -142,6 +143,7 @@ def branch_add_algorithmic_one(
         dry_run=False,
         item_index=1,
         preferred_parent_ref=preferred_parent_ref,
+        require_preferred_parent=require_preferred_parent,
     )
     return item
 
@@ -234,6 +236,7 @@ def _branch_add_algorithmic_next(
     dry_run: bool,
     item_index: int,
     preferred_parent_ref: str | None = None,
+    require_preferred_parent: bool = False,
 ) -> tuple[BranchAlgorithmItem | None, dict[str, int], str]:
     skip_reasons: dict[str, int] = {}
     candidates = branch_algorithm_candidate_pairs(
@@ -244,11 +247,20 @@ def _branch_add_algorithmic_next(
         source_kinds=algorithm.source_kinds,
         max_children=algorithm.max_children,
         limit=algorithm.candidate_limit,
+        parent_ref=preferred_parent_ref if require_preferred_parent else None,
     )
     if not candidates:
         return None, skip_reasons, "No score-ranked candidate pairs found."
 
-    for candidate in _ordered_candidates(candidates, preferred_parent_ref=preferred_parent_ref):
+    ordered_candidates = _ordered_candidates(
+        candidates,
+        preferred_parent_ref=preferred_parent_ref,
+        require_preferred_parent=require_preferred_parent,
+    )
+    if not ordered_candidates and preferred_parent_ref and require_preferred_parent:
+        return None, skip_reasons, f"No score-ranked candidate pairs found for node {preferred_parent_ref}."
+
+    for candidate in ordered_candidates:
         parent_key = (str(candidate["parent_kind"]), str(candidate["parent_id"]))
         parent_child_count = child_counts.get(parent_key, int(candidate["parent_child_count"] or 0))
         if parent_child_count >= algorithm.max_children:
@@ -302,6 +314,8 @@ def _branch_add_algorithmic_next(
             "",
         )
 
+    if preferred_parent_ref and require_preferred_parent:
+        return None, skip_reasons, f"No valid candidate pair found for node {preferred_parent_ref}."
     return None, skip_reasons, f"No valid candidate pair found in the top {len(candidates)} candidate pairs."
 
 
@@ -356,10 +370,17 @@ def _validate_epsilon_number(value: float, raw: object) -> None:
         raise TmlError(f"Invalid score.epsilon: {raw!r}")
 
 
-def _ordered_candidates(candidates: list[dict[str, Any]], *, preferred_parent_ref: str | None) -> list[dict[str, Any]]:
+def _ordered_candidates(
+    candidates: list[dict[str, Any]],
+    *,
+    preferred_parent_ref: str | None,
+    require_preferred_parent: bool = False,
+) -> list[dict[str, Any]]:
     if not preferred_parent_ref:
         return candidates
     preferred = [candidate for candidate in candidates if str(candidate.get("parent_ref") or "") == preferred_parent_ref]
+    if require_preferred_parent:
+        return preferred
     if not preferred:
         return candidates
     rest = [candidate for candidate in candidates if str(candidate.get("parent_ref") or "") != preferred_parent_ref]

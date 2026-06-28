@@ -353,6 +353,7 @@ def branch_algorithm_candidate_pairs(
     source_kinds: list[str],
     max_children: int,
     limit: int,
+    parent_ref: str | None = None,
 ) -> list[dict[str, Any]]:
     parent_ref_kinds = [_branch_algorithm_db_kind(kind) for kind in parent_kinds]
     source_ref_kinds = [_branch_algorithm_db_kind(kind) for kind in source_kinds]
@@ -363,6 +364,7 @@ def branch_algorithm_candidate_pairs(
     source_placeholders = ", ".join("?" for _ in source_ref_kinds)
     parent_order = _branch_algorithm_kind_order_sql("p.ref_kind", parent_ref_kinds)
     source_order = _branch_algorithm_kind_order_sql("s.ref_kind", source_ref_kinds)
+    parent_ref_filter = "AND p.ref = ?" if parent_ref else ""
     db_path = ensure_project_db(project_dir)
     params: list[Any] = [
         mode,
@@ -375,8 +377,10 @@ def branch_algorithm_candidate_pairs(
         *parent_ref_kinds,
         max_children,
         *source_ref_kinds,
-        limit,
     ]
+    if parent_ref:
+        params.append(parent_ref)
+    params.append(limit)
     with connect(db_path) as conn:
         rows = conn.execute(
             f"""
@@ -483,6 +487,7 @@ def branch_algorithm_candidate_pairs(
             WHERE p.ref_kind IN ({parent_placeholders})
               AND p.child_count < ?
               AND s.ref_kind IN ({source_placeholders})
+              {parent_ref_filter}
               AND EXISTS (
                   SELECT 1
                   FROM node_components sc

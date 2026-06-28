@@ -1132,10 +1132,10 @@ def branch_grow_cmd(
         list[str] | None,
         typer.Argument(
             help=(
-                "Required key=value parameter: steps=<N>. Optional fixed keys: algo, mode, yes. "
+                "Required key=value parameter: steps=<N>. Optional fixed keys: node, algo, mode, yes. "
                 "Profile override keys are also accepted for the active mode."
             ),
-            metavar="steps=<N> [algo=<id>] [mode=<name>] [yes=true] [profile_key=<value>]",
+            metavar="steps=<N> [node=<ref>] [algo=<id>] [mode=<name>] [yes=true] [profile_key=<value>]",
         ),
     ] = None,
 ) -> None:
@@ -1151,7 +1151,7 @@ def branch_grow_cmd(
         mode = str(overrides["mode"]) if "mode" in overrides else None
         config = load_project_config(ref.path)
         active_run_mode = mode or active_mode(config)
-        allowed = {"steps", "algo", "mode", "yes"} | _profile_override_keys(ref.path, active_run_mode)
+        allowed = {"steps", "node", "algo", "mode", "yes"} | _profile_override_keys(ref.path, active_run_mode)
         _validate_override_keys(overrides, allowed, "tml branch grow")
         if "steps" not in overrides:
             raise TmlError("Missing required parameter: steps=<N>.")
@@ -1162,13 +1162,15 @@ def branch_grow_cmd(
         if steps <= 0:
             raise TmlError("steps must be a positive integer.")
         algo_id = str(overrides.get("algo") or "default")
+        node_ref = _optional_text(overrides.get("node"))
         assume_yes = _bool(overrides.get("yes", False))
-        run_overrides = {key: value for key, value in overrides.items() if key not in {"steps", "algo", "mode", "yes"}}
+        run_overrides = {key: value for key, value in overrides.items() if key not in {"steps", "node", "algo", "mode", "yes"}}
         plan = branch_grow_plan(
             ref.path,
             steps=steps,
             algo_id=algo_id,
             mode=mode,
+            node_ref=node_ref,
             profile_overrides=run_overrides,
         )
         _print_branch_grow_plan(ref.slug, plan)
@@ -1180,6 +1182,7 @@ def branch_grow_cmd(
             steps=steps,
             algo_id=algo_id,
             mode=mode,
+            node_ref=node_ref,
             profile_overrides=run_overrides,
             progress=console.print,
         )
@@ -2206,6 +2209,7 @@ def _print_branch_grow_plan(project_slug: str, plan: BranchGrowPlan) -> None:
     table.add_row("Mode", plan.mode)
     table.add_row("Active profile", plan.profile_id)
     table.add_row("Algorithm", plan.algorithm_id)
+    table.add_row("Node", plan.node_ref or "auto")
     table.add_row("Config", _repo_relative(workspace_root(), plan.config_path))
     table.add_row("Steps", str(plan.requested_steps))
     table.add_row("Pending branch runs", str(plan.pending_branch_runs))
@@ -2220,6 +2224,7 @@ def _print_branch_grow_summary(result: BranchGrowResult) -> None:
     table.add_row("Mode", result.mode)
     table.add_row("Active profile", result.profile_id)
     table.add_row("Algorithm", result.algorithm_id)
+    table.add_row("Node", result.node_ref or "auto")
     table.add_row("Steps", str(result.requested_steps))
     table.add_row("Processed", str(result.processed_steps))
     table.add_row("Existing pending", str(result.existing_pending_steps))

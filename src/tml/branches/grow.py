@@ -17,6 +17,7 @@ class BranchGrowPlan:
     mode: str
     profile_id: str
     algorithm_id: str
+    node_ref: str | None
     requested_steps: int
     pending_branch_runs: int
     execution_timeout_seconds: int
@@ -44,6 +45,7 @@ class BranchGrowResult:
     mode: str
     profile_id: str
     algorithm_id: str
+    node_ref: str | None
     requested_steps: int
     processed_steps: int
     existing_pending_steps: int
@@ -59,19 +61,22 @@ def branch_grow_plan(
     steps: int,
     algo_id: str,
     mode: str | None = None,
+    node_ref: str | None = None,
     profile_overrides: dict[str, object] | None = None,
 ) -> BranchGrowPlan:
     if steps <= 0:
         raise TmlError("steps must be a positive integer.")
+    node_ref = _normalize_node_ref(node_ref)
     config = load_project_config(project_dir)
     active_run_mode = mode or active_mode(config)
     profile_id = active_profile_id(config, active_run_mode)
     algorithm = load_branch_algorithm(project_dir, algo_id)
-    pending = pending_branch_run_candidates(project_dir, mode=active_run_mode, profile_id=profile_id)
+    pending = [] if node_ref else pending_branch_run_candidates(project_dir, mode=active_run_mode, profile_id=profile_id)
     return BranchGrowPlan(
         mode=active_run_mode,
         profile_id=profile_id,
         algorithm_id=algorithm.algorithm_id,
+        node_ref=node_ref,
         requested_steps=steps,
         pending_branch_runs=len(pending),
         execution_timeout_seconds=_execution_timeout_seconds(profile_overrides),
@@ -85,25 +90,28 @@ def branch_grow(
     steps: int,
     algo_id: str,
     mode: str | None = None,
+    node_ref: str | None = None,
     profile_overrides: dict[str, object] | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> BranchGrowResult:
+    node_ref = _normalize_node_ref(node_ref)
     plan = branch_grow_plan(
         project_dir,
         steps=steps,
         algo_id=algo_id,
         mode=mode,
+        node_ref=node_ref,
         profile_overrides=profile_overrides,
     )
     items: list[BranchGrowItem] = []
     stop_reason = ""
     algorithm = load_branch_algorithm(project_dir, algo_id)
-    top_parent = branch_algorithm_top_parent(project_dir, algo_id=algo_id, mode=plan.mode)
-    accepted_parent_ref = top_parent.parent_ref if top_parent is not None else None
+    top_parent = None if node_ref else branch_algorithm_top_parent(project_dir, algo_id=algo_id, mode=plan.mode)
+    accepted_parent_ref = node_ref or (top_parent.parent_ref if top_parent is not None else None)
     accepted_top_score = top_parent.parent_score if top_parent is not None else None
 
     for step_index in range(1, steps + 1):
-        pending = next_pending_branch(project_dir, mode=plan.mode, profile_id=plan.profile_id)
+        pending = None if node_ref else next_pending_branch(project_dir, mode=plan.mode, profile_id=plan.profile_id)
         if pending is not None:
             branch_id = str(pending["branch_id"])
             _emit(progress, f"BRANCH grow {step_index}/{steps}: run pending {branch_id}")
@@ -139,11 +147,17 @@ def branch_grow(
                     accepted_top_score = run_item.metric
             continue
 
-        added = branch_add_algorithmic_one(project_dir, algo_id=algo_id, mode=plan.mode, preferred_parent_ref=accepted_parent_ref)
+        added = branch_add_algorithmic_one(
+            project_dir,
+            algo_id=algo_id,
+            mode=plan.mode,
+            preferred_parent_ref=accepted_parent_ref,
+            require_preferred_parent=node_ref is not None and accepted_parent_ref is not None,
+        )
         if added is None:
             stop_reason = "No pending branch and no valid algorithmic candidate."
             break
-        if accepted_parent_ref is None and added.parent_score is not None:
+        if accepted_top_score is None and added.parent_score is not None:
             accepted_parent_ref = added.parent_ref
             accepted_top_score = added.parent_score
 
@@ -186,6 +200,7 @@ def branch_grow(
         mode=plan.mode,
         profile_id=plan.profile_id,
         algorithm_id=plan.algorithm_id,
+        node_ref=node_ref,
         requested_steps=steps,
         processed_steps=len(items),
         existing_pending_steps=sum(1 for item in items if item.action == "run_pending"),
@@ -199,6 +214,17 @@ def branch_grow(
 def _emit(progress: Callable[[str], None] | None, message: str) -> None:
     if progress is not None:
         progress(message)
+
+
+def _normalize_node_ref(value: str | None) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.upper().startswith("B") and text[1:].isdigit():
+        return f"B{int(text[1:]):06d}"
+    if text.isdigit():
+        return text.zfill(6)
+    return text
 
 
 def _run_progress_line(step_index: int, steps: int, branch_id: str, status: str, metric: float | None) -> str:
