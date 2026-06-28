@@ -5,7 +5,7 @@ Use this only to avoid obvious repetition. Do not imitate the best previous grou
 {% for item in prior_root_group_results -%}
 {% set label = item.get("group_name") or item.get("hypothesis_id") -%}
 {% if label -%}
-- {{ label }}{% if item.get("family") %} ({{ item.get("family") }}){% endif %}: {{ item.get("prompt_summary") or item.get("summary") or item.get("title") or "" }}{% if item.get("score") is not none %} score={{ item.get("score") }}{% endif %}{% if item.get("status") %} status={{ item.get("status") }}{% endif %}
+- {% if item.get("score_result") %}{{ item.get("score_result") }}; {% endif %}{{ label }}{% if item.get("family") %} ({{ item.get("family") }}){% endif %}: {{ item.get("prompt_summary") or item.get("summary") or item.get("title") or "" }}{% if item.get("status") %} status={{ item.get("status") }}{% endif %}
 {% endif -%}
 {% endfor -%}
 {% endif %}

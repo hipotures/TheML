@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from tml.branches.algorithms import epsilon_delta, load_branch_algorithm, parse_score_epsilon
 from tml.core.config import load_project_config
+from tml.db.state import root_hypothesis_rows
 from tml.hypotheses.model import enabled_hypotheses
 
 
@@ -14,7 +16,6 @@ HYPOTHESIS_MEMORY_FIELDS = (
     "group_name",
     "family",
     "expected_signal",
-    "score",
     "status",
     "risk",
 )
@@ -52,13 +53,77 @@ def project_prompt_context(project_dir: Path, **extra: Any) -> dict[str, Any]:
 
 def _existing_hypothesis_memory(project_dir: Path, *, limit: int = 100) -> list[dict[str, object]]:
     memory: list[dict[str, object]] = []
-    for hypothesis in enabled_hypotheses(project_dir)[-limit:]:
+    hypotheses = enabled_hypotheses(project_dir)
+    scores = _root_scores_by_hypothesis_id(project_dir, hypotheses)
+    baseline = scores.get("000000")
+    epsilon = _score_epsilon(project_dir, baseline)
+    for hypothesis in hypotheses[-limit:]:
         entry = {key: hypothesis[key] for key in HYPOTHESIS_MEMORY_FIELDS if hypothesis.get(key)}
         if entry.get("summary"):
             entry["prompt_summary"] = _truncate_text(str(entry["summary"]), 250)
+        score_result = _score_result_text(
+            scores.get(str(hypothesis.get("hypothesis_id") or "")),
+            baseline=baseline,
+            epsilon=epsilon,
+            is_baseline=str(hypothesis.get("hypothesis_id") or "") == "000000",
+        )
+        if score_result:
+            entry["score_result"] = score_result
         if entry:
             memory.append(entry)
     return memory
+
+
+def _root_scores_by_hypothesis_id(project_dir: Path, hypotheses: list[dict[str, object]]) -> dict[str, float]:
+    scores: dict[str, float] = {}
+    for hypothesis in hypotheses:
+        hypothesis_id = str(hypothesis.get("hypothesis_id") or "")
+        score = _optional_float(hypothesis.get("score"))
+        if hypothesis_id and score is not None:
+            scores[hypothesis_id] = score
+    try:
+        for row in root_hypothesis_rows(project_dir):
+            hypothesis_id = str(row.get("hypothesis_id") or "")
+            score = _optional_float(row.get("best_score"))
+            if hypothesis_id and score is not None:
+                scores[hypothesis_id] = score
+    except Exception:
+        pass
+    return scores
+
+
+def _score_epsilon(project_dir: Path, baseline: float | None) -> float:
+    if baseline is None:
+        return 0.0
+    try:
+        return epsilon_delta(baseline, load_branch_algorithm(project_dir, "default").epsilon)
+    except Exception:
+        return epsilon_delta(baseline, parse_score_epsilon(None))
+
+
+def _score_result_text(
+    score: float | None,
+    *,
+    baseline: float | None,
+    epsilon: float,
+    is_baseline: bool,
+) -> str:
+    if score is None or baseline is None or is_baseline:
+        return ""
+    delta = score - baseline
+    if abs(delta) < epsilon or delta == 0:
+        return "score near baseline"
+    if delta > 0:
+        return "score above baseline"
+    return "score below baseline"
+
+
+def _optional_float(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    return None
 
 
 def _truncate_text(value: str, limit: int) -> str:
