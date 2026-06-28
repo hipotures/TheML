@@ -18,7 +18,7 @@ root:
     autogluon: ag-s6e6-boost-gpu-ens-v1
     legacy: legacy-root-start-v1
 rerun:
-  autogluon: ag-s6e6-boost-gpu-best-ens-stack-1h-v1
+  autogluon: ag-s6e6-boost-gpu-best-ens-stack-2h-v1
 models:
   metadata:
     provider: codex
@@ -27,7 +27,7 @@ models:
     timeout_seconds: 30
   hypothesis:
     provider: codex
-    model: gpt-5.3-codex-spark
+    model: gpt-5.5
     effort: xhigh
     timeout_seconds: 600
   materializations:
