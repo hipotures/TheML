@@ -16,7 +16,7 @@ score:
   # epsilon: 0.0001
   # Relative threshold:
   # epsilon: "0.1%"
-  epsilon: 0.0
+  epsilon: 0.0001
 
 selection:
   parent_kinds:
