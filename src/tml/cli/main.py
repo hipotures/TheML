@@ -270,10 +270,11 @@ def tree_cmd(ctx: typer.Context) -> None:
         overrides = _overrides(ctx.args)
         ref = active_project_ref()
         ensure_root_baseline(ref.path)
-        _validate_override_keys(overrides, {"mode"}, "tml tree")
+        _validate_override_keys(overrides, {"mode", "node"}, "tml tree")
         config = load_project_config(ref.path)
         mode = _optional_text(overrides.get("mode")) or active_mode(config)
-        _print_solution_tree(ref.path, mode=mode)
+        node_ref = _optional_text(overrides.get("node"))
+        _print_solution_tree(ref.path, mode=mode, node_ref=node_ref)
     except Exception as exc:
         _abort(exc)
 
@@ -2779,7 +2780,7 @@ def _branch_status_row(db_row: dict[str, object], *, summary_limit: int) -> list
     ]
 
 
-def _print_solution_tree(project_dir: Path, *, mode: str) -> None:
+def _print_solution_tree(project_dir: Path, *, mode: str, node_ref: str | None = None) -> None:
     config = load_project_config(project_dir)
     profile_id = active_profile_id(config, mode)
     root_rows = solution_tree_root_rows(project_dir, mode=mode, profile_id=profile_id)
@@ -2790,17 +2791,21 @@ def _print_solution_tree(project_dir: Path, *, mode: str) -> None:
     best_metric = _best_tree_metric([*root_rows, *branch_db_rows])
     root_by_id = {str(row.get("hypothesis_id") or ""): row for row in root_rows}
     baseline = root_by_id.get("000000") or {"hypothesis_id": "000000"}
-    tree = Tree(_solution_tree_label("root", baseline, best_metric=best_metric), guide_style="bright_black")
 
     children: dict[str, list[dict[str, object]]] = {"root:000000": []}
     known_keys = {"root:000000"}
+    entries_by_key: dict[str, dict[str, object]] = {
+        "root:000000": {"kind": "root", "key": "root:000000", "row": baseline}
+    }
     for row in root_rows:
         hid = str(row.get("hypothesis_id") or "")
         if hid == "000000":
             continue
         key = f"root:{hid}"
+        entry = {"kind": "root", "key": key, "row": row}
         known_keys.add(key)
-        children.setdefault("root:000000", []).append({"kind": "root", "key": key, "row": row})
+        entries_by_key[key] = entry
+        children.setdefault("root:000000", []).append(entry)
         children.setdefault(key, [])
 
     branch_entries: list[dict[str, object]] = []
@@ -2809,9 +2814,11 @@ def _print_solution_tree(project_dir: Path, *, mode: str) -> None:
         if runtime_display_state and bid == runtime_branch_id:
             row = {**row, "_runtime_state": runtime_display_state}
         key = f"branch:{bid}"
+        entry = {"kind": "branch", "key": key, "row": row}
         known_keys.add(key)
         children.setdefault(key, [])
-        branch_entries.append({"kind": "branch", "key": key, "row": row})
+        entries_by_key[key] = entry
+        branch_entries.append(entry)
 
     for entry in branch_entries:
         row = entry["row"]
@@ -2831,8 +2838,26 @@ def _print_solution_tree(project_dir: Path, *, mode: str) -> None:
             subtree = parent_tree.add(_solution_tree_label(str(child["kind"]), row, best_metric=best_metric))
             append_children(subtree, key, {*visited, key})
 
-    append_children(tree, "root:000000", {"root:000000"})
+    start_key = _solution_tree_node_key(node_ref) if node_ref else "root:000000"
+    start_entry = entries_by_key.get(start_key)
+    if start_entry is None:
+        raise TmlError(f"Tree node does not exist in mode={mode}: {node_ref}")
+    start_row = start_entry["row"]
+    assert isinstance(start_row, dict)
+    tree = Tree(_solution_tree_label(str(start_entry["kind"]), start_row, best_metric=best_metric), guide_style="bright_black")
+    append_children(tree, start_key, {start_key})
     console.print(tree)
+
+
+def _solution_tree_node_key(node_ref: str | None) -> str:
+    text = str(node_ref or "").strip()
+    if not text:
+        return "root:000000"
+    if text.upper().startswith("B") and text[1:].isdigit():
+        return f"branch:{_normalize_branch_display(text)}"
+    if text.isdigit():
+        return f"root:{text.zfill(6)}"
+    return f"branch:{_normalize_branch_display(text)}"
 
 
 def _solution_tree_parent_key(row: dict[str, object]) -> str:
