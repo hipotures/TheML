@@ -1527,9 +1527,16 @@ def materialization_rows(project_dir: Path, *, mode: str, hypothesis_id: str | N
     db_path = ensure_project_db(project_dir)
     sql = """
         SELECT h.hypothesis_id, h.summary, m.mode, m.file, m.status, m.active,
-               m.hypothesis_revision, m.model, m.reasoning_tokens, m.total_tokens, m.generation_seconds
+               m.hypothesis_revision,
+               COALESCE(latest.latest_hypothesis_revision, m.hypothesis_revision, 1) AS latest_hypothesis_revision,
+               m.model, m.reasoning_tokens, m.total_tokens, m.generation_seconds
         FROM materializations m
         JOIN hypotheses h ON h.hypothesis_id=m.hypothesis_id
+        LEFT JOIN (
+          SELECT hypothesis_id, MAX(revision) AS latest_hypothesis_revision
+          FROM hypothesis_revisions
+          GROUP BY hypothesis_id
+        ) latest ON latest.hypothesis_id=m.hypothesis_id
         WHERE m.mode=?
     """
     params: list[Any] = [mode]

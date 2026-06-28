@@ -2591,12 +2591,45 @@ def _root_materialization_row(db_row: dict[str, object]) -> list[object]:
 
 
 def _print_failed_materialization_summary(rows: list[dict[str, object]]) -> None:
-    failed = [row for row in rows if str(row.get("status") or "") == "failed"]
+    failed = _failed_latest_revision_materialization_rows(rows)
     if not failed:
         return
     shown = [f"{row.get('hypothesis_id')}/{row.get('file')}" for row in failed[:8]]
     suffix = "" if len(failed) <= len(shown) else f", +{len(failed) - len(shown)} more"
     console.print(f"Failed validation materializations: {len(failed)} ({', '.join(shown)}{suffix})", style="bold red")
+
+
+def _failed_latest_revision_materialization_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    ready_revisions = {
+        (str(row.get("hypothesis_id") or ""), revision)
+        for row in rows
+        if str(row.get("status") or "") in {"active", "fixed"}
+        if (revision := _materialization_revision_value(row.get("hypothesis_revision"))) is not None
+    }
+    failed: list[dict[str, object]] = []
+    for row in rows:
+        if str(row.get("status") or "") != "failed":
+            continue
+        hypothesis_id = str(row.get("hypothesis_id") or "")
+        revision = _materialization_revision_value(row.get("hypothesis_revision"))
+        latest_revision = _materialization_revision_value(row.get("latest_hypothesis_revision")) or revision
+        if not hypothesis_id or revision is None or latest_revision is None:
+            continue
+        if revision != latest_revision:
+            continue
+        if (hypothesis_id, revision) in ready_revisions:
+            continue
+        failed.append(row)
+    return failed
+
+
+def _materialization_revision_value(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _materialization_status_icon(status: str, *, active: bool) -> Text:
