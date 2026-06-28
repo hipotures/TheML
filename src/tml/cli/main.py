@@ -2358,9 +2358,15 @@ def _print_existing_root_hypotheses(
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
     db_rows = root_hypothesis_rows(project_dir, mode=mode, profile_id=profile_id)
     best = best_score_value if best_score_value is not None else _best_numeric(row.get("best_score") for row in db_rows)
+    baseline = _baseline_score(db_rows)
     rows = []
     for db_row in db_rows:
-        row = _root_hypothesis_row(db_row, created_ids=created_ids, best_score_value=best)
+        row = _root_hypothesis_row(
+            db_row,
+            created_ids=created_ids,
+            best_score_value=best,
+            baseline_score_value=baseline,
+        )
         if not row:
             continue
         rows.append(
@@ -3117,6 +3123,14 @@ def _best_numeric(values) -> float | None:
     return max(parsed) if parsed else None
 
 
+def _baseline_score(rows: list[dict[str, object]]) -> float | None:
+    for row in rows:
+        if str(row.get("hypothesis_id") or "") == "000000":
+            score = row.get("best_score")
+            return float(score) if isinstance(score, int | float) else None
+    return None
+
+
 def _rank_text(value: object, score: object) -> str:
     if not isinstance(score, int | float):
         return ""
@@ -3126,12 +3140,24 @@ def _rank_text(value: object, score: object) -> str:
         return ""
 
 
-def _score_text(value: object, *, best: float | None, style: str) -> str | Text:
+def _score_text(
+    value: object,
+    *,
+    best: float | None,
+    style: str,
+    baseline: float | None = None,
+    is_baseline: bool = False,
+) -> str | Text:
     if not isinstance(value, int | float):
         return ""
     text = f"{float(value):.5f}"
     if best is not None and float(value) == best:
         return Text(text, style=style)
+    if baseline is not None and not is_baseline:
+        if float(value) > baseline:
+            return Text(text, style="bright_green")
+        if float(value) < baseline:
+            return Text(text, style="bright_red")
     return text
 
 
@@ -3326,6 +3352,7 @@ def _root_hypothesis_row(
     *,
     created_ids: set[str],
     best_score_value: float | None = None,
+    baseline_score_value: float | None = None,
 ) -> dict[str, object]:
     hypothesis_id = str(db_row.get("hypothesis_id") or "")
     return {
@@ -3333,7 +3360,13 @@ def _root_hypothesis_row(
         "is_new": hypothesis_id in created_ids,
         "status": _hypothesis_status_text(str(db_row.get("status_icon") or "")),
         "revision": str(db_row.get("best_revision") or ""),
-        "score": _score_text(db_row.get("best_score"), best=best_score_value, style="reverse"),
+        "score": _score_text(
+            db_row.get("best_score"),
+            best=best_score_value,
+            style="reverse",
+            baseline=baseline_score_value,
+            is_baseline=hypothesis_id == "000000",
+        ),
         "created_at": _short_datetime(db_row.get("created_at")),
         "model": str(db_row.get("model") or ""),
         "reasoning_tokens": _token_summary(db_row),
