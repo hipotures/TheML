@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nEPSILON = 1e-12\nFLUX_MIN = 1e-12\nFLUX_MAX = 1e6\nLUPTON_Q = 10.0\nLUPTON_SCALE = 30.0\n\n\ndef add_lupton_rgb_chromaticity(raw, deps, aux):\n    u_mag = pd.to_numeric(raw[\"u\"], errors=\"coerce\").to_numpy(dtype=float, copy=True)\n    g_mag = pd.to_numeric(raw[\"g\"], errors=\"coerce\").to_numpy(dtype=float, copy=True)\n    r_mag = pd.to_numeric(raw[\"r\"], errors=\"coerce\").to_numpy(dtype=float, copy=True)\n    i_mag = pd.to_numeric(raw[\"i\"], errors=\"coerce\").to_numpy(dtype=float, copy=True)\n    z_mag = pd.to_numeric(raw[\"z\"], errors=\"coerce\").to_numpy(dtype=float, copy=True)\n\n    u_flux = np.clip(np.nan_to_num(10.0 ** ((22.5 - u_mag) / 2.5), nan=FLUX_MIN, posinf=FLUX_MAX, neginf=FLUX_MIN), FLUX_MIN, FLUX_MAX)\n    g_flux = np.clip(np.nan_to_num(10.0 ** ((22.5 - g_mag) / 2.5), nan=FLUX_MIN, posinf=FLUX_MAX, neginf=FLUX_MIN), FLUX_MIN, FLUX_MAX)\n    r_flux = np.clip(np.nan_to_num(10.0 ** ((22.5 - r_mag) / 2.5), nan=FLUX_MIN, posinf=FLUX_MAX, neginf=FLUX_MIN), FLUX_MIN, FLUX_MAX)\n    i_flux = np.clip(np.nan_to_num(10.0 ** ((22.5 - i_mag) / 2.5), nan=FLUX_MIN, posinf=FLUX_MAX, neginf=FLUX_MIN), FLUX_MIN, FLUX_MAX)\n    z_flux = np.clip(np.nan_to_num(10.0 ** ((22.5 - z_mag) / 2.5), nan=FLUX_MIN, posinf=FLUX_MAX, neginf=FLUX_MIN), FLUX_MIN, FLUX_MAX)\n\n    blue = 0.30 * u_flux + 0.70 * g_flux\n    green = 0.55 * r_flux + 0.45 * g_flux\n    red = 0.65 * i_flux + 0.35 * z_flux\n\n    total = red + green + blue\n    valid_total = total > EPSILON\n    safe_total = np.where(valid_total, total, 1.0)\n    intensity = total / 3.0\n    safe_intensity = intensity + EPSILON\n\n    red_frac = np.where(valid_total, red / safe_total, 1.0 / 3.0)\n    green_frac = np.where(valid_total, green / safe_total, 1.0 / 3.0)\n    blue_frac = np.where(valid_total, blue / safe_total, 1.0 / 3.0)\n\n    compressed_red = np.arcsinh(LUPTON_Q * red / safe_intensity) / np.arcsinh(LUPTON_SCALE)\n    compressed_green = np.arcsinh(LUPTON_Q * green / safe_intensity) / np.arcsinh(LUPTON_SCALE)\n    compressed_blue = np.arcsinh(LUPTON_Q * blue / safe_intensity) / np.arcsinh(LUPTON_SCALE)\n\n    compressed_total = compressed_red + compressed_green + compressed_blue\n    valid_compressed_total = compressed_total > EPSILON\n    safe_compressed_total = np.where(valid_compressed_total, compressed_total, 1.0)\n\n    compressed_red_frac = np.where(valid_compressed_total, compressed_red / safe_compressed_total, 1.0 / 3.0)\n    compressed_green_frac = np.where(valid_compressed_total, compressed_green / safe_compressed_total, 1.0 / 3.0)\n    compressed_blue_frac = np.where(valid_compressed_total, compressed_blue / safe_compressed_total, 1.0 / 3.0)\n\n    hue_angle = np.arctan2(np.sqrt(3.0) * (green - blue), (2.0 * red) - green - blue)\n    max_frac = np.maximum(np.maximum(red_frac, green_frac), blue_frac)\n    min_frac = np.minimum(np.minimum(red_frac, green_frac), blue_frac)\n    saturation = max_frac - min_frac\n\n    whitepoint_distance = np.sqrt(\n        ((red_frac - (1.0 / 3.0)) ** 2)\n        + ((green_frac - (1.0 / 3.0)) ** 2)\n        + ((blue_frac - (1.0 / 3.0)) ** 2)\n    )\n\n    entropy_terms = np.stack([red_frac, green_frac, blue_frac], axis=0)\n    chromatic_entropy = -np.sum(entropy_terms * np.log(np.clip(entropy_terms, EPSILON, 1.0)), axis=0) / np.log(3.0)\n\n    dominant_index = np.argmax(np.stack([red, green, blue], axis=0), axis=0)\n\n    return pd.DataFrame(\n        {\n            \"red_fraction\": red_frac,\n            \"green_fraction\": green_frac,\n            \"blue_fraction\": blue_frac,\n            \"compressed_red\": compressed_red,\n            \"compressed_green\": compressed_green,\n            \"compressed_blue\": compressed_blue,\n            \"compressed_red_fraction\": compressed_red_frac,\n            \"compressed_green_fraction\": compressed_green_frac,\n            \"compressed_blue_fraction\": compressed_blue_frac,\n            \"hue_angle\": hue_angle,\n            \"saturation\": saturation,\n            \"whitepoint_distance\": whitepoint_distance,\n            \"chromatic_entropy\": chromatic_entropy,\n            \"red_minus_blue\": red_frac - blue_frac,\n            \"blue_minus_green\": blue_frac - green_frac,\n            \"red_minus_green\": red_frac - green_frac,\n            \"log10_total_flux\": np.log10(total + EPSILON),\n            \"dominant_red\": dominant_index == 0,\n            \"dominant_green\": dominant_index == 1,\n            \"dominant_blue\": dominant_index == 2,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"lupton_rgb_chromaticity\",\n        \"fn\": add_lupton_rgb_chromaticity,\n        \"depends_on\": [],\n        \"description\": \"Encodes SDSS ugriz magnitudes as Lupton-inspired RGB chromaticity, compressed color fractions, hue, saturation, entropy, and dominant-channel indicators.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f0d50-7d23-75b2-9a13-4a0c573cbbc1",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 11826,
+        "outputTokens": 1932,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13758
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 11826,
+        "outputTokens": 1932,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13758
+      }
+    },
+    "turnId": "019f0d50-7d2f-7903-84d7-c271fd7ae783"
+  },
+  "wall_ms": 36558,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

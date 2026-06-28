@@ -1,0 +1,38 @@
+title: Fiber-scale neighbor crowding
+group_name: fiber_collision_crowding_context
+family: spectroscopic_selection_geometry
+summary: Encode whether an object lies in a close angular crowding regime where SDSS
+  fiber-placement and deblending constraints can make galaxies, blended stars, and
+  compact quasars appear with different catalog-neighborhood signatures.
+depends_on: []
+strategy: 'Using only predictor rows and no labels, convert alpha and delta to spherical
+  unit vectors with RA wrap handled by geometry, then compute nearest-neighbor context
+  on the combined unlabeled catalog or, if unavailable, within the supplied frame.
+  For each object, exclude itself and query angular neighbors at fixed SDSS-motivated
+  scales: 2 arcsec for unresolved blends, 3 arcsec for legacy fiber aperture, 10 arcsec
+  for close deblending/crowding, 55 arcsec for SDSS-I/II fiber collision, 62 arcsec
+  for BOSS-like collision, and 120 arcsec as a local control annulus; these scales
+  are motivated by SDSS documentation on star-galaxy classification and fiber placement
+  (https://www.sdss4.org/dr17/algorithms/classify/, https://www.sdss3.org/dr10/help/glossary.php).
+  Derive log1p neighbor counts inside each radius, nearest and second-nearest angular
+  distances capped at 120 arcsec and represented as log distance ratios to 55 arcsec,
+  signed margins to the 3, 55, and 62 arcsec thresholds, close-pair indicators, and
+  companion-similarity summaries for neighbors inside 120 arcsec using median absolute
+  differences in redshift, r magnitude, and adjacent colors. If an object has no neighbor
+  within 120 arcsec, set counts to zero, capped distances to 120 arcsec, threshold
+  margins to negative outside values, and similarity summaries to robust high sentinel
+  values based on finite training-frame quantiles.'
+expected_signal: 'Close angular companions are not uniformly distributed by class:
+  galaxies cluster and are affected by close-pair spectroscopy, stars can be crowded
+  or blended in dense fields, while most quasars are comparatively isolated except
+  for special cases, so explicit fiber-scale crowding may clarify ambiguous STAR/GALAXY/QSO
+  boundaries beyond raw sky coordinates.'
+risk: This can be partly redundant with broader sky-environment features, may be unstable
+  if the train/test catalog is only a sparse sample of the true sky footprint, and
+  fixed SDSS angular thresholds could overfit survey-specific selection artifacts
+  despite using no target labels.
+schema_version: 1
+hypothesis_id: '000065'
+revision: 1
+enabled: true
+created_at: '2026-06-28T08:47:56'

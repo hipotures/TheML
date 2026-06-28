@@ -1,0 +1,10 @@
+{
+  "title": "Virtual Infrared Tail",
+  "group_name": "virtual_infrared_tail_extrapolation",
+  "family": "missing_wavelength_surrogate",
+  "summary": "Extrapolate each object's optical ugriz continuum beyond the z band into near/mid-infrared anchor wavelengths to expose whether its red-side spectral tail behaves more like a stellar photosphere, a galaxy stellar bump, or a quasar hot-dust/power-law continuum.",
+  "depends_on": [],
+  "strategy": "Use SDSS effective wavelengths u,g,r,i,z = 0.355, 0.477, 0.623, 0.762, 0.913 microns and convert magnitudes to median-centered relative log flux y_b = -0.4 * (m_b - median(m_ugriz)); winsorize magnitudes and colors to train-only 0.1/99.9 percentiles, fit a red-tail line on r,i,z and a smooth quadratic on g,r,i,z in log wavelength, using magnitude-dependent reliability weights that down-weight bands near the faint tail; extrapolate both fits to observed-frame virtual J,K,W1,W2 anchors at 1.25, 2.2, 3.4, and 4.6 microns, then derive optical-to-virtual-IR color surrogates, red-tail spectral index, Rayleigh-Jeans versus power-law margins, extrapolation disagreement, and redshift-regime-gated versions for z < 0.05, 0.05 <= z < 2.15, 2.15 <= z < 3.5, and z >= 3.5; clip extrapolated relative fluxes to robust finite ranges, treat negative redshift as zero for gates only, and fall back to the red-tail line with low reliability if the quadratic fit is ill-conditioned.",
+  "expected_signal": "Published SDSS/WISE work indicates optical plus mid-infrared colors help separate quasars from stars, especially at high redshift (https://www.sdss4.org/dr17/algorithms/ancillary/boss/qsowise/ and https://academic.oup.com/mnras/article/452/3/3124/1751728), so an optical-only surrogate for the unobserved infrared tail may clarify QSO, STAR, and red-galaxy overlap regions beyond ordinary adjacent optical colors.",
+  "risk": "The extrapolation is speculative because no real infrared measurements are present, so it can amplify noisy z-band behavior, depend on clipping choices, and be partly redundant with existing continuum-shape features."
+}

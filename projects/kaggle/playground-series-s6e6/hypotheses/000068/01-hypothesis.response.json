@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Seeing-Limited Resolvability Proxy\",\n  \"group_name\": \"seeing_limited_resolvability_proxy\",\n  \"family\": \"morphology_proxy\",\n  \"summary\": \"Estimate whether each object's redshift, apparent brightness, and catalog population imply an angularly resolved galaxy-like source or an unresolved point-source-like object under SDSS seeing, adding a surrogate for missing morphology information.\",\n  \"depends_on\": [],\n  \"strategy\": \"Use a fixed flat LCDM approximation with H0=70, Omega_m=0.3, Omega_L=0.7, and c=299792.458 to compute luminosity distance and angular-diameter distance from redshift clipped to [1e-4, 7], while adding validity gates for redshift <= 0.005 and negative redshift. Compute pseudo absolute r magnitude from r and distance modulus for valid cosmological redshifts. Map galaxy_population to a canonical half-light-size relation: Red_Sequence uses a larger, steeper early-type size scale and Blue_Cloud uses a disk-like size scale, both brightness-scaled from pseudo absolute r magnitude and clipped to a plausible 0.3-30 kpc range. Convert this physical size to an angular half-light radius in arcsec, compare it with the SDSS median r-band seeing of 1.32 arcsec, and derive continuous log size-to-seeing margins, soft resolved/unresolved indicators at 0.5x, 1x, and 2x seeing, a compact-bright flag for r < 15 with predicted radius < 2 arcsec, and an approximate half-light surface-brightness margin using r + 2.5*log10(2*pi*theta_e^2) against 23.0 and 24.5 mag arcsec^-2. For invalid cosmological redshifts, set angular-size and surface-brightness values to neutral sentinels and rely on the explicit invalid/local-redshift gates. Sources consulted for the SDSS morphology and seeing rationale: https://www.sdss4.org/dr17/algorithms/classify/, https://www.sdss4.org/dr17/imaging/other_info/, and https://ned.ipac.caltech.edu/level5/March02/Sahni/Sahni4_5.html.\",\n  \"expected_signal\": \"SDSS star-galaxy separation is fundamentally morphology-driven, so a deterministic proxy for whether a source should be resolved at its redshift and brightness may help separate true galaxies from point-like stars and QSOs, especially in low-redshift or compact regimes where color and redshift cues can overlap.\",\n  \"risk\": \"The physical-size constants are approximate and may be redundant with existing redshift, luminosity, and survey-depth features; compact galaxies, Seyfert-like nuclei, and synthetic catalog artifacts could make the proxy misleading or unstable.\"\n}",
+  "usage": {
+    "threadId": "019f0cff-c495-78f0-9047-f88b041138b6",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 62762,
+        "outputTokens": 5836,
+        "reasoningOutputTokens": 5241,
+        "totalTokens": 68598
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 62762,
+        "outputTokens": 5836,
+        "reasoningOutputTokens": 5241,
+        "totalTokens": 68598
+      }
+    },
+    "turnId": "019f0cff-c4a5-77a1-bbd1-3c729b4c7406"
+  },
+  "wall_ms": 122089,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

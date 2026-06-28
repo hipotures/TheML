@@ -1,0 +1,10 @@
+{
+  "title": "White-Dwarf Companion Color Bridge",
+  "group_name": "wdms_color_bridge_signature",
+  "family": "stellar_binary_contaminants",
+  "summary": "Encode the two-component SDSS optical color signature of white-dwarf/main-sequence and related hot-star contaminants that occupy quasar-like color space but are physically stellar.",
+  "depends_on": [],
+  "strategy": "Using SDSS quasar-target contaminant notes and WDMS color-selection references from https://www.sdss4.org/dr17/algorithms/legacy_target_selection/ and https://academic.oup.com/mnras/article/433/4/3398/1750473, derive ugriz colors u-g, g-r, r-i, and i-z; compute signed margins to the WDMS optical bridge constraints 15 <= g <= 19, u-g > -0.6, and -0.5 < g-r < 1.3; compute the refined WDMS upper color boundary margin where P(g-r) - (u-g) uses P(x)=0.93-0.27x-4.7x^2+12.38x^3+3.08x^4-22.19x^5+16.67x^6-3.89x^7 for x <= 0.52 and P(x)=0.4+x for x > 0.52, clipping x to [-0.5,1.3] and adding a clipped-range flag; summarize the composite hot-plus-cool shape with blue-excess strength from low u-g, red-tail strength from positive r-i and i-z, their product, and a valley/curvature contrast between the blue and red ends versus the middle bands; add near-zero-redshift gating with smooth absolute-redshift margins so the same color bridge is treated differently for stellar-like redshifts versus genuine extragalactic redshifts; keep all margins finite by clipping extreme color values to broad physical ranges while retaining overflow indicators.",
+  "expected_signal": "This may improve balanced accuracy by giving the classifier a compact, class-relevant description of rare STAR contaminants that deliberately overlap QSO selection color space, especially white dwarfs, A stars, and M-dwarf plus white-dwarf systems that raw broad colors may otherwise blur with quasars or compact blue galaxies.",
+  "risk": "The signal may be sparse and partly redundant with existing color, blackbody, and quasar-selection features; the published WDMS criteria assume SDSS PSF photometry and sometimes infrared confirmation that is unavailable here, so overly literal margins could be brittle or low-impact."
+}

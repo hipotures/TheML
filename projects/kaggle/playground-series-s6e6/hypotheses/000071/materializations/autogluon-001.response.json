@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nGALAXY_LINES = (3727.0, 4861.0, 4959.0, 5007.0, 6563.0)\nQUASAR_LINES = (1216.0, 1549.0, 1909.0, 2798.0, 4861.0)\nSTELLAR_LINES = (3934.0, 3969.0, 4102.0, 4341.0, 4861.0, 6563.0)\nSKY_ANCHORS = (5577.0, 6300.0, 6363.0)\nWINDOW_BLUE = 3800.0\nWINDOW_RED = 9200.0\nWINDOW_EDGE_MARGIN = 50.0\nOH_ZONE_START = 7000.0\nDISTANCE_CAP = 500.0\n\n\ndef _family_features(redshift_factor, rest_lines, prefix, index):\n    lines = np.asarray(rest_lines, dtype=\"float64\")\n    anchors = np.asarray(SKY_ANCHORS, dtype=\"float64\")\n\n    observed = redshift_factor[:, None] * lines[None, :]\n    finite = np.isfinite(observed)\n\n    inside_window = finite & (observed >= WINDOW_BLUE) & (observed <= WINDOW_RED)\n    near_blue_edge = inside_window & (observed <= WINDOW_BLUE + WINDOW_EDGE_MARGIN)\n    near_red_edge = inside_window & (observed >= WINDOW_RED - WINDOW_EDGE_MARGIN)\n    oh_zone = inside_window & (observed >= OH_ZONE_START)\n\n    anchor_dist = np.abs(observed[:, :, None] - anchors[None, None, :])\n    min_line_dist = np.nanmin(anchor_dist, axis=2)\n    clipped_line_dist = np.clip(min_line_dist, 0.0, DISTANCE_CAP)\n    valid_dist = finite & inside_window\n\n    clipped_for_min = np.where(valid_dist, clipped_line_dist, np.nan)\n    min_dist = np.nanmin(clipped_for_min, axis=1)\n    min_dist = np.where(np.isfinite(min_dist), min_dist, 0.0)\n\n    narrow_score = np.where(valid_dist, np.exp(-((clipped_line_dist / 8.0) ** 2)), 0.0)\n    broad_score = np.where(valid_dist, np.exp(-((clipped_line_dist / 25.0) ** 2)), 0.0)\n\n    n_lines = float(len(rest_lines))\n    features = pd.DataFrame(index=index)\n    features[prefix + \"_window_frac\"] = inside_window.sum(axis=1) / n_lines\n    features[prefix + \"_blue_edge_frac\"] = near_blue_edge.sum(axis=1) / n_lines\n    features[prefix + \"_red_edge_frac\"] = near_red_edge.sum(axis=1) / n_lines\n    features[prefix + \"_sky_min_dist_clipped\"] = min_dist\n    features[prefix + \"_sky_score_8a_mean\"] = narrow_score.mean(axis=1)\n    features[prefix + \"_sky_score_25a_mean\"] = broad_score.mean(axis=1)\n    features[prefix + \"_sky_score_8a_max\"] = narrow_score.max(axis=1)\n    features[prefix + \"_sky_score_25a_max\"] = broad_score.max(axis=1)\n    features[prefix + \"_sky_count_10a\"] = (valid_dist & (clipped_line_dist <= 10.0)).sum(axis=1)\n    features[prefix + \"_sky_count_25a\"] = (valid_dist & (clipped_line_dist <= 25.0)).sum(axis=1)\n    features[prefix + \"_oh_zone_frac\"] = oh_zone.sum(axis=1) / n_lines\n    return features\n\n\ndef add_spectral_skyline_interference(raw, deps, aux):\n    redshift = pd.to_numeric(raw[\"redshift\"], errors=\"coerce\").to_numpy(dtype=\"float64\", copy=True)\n    redshift_factor = np.maximum(1.0 + redshift, 1e-6)\n    redshift_factor = np.where(np.isfinite(redshift_factor), redshift_factor, 1e-6)\n\n    galaxy = _family_features(redshift_factor, GALAXY_LINES, \"galaxy_lines\", raw.index)\n    quasar = _family_features(redshift_factor, QUASAR_LINES, \"quasar_lines\", raw.index)\n    stellar = _family_features(redshift_factor, STELLAR_LINES, \"stellar_lines\", raw.index)\n\n    features = pd.concat((galaxy, quasar, stellar), axis=1)\n\n    extragalactic_sky_25 = 0.5 * (\n        features[\"galaxy_lines_sky_score_25a_mean\"] + features[\"quasar_lines_sky_score_25a_mean\"]\n    )\n    extragalactic_window = 0.5 * (\n        features[\"galaxy_lines_window_frac\"] + features[\"quasar_lines_window_frac\"]\n    )\n\n    features[\"galaxy_minus_quasar_sky_score_25a\"] = (\n        features[\"galaxy_lines_sky_score_25a_mean\"] - features[\"quasar_lines_sky_score_25a_mean\"]\n    )\n    features[\"galaxy_minus_quasar_window_frac\"] = (\n        features[\"galaxy_lines_window_frac\"] - features[\"quasar_lines_window_frac\"]\n    )\n    features[\"stellar_minus_extragalactic_sky_score_25a\"] = (\n        features[\"stellar_lines_sky_score_25a_mean\"] - extragalactic_sky_25\n    )\n    features[\"stellar_minus_extragalactic_window_frac\"] = (\n        features[\"stellar_lines_window_frac\"] - extragalactic_window\n    )\n    features[\"galaxy_minus_quasar_oh_zone_frac\"] = (\n        features[\"galaxy_lines_oh_zone_frac\"] - features[\"quasar_lines_oh_zone_frac\"]\n    )\n    features[\"stellar_minus_extragalactic_oh_zone_frac\"] = (\n        features[\"stellar_lines_oh_zone_frac\"]\n        - 0.5 * (features[\"galaxy_lines_oh_zone_frac\"] + features[\"quasar_lines_oh_zone_frac\"])\n    )\n\n    return features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"spectral_skyline_interference\",\n        \"fn\": add_spectral_skyline_interference,\n        \"depends_on\": [],\n        \"description\": \"Redshift-dependent spectral line overlap with SDSS sky residuals, OH regions, and spectrograph window edges.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f0d2e-86e0-7750-a349-f29c3a9b5d5e",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 11900,
+        "outputTokens": 1887,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13787
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 11900,
+        "outputTokens": 1887,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13787
+      }
+    },
+    "turnId": "019f0d2e-86ec-7a41-bdca-5a03461eb530"
+  },
+  "wall_ms": 36438,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

@@ -1,0 +1,33 @@
+title: Spectroscopic Redshift Grid Imprint
+group_name: spectroscopic_redshift_grid_imprint
+family: spectroscopic_pipeline_geometry
+summary: Represent each object by how its reported redshift sits within the numerical
+  search windows and velocity-grid structure used by SDSS-style spectral template
+  classification, capturing pipeline-imprinted evidence separate from raw redshift
+  magnitude.
+depends_on: []
+strategy: 'Using only redshift, compute a clipped z value with lower bound -0.999
+  for stable log and velocity transforms; derive ln(1+z), relativistic beta=((1+z)^2-1)/((1+z)^2+1),
+  velocity_kms=299792.458*beta, and log_velocity_kms=299792.458*ln(1+z). For the documented
+  SDSS trial spacings of 138 km/s for galaxy fits and 276 km/s for quasar fits, compute
+  signed nearest-grid residuals log_velocity_kms - step*round(log_velocity_kms/step),
+  absolute residuals divided by half-step, and sin/cos phase on each grid. Encode
+  template-search-window geometry as signed normalized margins and inside indicators
+  for stellar radial velocity abs(velocity_kms)<=1200, galaxy redshift -0.01<=z<=1.00,
+  and quasar redshift 0.0333<=z<=7.00; additionally encode the count and categorical
+  pattern of these memberships and the clipped signed distance to their shared boundaries.
+  Clip extreme normalized distances to a finite range such as [-5,5], keep all operations
+  deterministic, and add no label-derived statistics. Source basis: https://www.sdss3.org/dr10/algorithms/redshifts.php'
+expected_signal: The target labels are tied to spectroscopic template families whose
+  redshift solutions live in different velocity ranges and search windows, so near-zero
+  stellar velocities, low-redshift galaxy solutions, quasar-only high-redshift regions,
+  and ambiguous overlap zones may become clearer than from raw redshift alone.
+risk: Much of the useful information may already be captured by redshift, and the
+  grid-phase features may be weak because final SDSS redshifts are locally refined;
+  the group is also survey-pipeline-specific and could overfit numerical conventions
+  if test data were produced differently.
+schema_version: 1
+hypothesis_id: '000066'
+revision: 1
+enabled: true
+created_at: '2026-06-28T08:49:42'

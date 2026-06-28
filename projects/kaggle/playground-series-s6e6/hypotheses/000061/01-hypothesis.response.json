@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Redshift-Slice Angular Environment\",\n  \"group_name\": \"redshift_slice_angular_environment\",\n  \"family\": \"spatial_environment\",\n  \"summary\": \"Represent each object by whether it lies in a sky-local overdensity of objects at comparable redshift and coherent broadband color, exposing galaxy-cluster and large-scale-structure context distinct from foreground stars and isolated quasar candidates.\",\n  \"depends_on\": [],\n  \"strategy\": \"Using only predictor columns, fit an unsupervised neighbor reference on training rows with class removed; for training rows exclude the row itself, and for test rows query the frozen training reference. Convert alpha and delta to unit-sphere coordinates and use great-circle distances. For each object define a redshift half-window dz=max(0.01,0.03*(1+max(redshift,0))) and select neighbors with absolute redshift difference <= dz. For positive redshift above 0.003, compute approximate angular-diameter distance under a fixed flat cosmology with H0=70 and Omega_m=0.3, then evaluate spherical-cap counts and nearest-neighbor distances at physical transverse radii of 0.5, 1, 3, and 10 Mpc with angular radii clipped to [0.02,2.0] degrees; for redshift <= 0.003 use fixed angular radii of 0.05, 0.2, 1.0, and 2.0 degrees plus an invalid-physical-scale indicator. Convert counts to log overdensities against annular backgrounds at 3 to 6 times each radius and against all-redshift angular counts, add nearest-neighbor rank ratios for the 1st, 5th, and 20th neighbors where available, and add neighborhood color-coherence summaries from the median and MAD of neighbor differences in g-r and r-i with empty-neighbor statistics set to zero and paired missingness flags. Motivating references opened: https://www.sdss4.org/dr17/tutorials/lss_galaxy/ and https://astrobites.org/2012/03/27/the-red-sequence-method-for-galaxy-cluster-detection/.\",\n  \"expected_signal\": \"Galaxies, especially red-sequence and cluster-associated populations, should appear in same-redshift angular overdensities with coherent colors, while stars mostly reflect foreground sky density without cosmological slice coherence and QSOs are often sparse high-redshift objects; making this projection contrast explicit may reduce galaxy-star and galaxy-QSO confusions and improve balanced accuracy.\",\n  \"risk\": \"The signal can be partly survey-footprint or targeting-mask artifact, sparse redshift slices may produce noisy neighbor statistics for rare regimes, close-neighbor searches add implementation cost, and the group may overlap with existing sky-density features if redshift-slice contrast is weak.\"\n}",
+  "usage": {
+    "threadId": "019f0cf2-1530-7b62-a7a3-3a79257a01ae",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 49020,
+        "outputTokens": 8288,
+        "reasoningOutputTokens": 7665,
+        "totalTokens": 57308
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 49020,
+        "outputTokens": 8288,
+        "reasoningOutputTokens": 7665,
+        "totalTokens": 57308
+      }
+    },
+    "turnId": "019f0cf2-153e-7d83-8b8f-e9ee7839bb91"
+  },
+  "wall_ms": 164177,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

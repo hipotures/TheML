@@ -1,0 +1,10 @@
+{
+  "title": "u-band continuum anomaly",
+  "group_name": "u_band_continuum_anomaly",
+  "family": "uv_photometry",
+  "summary": "Compare each object's observed near-ultraviolet brightness with the smooth optical continuum implied by its redder SDSS bands to expose UV excesses and dropouts that separate normal stellar loci, galaxies, and quasars.",
+  "depends_on": [],
+  "strategy": "Use the SDSS filter centers u=3551, g=4686, r=6166, i=7480, z=8932 Angstrom from https://www.sdss4.org/instruments/camera/. For each row define x_b=log(lambda_b/lambda_r), fit a fixed quadratic least-squares continuum m=a+b*x+c*x^2 using only g,r,i,z, and predict u_hat at x_u. Derive d_u=u-u_hat, where positive means u is fainter than the optical-continuum extrapolation and negative means UV excess; include clipped signed d_u, abs(d_u), max(0,-d_u), max(0,d_u), -0.4*d_u as a log flux-ratio proxy, 10^(-0.4*d_u) clipped to [0.001,1000], the griz fit RMS, d_u/(0.05+griz_rms+0.03*max(u-22,0)), and hinge responses around d_u thresholds -1.0,-0.5,-0.2,0.2,0.5,1.0 mag. Since the provided columns have no missing values, normal rows need no imputation; if a nonfinite value appears, output neutral residuals and a bad-continuum flag. Domain motivation comes from SDSS quasar targeting notes that quasar selection uses color-space departure from the stellar locus and that UV-excess objects are a known low-redshift quasar channel: https://www.sdss4.org/dr17/algorithms/boss_quasar_ts/ and https://www.sdss4.org/dr17/algorithms/legacy_special_target/.",
+  "expected_signal": "Normal stars should usually have a coherent u-to-griz continuum, galaxies often show red/UV-suppressed continua, and quasars can show either strong observer-frame UV excess or dropout-like behavior, so this isolates a class-relevant anomaly that raw adjacent colors may leave distributed across several columns.",
+  "risk": "This overlaps partly with existing color and continuum-shape information, and SDSS documentation notes u-band response variation, so faint or calibration-sensitive u measurements can add noise despite clipping and the faint-u penalty."
+}

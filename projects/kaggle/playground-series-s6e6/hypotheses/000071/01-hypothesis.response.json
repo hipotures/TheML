@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Night-sky line redshift interference\",\n  \"group_name\": \"spectral_skyline_interference\",\n  \"family\": \"spectroscopic_quality_geometry\",\n  \"summary\": \"Encode whether class-diagnostic rest-frame spectral features are shifted onto strong observed-frame night-sky residual regions or out of the spectrograph window, exposing redshift regimes where galaxy, quasar, and stellar template evidence may be selectively degraded.\",\n  \"depends_on\": [],\n  \"strategy\": \"Use fixed rest-frame line families for galaxy emission lines ([O II] 3727, Hbeta 4861, [O III] 4959/5007, Halpha 6563), quasar lines (Lyalpha 1216, C IV 1549, C III] 1909, Mg II 2798, Hbeta 4861), and stellar absorption anchors (Ca K/H 3934/3969 plus Balmer 4102/4341/4861/6563). For each object compute observed wavelength as rest_wavelength * (1 + redshift), using max(1 + redshift, 1e-6) for safety. Against the SDSS spectral window 3800-9200 Angstrom and sky-residual anchors 5577, 6300, and 6363 Angstrom plus a broad OH-forest zone above 7000 Angstrom, derive per-family fractions inside the window, fractions near the blue/red window edge within 50 Angstrom, minimum clipped distance to a sky anchor, soft contamination scores exp(-(distance/8)^2) and exp(-(distance/25)^2), counts within 10 and 25 Angstrom of sky anchors, OH-zone exposure, and pairwise galaxy-minus-quasar and stellar-minus-extragalactic contamination contrasts. Cap wavelength distances at 500 Angstrom, set missing or invalid calculations to neutral zero-valued scores, and use only deterministic constants without target statistics. Source grounding: SDSS documents the 3800-9200 Angstrom spectral coverage and strong residuals at 5577, 6300, 6363 and red OH sky lines (https://classic.sdss.org/dr5/products/spectra/index.php), while SDSS redshift classification is based on shifted galaxy, quasar, and stellar templates (https://www.sdss4.org/dr17/algorithms/redshifts/).\",\n  \"expected_signal\": \"Raw redshift is smooth, but spectral classification can change sharply when decisive lines land on sky residuals or leave the usable wavelength range; these localized redshift-interference descriptors may clarify QSO versus GALAXY confusion and identify STAR-like cases where extragalactic line evidence is unavailable or unreliable.\",\n  \"risk\": \"The labels may already come from high-confidence spectra where sky-line artifacts were resolved, so the features can be redundant with redshift; hardcoded line lists and narrow wavelength margins may add sparse, brittle thresholds or overfit survey-specific spectral-processing quirks.\"\n}",
+  "usage": {
+    "threadId": "019f0d1b-b2d3-7633-b344-e44c125549b7",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 52716,
+        "outputTokens": 7870,
+        "reasoningOutputTokens": 7215,
+        "totalTokens": 60586
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 52716,
+        "outputTokens": 7870,
+        "reasoningOutputTokens": 7215,
+        "totalTokens": 60586
+      }
+    },
+    "turnId": "019f0d1b-b2e1-78c2-af85-7f25dc38749e"
+  },
+  "wall_ms": 160461,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}
