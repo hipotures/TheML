@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\ndef add_lrg_target_cut_margins(raw, deps, aux):\n    g = raw[\"g\"].astype(\"float64\")\n    r = raw[\"r\"].astype(\"float64\")\n    i = raw[\"i\"].astype(\"float64\")\n\n    gmr = g - r\n    rmi = r - i\n\n    c_perp = rmi - (gmr / 4.0) - 0.177\n    c_par = (0.7 * gmr) + (1.2 * (rmi - 0.177))\n\n    margin_cutI_lum_raw = r - (13.116 + (c_par / 0.3))\n    margin_cutI_r_raw = r - 19.2\n    margin_cutI_c_raw = c_perp.abs() - 0.2\n    score_cutI_raw = pd.concat(\n        [margin_cutI_lum_raw, margin_cutI_r_raw, margin_cutI_c_raw],\n        axis=1,\n    ).max(axis=1)\n\n    margin_cutII_c_raw = (0.449 - (gmr / 6.0)) - c_perp\n    margin_cutII_red_raw = (1.296 + (0.25 * rmi)) - gmr\n    margin_cutII_r_raw = r - 19.5\n    score_cutII_raw = pd.concat(\n        [margin_cutII_c_raw, margin_cutII_red_raw, margin_cutII_r_raw],\n        axis=1,\n    ).max(axis=1)\n\n    score_lrg_any_raw = np.minimum(score_cutI_raw, score_cutII_raw)\n\n    new_features = pd.DataFrame(index=raw.index)\n    new_features[\"c_perp\"] = c_perp\n    new_features[\"c_par\"] = c_par\n    new_features[\"margin_cutI_lum\"] = margin_cutI_lum_raw.clip(-20.0, 20.0)\n    new_features[\"margin_cutI_r\"] = margin_cutI_r_raw.clip(-20.0, 20.0)\n    new_features[\"margin_cutI_c\"] = margin_cutI_c_raw.clip(-20.0, 20.0)\n    new_features[\"margin_cutII_c\"] = margin_cutII_c_raw.clip(-20.0, 20.0)\n    new_features[\"margin_cutII_red\"] = margin_cutII_red_raw.clip(-20.0, 20.0)\n    new_features[\"margin_cutII_r\"] = margin_cutII_r_raw.clip(-20.0, 20.0)\n    new_features[\"score_cutI\"] = score_cutI_raw.clip(-20.0, 20.0)\n    new_features[\"score_cutII\"] = score_cutII_raw.clip(-20.0, 20.0)\n    new_features[\"score_lrg_any\"] = pd.Series(score_lrg_any_raw, index=raw.index).clip(-20.0, 20.0)\n    new_features[\"pass_cutI\"] = score_cutI_raw <= 0.0\n    new_features[\"pass_cutII\"] = score_cutII_raw <= 0.0\n    new_features[\"pass_lrg_any\"] = score_lrg_any_raw <= 0.0\n\n    return new_features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"lrg_target_cut_margins\",\n        \"fn\": add_lrg_target_cut_margins,\n        \"depends_on\": [],\n        \"description\": \"Continuous SDSS luminous-red-galaxy cut-margin proxies from g, r, and i photometry.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f0c0a-da9a-7e60-990a-19aa31677f86",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 12001,
+        "outputTokens": 1279,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13280
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 12001,
+        "outputTokens": 1279,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13280
+      }
+    },
+    "turnId": "019f0c0a-dab5-7e23-9aca-3ef3e5178aa5"
+  },
+  "wall_ms": 25600,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

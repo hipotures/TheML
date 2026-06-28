@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Intrinsic-Rank Pairwise Color Lattice Residuals\",\n  \"group_name\": \"pairwise_color_lattice_residuals\",\n  \"family\": \"pairwise_color_geometry\",\n  \"summary\": \"Characterize each object by redshift-local residual geometry of the complete ugriz pairwise color lattice, using robust centering and intrinsic low-rank orthogonal directions to expose non-adjacent color-manifold departures relevant to class separation.\",\n  \"depends_on\": [],\n  \"strategy\": \"Compute the 10 pairwise color differences from magnitudes in fixed order: u-g, u-r, u-i, u-z, g-r, g-i, g-z, r-i, r-z, i-z. Fit all statistics on training data only within each validation fold, and on full training data for final test generation. Define redshift bins from training redshift quantiles with nq=32, then merge adjacent sparse bins until every final bin has at least m_min=max(1500, ceil(0.001*|train|)) rows; freeze these boundaries and assign rows by clipped lookup, including negative redshift values in the lowest applicable bin. For each bin, compute component-wise medians mu_b and MAD scales sigma_b over the 10-color vectors, replacing sigma_b<1e-6 with 1e-6. Create standardized residual vector s=clip((x-mu_b)/sigma_b, -8, 8) and emit its 10 components. Because the 10 pairwise colors are linearly dependent, compute orthogonal geometry in the empirical intrinsic subspace rather than inverting an unstable full 10x10 covariance: run deterministic PCA/SVD on the bin's standardized residual matrix, keep components with eigenvalue greater than max(1e-8, 1e-6*largest_eigenvalue), and cap retained components at 4, the maximum rank implied by five magnitudes. Emit the first 3 signed-deterministic principal residual scores, padding missing components with 0 if fewer than 3 valid axes exist. Also emit a regularized PCA-space Mahalanobis distance sqrt(sum_j score_j^2 / (lambda_j + ridge_b)) over retained axes, where ridge_b=1e-6*mean(lambda_j). If a row's bin is missing, too small after merging, or has no valid PCA axis, use the nearest populated bin by redshift midpoint, then global training statistics as final fallback.\",\n  \"expected_signal\": \"The full pairwise lattice makes long-baseline color contrasts explicit while redshift-local residualization removes broad magnitude-color trends that can blur class boundaries; using the intrinsic color subspace should preserve useful orthogonal deviation signals without making the geometry numerically dominated by the known linear dependencies among pairwise colors.\",\n  \"risk\": \"The added residuals are still highly correlated with raw magnitudes and simple colors, so flexible models may overfit redundant signal; redshift-bin boundaries can introduce discontinuities near cut points; sparse high-redshift bins may yield noisy PCA axes despite merging; incorrect fold handling would leak validation distribution information into the residual statistics.\"\n}",
+  "usage": {
+    "threadId": "019f0bf7-4ff3-7e11-8fae-097414303c22",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 12479,
+        "outputTokens": 1162,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13641
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 12479,
+        "outputTokens": 1162,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13641
+      }
+    },
+    "turnId": "019f0bf7-5002-7fb1-8046-c85098528b77"
+  },
+  "wall_ms": 24500,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

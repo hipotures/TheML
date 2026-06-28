@@ -1,0 +1,119 @@
+# Project Context
+
+## Goal
+Predict the stellar class for each test-set object.
+
+## Evaluation
+Submissions are evaluated using balanced accuracy between predicted class labels and the true class. Submission file must contain `id,class` with one label per test row, where `class` is one of GALAXY, STAR, or QSO.
+
+## Data description
+`train.csv` contains 577347 rows with 10 feature columns plus `id`, `galaxy_population`, `spectral_type`, and the target `class`. `test.csv` contains the same predictors without the target across 247435 rows. `sample_submission.csv` shows the required submission columns `id` and `class`. The target is a 3-class stellar classification problem with labels GALAXY, QSO, and STAR.
+
+# Data Overview
+
+-> sample_submission.csv has 247435 rows and 2 columns.
+Here is some information about the columns:
+id (int64) has range: 577347.00 - 824781.00, 0 nan values
+class (object) has 1 unique values: ['GALAXY'], 0 nan values
+
+-> test.csv has 247435 rows and 11 columns.
+Here is some information about the columns:
+id (int64) has range: 577347.00 - 824781.00, 0 nan values
+alpha (float64) has range: 0.01 - 360.00, 0 nan values
+delta (float64) has range: -17.96 - 79.17, 0 nan values
+u (float64) has range: 13.90 - 27.84, 0 nan values
+g (float64) has range: 13.37 - 27.17, 0 nan values
+r (float64) has range: 10.39 - 25.29, 0 nan values
+i (float64) has range: 10.03 - 24.57, 0 nan values
+z (float64) has range: 10.63 - 25.70, 0 nan values
+redshift (float64) has range: -0.01 - 7.01, 0 nan values
+spectral_type (object) has 4 unique values: ['G/K', 'M', 'O/B', 'A/F'], 0 nan values
+galaxy_population (object) has 2 unique values: ['Red_Sequence', 'Blue_Cloud'], 0 nan values
+
+-> train.csv has 577347 rows and 12 columns.
+Here is some information about the columns:
+id (int64) has range: 0.00 - 577346.00, 0 nan values
+alpha (float64) has range: 0.01 - 360.00, 0 nan values
+delta (float64) has range: -17.97 - 79.16, 0 nan values
+u (float64) has range: -0.14 - 28.25, 0 nan values
+g (float64) has range: 13.54 - 27.62, 0 nan values
+r (float64) has range: 12.58 - 25.25, 0 nan values
+i (float64) has range: 11.96 - 27.91, 0 nan values
+z (float64) has range: 11.68 - 26.83, 0 nan values
+redshift (float64) has range: -0.01 - 7.01, 0 nan values
+spectral_type (object) has 4 unique values: ['M', 'O/B', 'G/K', 'A/F'], 0 nan values
+galaxy_population (object) has 2 unique values: ['Red_Sequence', 'Blue_Cloud'], 0 nan values
+class (object) has 3 unique values: ['GALAXY', 'QSO', 'STAR'], 0 nan values
+
+# Project Target
+- ID column: id
+- Target column: class
+- Problem type: multiclass
+- Evaluation metric: balanced_accuracy
+- Submission kind: labels
+
+# Instruction
+
+Analyze the selected ROOT hypothesis, the project context, and the previous
+revisions.
+
+Create the next revision by expanding or improving the hypothesis while
+preserving its substantive feature-group idea. You are not writing code. You are
+not creating a new feature group.
+
+The revision should make the hypothesis more precise, internally consistent,
+implementable, or better justified. Improve the hypothesis text, especially
+`strategy`, when there is a concrete useful improvement. Do not force arbitrary
+changes.
+
+Use previous revisions only as context. If they contain useful details, use that
+context, but do not mechanically merge them. The output must be one coherent
+revised hypothesis using exactly the same JSON schema as a newly generated
+hypothesis.
+
+# Web Search
+
+Live web search is enabled. If internet verification is useful, use the
+`web_search` tool before writing the revised hypothesis. Check at most 3 sources.
+Use web search only to verify domain facts, feature-engineering background,
+validation risks, or implementation constraints relevant to the selected
+hypothesis. Do not use web search to invent a different feature-group idea, copy
+a public solution, or broaden the scope. If web search is not useful, continue
+without inventing sources.
+
+# Selected Hypothesis
+
+Hypothesis ID: 000016
+
+Previous versions:
+
+- rev 1: Sky-frame survey position geometry
+  group_name=sky_frame_position_geometry
+  family=spatial_geometry
+  summary=Express each object's celestial position in physically meaningful Galactic and SDSS survey-aligned coordinate frames so the classifier can distinguish true astrophysical sky-population gradients from raw right-ascension and declination artifacts.
+  strategy=From alpha and delta in degrees, normalize alpha modulo 360 and convert to radians; create the unit-sphere Cartesian direction cos(delta)*cos(alpha), cos(delta)*sin(alpha), and sin(delta), plus cyclic alpha encodings sin(alpha), cos(alpha). Deterministically transform ICRS/J2000 equatorial coordinates to Galactic longitude and latitude using the standard rotation constants for the north Galactic pole and Galactic center; derive sin(b), abs(b), cos(b), sin(l), cos(l), angular distance to the Galactic plane as abs(b), angular proximity to the Galactic poles as 90 - abs(b), and wrapped angular separations to the Galactic center and anticenter. Also compute an SDSS-style survey-coordinate approximation by rotating the equatorial unit vector into a frame whose survey nodes are at RA 95 and 275 degrees on Dec 0, then derive survey latitude eta-like and longitude lambda-like angles; add stripe-phase features using a 2.5 degree survey-latitude period, represented as sin(2*pi*eta/2.5) and cos(2*pi*eta/2.5). Clip trigonometric inputs to [-1, 1], wrap all longitudes to [0, 360), encode cyclic angles with sine and cosine rather than raw discontinuous values, and return finite zeros only if numerical roundoff produces non-finite values. This is motivated by SDSS documentation that survey scans follow great-circle stripes spaced by 2.5 degrees and by standard Galactic-coordinate definitions in which latitude measures position relative to the Milky Way plane.
+  expected_signal=Stars are local Milky Way objects with sky-density structure relative to the Galactic plane and center, while galaxies and QSOs are extragalactic and SDSS targeting/imaging coverage follows survey-coordinate stripes, so this group may improve balanced accuracy by giving minority classes position priors and survey-footprint context without using target statistics.
+  risk=The signal may partly reflect survey selection artifacts rather than intrinsic object physics, so it can become redundant with alpha and delta or unstable if the test sky footprint differs from training; stripe-phase features in particular could add high-frequency positional noise if the synthetic split removed real scan-pattern effects.
+
+- rev 2: Galactic- and SDSS-frame sky geometry
+  group_name=sky_frame_position_geometry
+  family=spatial_geometry
+  summary=Represent celestial position in continuous Galactic and SDSS survey-aligned angular manifolds that remove RA/Dec discontinuities and expose real astrophysical and observational-footprint priors linked to object class imbalance.
+  strategy=Standardize coordinates first: wrap alpha into [0,360) with a = ((alpha % 360) + 360) % 360, convert to radians ar = a*pi/180, and clip delta to [-90,90] before delta_rad = delta*pi/180; build base Cartesian direction p = (cos(delta_rad)*cos(ar), cos(delta_rad)*sin(ar), sin(delta_rad)) and unit-length guard by renormalizing with max(||p||, eps). Create wrap-safe continuity features sin(alpha), cos(alpha), sin(delta), cos(delta), and the raw unit vector components. Convert to Galactic frame using fixed IAU 1958 J2000 matrix M_eq_to_gal = [[-0.0548755604, 0.4941094279, -0.8676661490], [-0.8734370902, -0.4448296300, -0.1980763734], [-0.4838350155, 0.7469822445, 0.4559837762]], then g = M_eq_to_gal p, clamp each component to [-1,1], and compute l = atan2(g_y, g_x) mapped to [0, 2pi), b = atan2(g_z, sqrt(g_x^2+g_y^2)); add sin/cos l, sin/cos b, |b|, distance-to-Galactic-plane features abs(b) and pi/2-abs(b), and great-circle distances to Galactic center/anti-center: d_gc = acos(cos(b)*cos(l)) and d_anticenter = acos(cos(b)*cos(l-pi)). For SDSS-style survey geometry, define x_hat = unit(r_2018(185,32.5)), v = unit(r_2018(275,0)), z_hat = normalize(cross(x_hat, v)), y_hat = cross(z_hat, x_hat); then eta = asin(dot(p, z_hat)), lambda = atan2(dot(p, y_hat), dot(p, x_hat)), with lambda wrapped to [-pi,pi]. Add sin/cos eta and lambda plus Stripe-aware periodic terms in eta using stripe width 2.5 degrees: eta_deg = eta*180/pi, eta_phase = (eta_deg % 2.5), eta_phase_centered = eta_phase - 1.25, and sin(2*pi*eta_phase_centered/2.5), cos(2*pi*eta_phase_centered/2.5). Optionally include integer stripe-band bins floor((eta_deg+90)/2.5). All trig inputs should be numerically clipped and any NaN/Inf mapped deterministically to finite defaults.
+  expected_signal=The revised geometry stack gives the model an orthogonal positional prior: stars should remain concentrated near low Galactic latitude while redshifted and extragalactic classes follow SDSS footprint and stripe-like anisotropy, so balanced accuracy can improve by reducing confusions where photometric features overlap and minority classes are spatially structured.
+  risk=If train and test survey footprints or SDSS stripe conventions differ, these features can transfer poorly and encode footprint artifacts as spurious signal; eta periodic terms can overfit high-frequency scan pattern noise, and angular wrapping/deg-to-rad edge handling must be strict to avoid discontinuity-induced instability at poles or boundaries.
+
+Return valid JSON only. Do not use markdown fences.
+
+Return exactly this JSON object:
+
+{
+  "title": "short descriptive title",
+  "group_name": "same concise_snake_case_group_name as the previous version",
+  "family": "compact feature-family label",
+  "summary": "one comprehensive sentence describing the semantic feature-set idea; do not list formulas, exact feature names, or implementation details here",
+  "depends_on": [],
+  "strategy": "concrete deterministic feature logic, formulas, bins, statistics, and edge handling",
+  "expected_signal": "why this group may improve or clarify the metric",
+  "risk": "specific overfitting, leakage, cost, redundancy, or instability risk"
+}

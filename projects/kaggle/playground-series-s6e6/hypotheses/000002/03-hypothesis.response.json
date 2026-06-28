@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Redshift-Regime Catalog Consistency Encoding\",\n  \"group_name\": \"redshift_regime_catalog_consistency\",\n  \"family\": \"astrophysical_consistency\",\n  \"summary\": \"Represent whether an object's redshift-implied distance regime is consistent with its catalog spectral and population tags, emphasizing stellar-like near-zero cases, galaxy-like intermediate cases, and quasar-like high-redshift cases.\",\n  \"depends_on\": [],\n  \"strategy\": \"Use only `redshift`, `spectral_type`, and `galaxy_population`. Compute `abs_redshift = abs(redshift)`, `redshift_negative_flag = 1[redshift < 0]`, `redshift_zero_like_flag = 1[abs_redshift < 0.003]`, and `signed_log_redshift = sign(redshift) * log1p(abs_redshift)`. Bin `abs_redshift` into ordered deterministic regimes: `R0_zero_like` for abs_redshift < 0.003, `R1_very_low` for 0.003 <= abs_redshift < 0.0333, `R2_low` for 0.0333 <= abs_redshift < 0.25, `R3_moderate` for 0.25 <= abs_redshift < 1.0, `R4_high` for 1.0 <= abs_redshift < 3.0, and `R5_extreme` for abs_redshift >= 3.0. Boundary handling is left-closed/right-open, so exact threshold values enter the higher regime. Emit the regime as both an ordered categorical feature and a small ordinal code from 0 to 5. Add crossed categorical features `redshift_regime x spectral_type`, `redshift_regime x galaxy_population`, and `redshift_regime x spectral_type x galaxy_population` to expose catalog-consistency patterns. Preserve all rows, do not clip redshift values, and treat the provided categorical values as fixed known levels.\",\n  \"expected_signal\": \"Balanced accuracy may improve because the same catalog tag can imply different classes depending on redshift regime: near-zero redshift is strongly stellar-like, moderate redshift is more galaxy-like, and high or extreme redshift is more QSO-like. The crossed features help the model learn rare but class-informative combinations without relying only on a smooth raw redshift split.\",\n  \"risk\": \"The hand-chosen thresholds may be brittle if redshift calibration differs between train and test, and the three-way cross can create sparse combinations that overfit in high-capacity models. These features may also be partly redundant with raw redshift and categorical encodings, so regularization or validation-based pruning may be needed.\"\n}",
+  "usage": {
+    "threadId": "019f0bd1-16be-7163-b9c3-31d1b4102f19",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 12148,
+        "outputTokens": 1084,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13232
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 12148,
+        "outputTokens": 1084,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13232
+      }
+    },
+    "turnId": "019f0bd1-16c9-7761-8fd7-030e3eec084e"
+  },
+  "wall_ms": 21467,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nEPS = 0.000001\nLOG_FLUX_K = -0.9210340371976183\nLOG_FLUX_MIN = -30.0\nLOG_FLUX_MAX = 10.0\nOUTPUT_MIN = -1000000.0\nOUTPUT_MAX = 1000000.0\nBANDS = (\"u\", \"g\", \"r\", \"i\", \"z\")\nBAND_PAIRS = (\n    (\"u\", \"g\"),\n    (\"g\", \"r\"),\n    (\"r\", \"i\"),\n    (\"i\", \"z\"),\n    (\"u\", \"r\"),\n    (\"u\", \"i\"),\n    (\"u\", \"z\"),\n    (\"g\", \"z\"),\n    (\"r\", \"z\"),\n)\n\n\ndef add_aide_broadband_flux_ratios(raw, deps, aux):\n    index = raw.index\n    features = pd.DataFrame(index=index)\n\n    mags = {}\n    flux = {}\n\n    for band in BANDS:\n        mag = pd.to_numeric(raw[band], errors=\"coerce\").astype(\"float64\")\n        log_flux = (LOG_FLUX_K * mag).clip(LOG_FLUX_MIN, LOG_FLUX_MAX)\n        flux_proxy = np.exp(log_flux)\n\n        mags[band] = mag\n        flux[band] = pd.Series(flux_proxy, index=index)\n\n        features[f\"{band}_log_flux_proxy\"] = log_flux\n        features[f\"{band}_flux_proxy\"] = flux[band]\n\n    for left, right in BAND_PAIRS:\n        left_mag = mags[left]\n        right_mag = mags[right]\n        right_abs = right_mag.abs()\n        safe_right_abs = right_abs.where(right_abs >= EPS, EPS)\n        signed_denominator = np.sign(right_mag).replace(0.0, 1.0) * safe_right_abs\n\n        features[f\"{left}_{right}_abs_gap\"] = (left_mag - right_mag).abs()\n        features[f\"{left}_{right}_signed_norm_gap\"] = (left_mag - right_mag) / (right_abs + EPS)\n        features[f\"{left}_{right}_safe_mag_ratio\"] = left_mag / signed_denominator\n        features[f\"{left}_{right}_flux_ratio\"] = flux[left] / (flux[right] + EPS)\n\n    color_ug = mags[\"u\"] - mags[\"g\"]\n    color_gr = mags[\"g\"] - mags[\"r\"]\n    color_ri = mags[\"r\"] - mags[\"i\"]\n    color_iz = mags[\"i\"] - mags[\"z\"]\n    color_gz = mags[\"g\"] - mags[\"z\"]\n\n    features[\"curvature_u_2r_i\"] = mags[\"u\"] - 2.0 * mags[\"r\"] + mags[\"i\"]\n    features[\"curvature_g_2i_z\"] = mags[\"g\"] - 2.0 * mags[\"i\"] + mags[\"z\"]\n    features[\"color_curvature_ug_gr\"] = color_ug - color_gr\n    features[\"color_curvature_gr_ri\"] = color_gr - color_ri\n    features[\"color_curvature_ri_iz\"] = color_ri - color_iz\n\n    redshift = pd.to_numeric(raw[\"redshift\"], errors=\"coerce\").astype(\"float64\")\n    zr = redshift.clip(lower=0.0)\n    zr_clipped = zr.clip(0.0, 8.0)\n    log1p_zr = np.log1p(zr_clipped)\n    zr2 = zr_clipped * zr_clipped\n    zr3 = zr2 * zr_clipped\n\n    features[\"zr_nonnegative\"] = zr\n    features[\"zr_log1p_clipped\"] = log1p_zr\n    features[\"zr2_clipped\"] = zr2\n    features[\"zr3_clipped\"] = zr3\n\n    for band in BANDS:\n        features[f\"log1p_zr_x_{band}_flux_proxy\"] = log1p_zr * flux[band]\n\n    features[\"zr_x_color_ug\"] = zr_clipped * color_ug\n    features[\"zr_x_color_gr\"] = zr_clipped * color_gr\n    features[\"zr2_x_color_ri\"] = zr2 * color_ri\n    features[\"zr2_x_color_gz\"] = zr2 * color_gz\n\n    features = features.replace([np.inf, -np.inf], np.nan)\n    features = features.fillna(0.0)\n    features = features.clip(OUTPUT_MIN, OUTPUT_MAX)\n\n    return features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"aide_broadband_flux_ratios\",\n        \"fn\": add_aide_broadband_flux_ratios,\n        \"depends_on\": [],\n        \"description\": \"Deterministic ugriz magnitude, flux-ratio, curvature, and redshift-interaction photometric features.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f0c12-2671-73a1-9fc5-958e8df36f43",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 11856,
+        "outputTokens": 1541,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13397
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 11856,
+        "outputTokens": 1541,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13397
+      }
+    },
+    "turnId": "019f0c12-2688-71e2-bc4f-bf2680111601"
+  },
+  "wall_ms": 31205,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Cross-Validated Shrunk Template Color Residuals\",\n  \"group_name\": \"catalog_template_residuals\",\n  \"family\": \"template_mismatch\",\n  \"summary\": \"Measure how atypical each object's ugriz color pattern is relative to the robust catalog-template locus implied by its spectral and population tags, turning tag-conditioned photometric mismatch into class-separation features.\",\n  \"depends_on\": [],\n  \"strategy\": \"Define adjacent colors c1=u-g, c2=g-r, c3=r-i, and c4=i-z. For model validation, fit all template statistics inside each training fold only and apply them to the held-out fold; for the final submission, refit on the full training set. For each color, compute robust median location and MAD scale for every (spectral_type, galaxy_population) cell, every spectral_type group, every galaxy_population group, and the global training set. For an object with exact cell count n_cell, spectral_type count n_sp, and population count n_pop, form a hierarchical template by shrinking the joint-cell profile toward the spectral_type profile, then lightly toward the global profile when support is weak: w_cell=clip((n_cell-500)/1500,0,1), w_sp=clip((n_sp-1000)/3000,0,1). Use mu*_k=w_cell*mu_cell,k+(1-w_cell)*(w_sp*mu_sp,k+(1-w_sp)*mu_global,k), and s*_k=w_cell*s_cell,k+(1-w_cell)*(w_sp*s_sp,k+(1-w_sp)*s_global,k). If spectral_type is unseen, substitute the galaxy_population profile when available; if both tags are unseen, use global statistics. Floor every scale at 0.02. Standardize residuals as z_k=(c_k-mu*_k)/s*_k and clip z_k to [-10,10]. Emit signed z1..z4 plus aggregate mismatch descriptors mean_abs_z, median_abs_z, max_abs_z, l1_abs_z, l2_z, residual_sum_squares, count_abs_z_gt_2, and count_abs_z_gt_3. Apply identical category fallback and clipping rules at inference.\",\n  \"expected_signal\": \"Balanced accuracy may improve because GALAXY, STAR, and QSO can share overlapping raw magnitudes or colors while differing in how consistently their full color sequence matches the catalog-implied template; robust residual magnitudes can highlight quasars and mislabeled-template edge cases without directly using target labels.\",\n  \"risk\": \"The features may be redundant with raw colors and tag variables, sparse or shifted tag groups can produce unstable template baselines despite shrinkage, and validation will be optimistic if the residual statistics are fit on held-out folds rather than only on each fold's training split.\"\n}",
+  "usage": {
+    "threadId": "019f0bd3-0505-7d72-a41b-2460fa783704",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 12245,
+        "outputTokens": 1099,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13344
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 12245,
+        "outputTokens": 1099,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13344
+      }
+    },
+    "turnId": "019f0bd3-0521-7d02-886a-f3028e72336e"
+  },
+  "wall_ms": 21399,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

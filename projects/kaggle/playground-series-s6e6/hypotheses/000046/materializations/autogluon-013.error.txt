@@ -1,0 +1,1 @@
+Invalid materialization for hypothesis 000046 (autogluon); response=hypotheses/000046/materializations/autogluon-013.response.md: Group materialization must not execute top-level code outside imports, definitions, and registry assignments

@@ -1,0 +1,42 @@
+title: Shrunk redshift-bin color residuals
+group_name: aide_redshift_bin_color_residuals
+family: aide_photometric_redshift
+summary: "This feature group measures how unusually each object\u2019s color and color-curvature\
+  \ profile behaves relative to the typical profile of training objects at similar\
+  \ redshift, exposing local photometric deviations that raw colors and redshift alone\
+  \ may not separate cleanly."
+depends_on: []
+strategy: 'Derive the fixed ten AIDE color-shape channels for every row: u-g, g-r,
+  r-i, i-z, u-i, u-r, g-z, r-z, u-2*r+i, and g-2*i+z. Fit all bin edges and statistics
+  on training rows only, and in cross-validation refit them inside each training fold.
+  Define z0 = clip(redshift, 0.0, 7.01). Build 24 quantile redshift bins from z0_train
+  using quantiles k/24 for k=0..24, drop duplicate edges, and require at least 12
+  usable bins; otherwise use 24 equal-width edges over [min(z0_train), max(z0_train)].
+  Assign train and test rows with b = clip(searchsorted(edges, z0, side=''right'')
+  - 1, 0, n_bins - 1), so values at or outside fitted limits map deterministically
+  to the nearest edge bin. For each bin b and channel c, compute count n_b, mean mu_b_c,
+  and sample standard deviation sd_b_c from training rows; also compute global training
+  mean mu_all_c and sample standard deviation sd_all_c. Stabilize sparse bins with
+  shrinkage weight w_b = min(1.0, n_b / 400.0): mu_hat_b_c = w_b * mu_b_c + (1 - w_b)
+  * mu_all_c and sd_hat_b_c = max(w_b * sd_b_c + (1 - w_b) * sd_all_c, 1e-6). If a
+  bin has fewer than 2 rows, use the global standard deviation before shrinkage. For
+  each row, emit per-channel signed residuals d_c = x_c - mu_hat_b_c and standardized
+  residuals s_c = clip(d_c / sd_hat_b_c, -8.0, 8.0). Also emit aggregate residual
+  summaries across the ten channels: sqrt(sum(d_c^2)), mean(abs(d_c)), mean(d_c),
+  standard deviation of d_c, mean(s_c), standard deviation of s_c, and max(abs(s_c)).
+  The transform is deterministic, target-free, and uses only fitted training statistics
+  when applied to test rows.'
+expected_signal: Balanced accuracy can improve because the classes are not only separated
+  by absolute color and redshift, but also by how their photometric shape departs
+  from the local redshift-conditioned manifold; per-channel residuals retain directional
+  class cues, while aggregate residual norms capture broad color inconsistency patterns
+  that may distinguish quasars, stars, and galaxies in minority-sensitive scoring.
+risk: The features can be redundant with raw color, redshift, and other photometric-consistency
+  groups, and redshift noise or edge-bin sparsity can create unstable residuals; fitting
+  bin statistics outside a training fold would leak validation distribution information,
+  so fold-local fitting is required for honest validation.
+schema_version: 1
+hypothesis_id: '000023'
+revision: 3
+enabled: true
+created_at: '2026-06-28T03:34:25'

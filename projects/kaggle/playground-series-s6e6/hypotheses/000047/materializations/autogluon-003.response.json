@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nBAND_COLUMNS = (\"u\", \"g\", \"r\", \"i\", \"z\")\nWAVELENGTH_NM = (355.1, 468.6, 616.5, 748.1, 893.1)\nANCHOR_WAVELENGTH_NM = (400.0, 550.0, 700.0)\nFLUX_SHARE_ALPHA = 1e-12\nEPS = 1e-12\n\n\ndef add_flux_allocation_entropy(raw, deps, aux):\n    index = raw.index\n    mags = raw.loc[:, BAND_COLUMNS].to_numpy(dtype=np.float64, copy=True)\n\n    finite_mags = np.isfinite(mags).all(axis=1)\n    safe_mags = np.where(np.isfinite(mags), mags, 0.0)\n\n    with np.errstate(over=\"ignore\", under=\"ignore\", invalid=\"ignore\", divide=\"ignore\"):\n        a = -0.4 * np.log(10.0) * safe_mags\n        a = a - np.max(a, axis=1, keepdims=True)\n        q = np.exp(a)\n        denom = np.sum(q, axis=1, keepdims=True) + len(BAND_COLUMNS) * FLUX_SHARE_ALPHA\n        p = (q + FLUX_SHARE_ALPHA) / denom\n\n    valid_p = (\n        finite_mags\n        & np.isfinite(p).all(axis=1)\n        & (np.abs(np.sum(p, axis=1) - 1.0) <= 1e-6)\n        & (p >= 0.0).all(axis=1)\n    )\n    invalid_flux_share = ~valid_p\n    p[invalid_flux_share, :] = 1.0 / len(BAND_COLUMNS)\n\n    p_u = p[:, 0]\n    p_g = p[:, 1]\n    p_r = p[:, 2]\n    p_i = p[:, 3]\n    p_z = p[:, 4]\n\n    with np.errstate(over=\"ignore\", under=\"ignore\", invalid=\"ignore\", divide=\"ignore\"):\n        entropy = -np.sum(p * np.log(np.maximum(p, EPS)), axis=1)\n        entropy_norm = entropy / np.log(float(len(BAND_COLUMNS)))\n        simpson_concentration = np.sum(p * p, axis=1)\n        gini_impurity = 1.0 - simpson_concentration\n        effective_band_count = 1.0 / (simpson_concentration + EPS)\n\n        p_sorted = np.sort(p, axis=1)[:, ::-1]\n        p_max = p_sorted[:, 0]\n        p_second = p_sorted[:, 1]\n        p_min = p_sorted[:, -1]\n        p_spread = p_max - p_min\n        top_two_ratio = p_max / (p_second + EPS)\n        top_two_gap = p_max - p_second\n\n        blue_share = p_u + p_g\n        central_share = p_r\n        red_share = p_i + p_z\n        blue_minus_red = blue_share - red_share\n        blue_fraction = blue_share / (blue_share + red_share + EPS)\n\n        x = np.log(np.asarray(WAVELENGTH_NM, dtype=np.float64))\n        x_min = np.min(x)\n        x_max = np.max(x)\n        x_range = x_max - x_min\n\n        mu = np.sum(p * x.reshape(1, -1), axis=1)\n        centered = x.reshape(1, -1) - mu.reshape(-1, 1)\n        variance = np.sum(p * centered * centered, axis=1)\n        variance = np.maximum(variance, 0.0)\n        sd = np.sqrt(variance)\n        skew = np.sum(p * centered ** 3, axis=1) / (sd ** 3 + EPS)\n        excess_kurtosis = np.sum(p * centered ** 4, axis=1) / (sd ** 4 + EPS) - 3.0\n        mu_norm = (mu - x_min) / (x_range + EPS)\n        variance_norm = variance / (x_range * x_range + EPS)\n\n        redshift = raw[\"redshift\"].to_numpy(dtype=np.float64, copy=True)\n        safe_redshift = np.where(np.isfinite(redshift), redshift, 0.0)\n        zc = np.clip(safe_redshift, -0.95, 20.0)\n        redshift_shift = np.log1p(zc)\n\n        x_rf = x.reshape(1, -1) - redshift_shift.reshape(-1, 1)\n        mu_rf = np.sum(p * x_rf, axis=1)\n        mu_rf_norm = (mu_rf - x_min) / (x_range + EPS)\n        delta_mu = mu - mu_rf\n\n        anchor_logs = np.log(np.asarray(ANCHOR_WAVELENGTH_NM, dtype=np.float64))\n        d_anchor_400 = np.sum(p * np.abs(x_rf - anchor_logs[0]), axis=1)\n        d_anchor_550 = np.sum(p * np.abs(x_rf - anchor_logs[1]), axis=1)\n        d_anchor_700 = np.sum(p * np.abs(x_rf - anchor_logs[2]), axis=1)\n\n    top_two_ratio = np.clip(top_two_ratio, 0.0, 1e6)\n    skew = np.clip(skew, -8.0, 8.0)\n    excess_kurtosis = np.clip(excess_kurtosis, -8.0, 8.0)\n\n    features = pd.DataFrame(\n        {\n            \"invalid_flux_share\": invalid_flux_share.astype(np.int8),\n            \"p_u\": p_u,\n            \"p_g\": p_g,\n            \"p_r\": p_r,\n            \"p_i\": p_i,\n            \"p_z\": p_z,\n            \"entropy\": entropy,\n            \"entropy_norm\": entropy_norm,\n            \"simpson_concentration\": simpson_concentration,\n            \"gini_impurity\": gini_impurity,\n            \"effective_band_count\": effective_band_count,\n            \"p_max\": p_max,\n            \"p_min\": p_min,\n            \"p_spread\": p_spread,\n            \"top_two_ratio\": top_two_ratio,\n            \"top_two_gap\": top_two_gap,\n            \"blue_share\": blue_share,\n            \"central_share\": central_share,\n            \"red_share\": red_share,\n            \"blue_minus_red\": blue_minus_red,\n            \"blue_fraction\": blue_fraction,\n            \"p_u_minus_p_i\": p_u - p_i,\n            \"p_g_minus_p_r\": p_g - p_r,\n            \"p_r_minus_p_z\": p_r - p_z,\n            \"p_z_minus_p_g\": p_z - p_g,\n            \"log_wavelength_centroid\": mu,\n            \"log_wavelength_variance\": variance,\n            \"log_wavelength_sd\": sd,\n            \"log_wavelength_skew\": skew,\n            \"log_wavelength_excess_kurtosis\": excess_kurtosis,\n            \"log_wavelength_centroid_norm\": mu_norm,\n            \"log_wavelength_variance_norm\": variance_norm,\n            \"rest_log_wavelength_centroid\": mu_rf,\n            \"rest_log_wavelength_centroid_norm\": mu_rf_norm,\n            \"delta_log_wavelength_centroid\": delta_mu,\n            \"rest_anchor_distance_400nm\": d_anchor_400,\n            \"rest_anchor_distance_550nm\": d_anchor_550,\n            \"rest_anchor_distance_700nm\": d_anchor_700,\n        },\n        index=index,\n    )\n\n    return features.replace([np.inf, -np.inf], 0.0).fillna(0.0)\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"flux_allocation_entropy\",\n        \"fn\": add_flux_allocation_entropy,\n        \"depends_on\": [],\n        \"description\": \"Stable normalized ugriz flux-share entropy, concentration, allocation, wavelength-location, and redshift-aware placement features.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f0c40-e40a-7d61-8cb3-e784bd24cd7d",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 12123,
+        "outputTokens": 2198,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14321
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 12123,
+        "outputTokens": 2198,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14321
+      }
+    },
+    "turnId": "019f0c40-e423-7792-b750-917797234a23"
+  },
+  "wall_ms": 41347,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

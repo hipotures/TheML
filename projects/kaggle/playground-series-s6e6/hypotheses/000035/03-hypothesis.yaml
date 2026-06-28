@@ -1,0 +1,42 @@
+title: Robust eBOSS c1/c3 wedge and bright-pocket margins
+group_name: eboss_ptf_c1_c3_geometry
+family: color_plane_selection_geometry
+summary: Encode the SDSS-style rotated ugri color-plane geometry used for quasar selection
+  as robust boundary-margin and bright-contaminant-pocket proximity features that
+  summarize how far each object lies from quasar-like versus stellar or low-redshift
+  color manifolds.
+depends_on: []
+strategy: 'Compute adjacent colors from original magnitudes: c_ug = u - g, c_gr =
+  g - r, c_ri = r - i. Fit all robustness parameters on train only, then reuse for
+  test: replace nonfinite color values with the corresponding train median and clip
+  each derived color to train p0.1-p99.9 bounds, with fallback bounds [-10, 10] if
+  quantiles are unavailable. Compute rotated coordinates c1 = 0.95*c_ug + 0.31*c_gr
+  + 0.11*c_ri and c3 = -0.39*c_ug + 0.79*c_gr + 0.47*c_ri. Define wedge upper boundaries
+  b1 = 1.4 - 0.55*c1 and b2 = 0.3 - 0.1*c1, margins m1 = b1 - c3 and m2 = b2 - c3,
+  and emit core_margin = min(m1, m2), abs_core_margin = abs(core_margin), inside_margin_1
+  = max(m1, 0), inside_margin_2 = max(m2, 0), violation_1 = max(-m1, 0), violation_2
+  = max(-m2, 0), max_violation = max(violation_1, violation_2), and normalized_violation
+  = max_violation / (1 + abs(c1)). For the bright rejection pocket, emit pocket_c1_gap
+  = max(0.85 - c1, 0, c1 - 1.35), pocket_c3_gap = max(-0.2 - c3, 0), pocket_distance
+  = max(pocket_c1_gap, pocket_c3_gap), pocket_flag = 1 when r < 20.5, pocket_c1_gap
+  == 0, and pocket_c3_gap == 0, else 0, plus bright_scaled_pocket_distance = pocket_distance
+  / (1 + max(20.5 - r, 0)). Add deterministic discretized companions using train-only
+  edges: core_margin_bin from sign-aware bins {negative, near_zero, positive} where
+  near_zero is bounded by the train 45th-55th percentile interval clipped to include
+  0, c1_tertile from train tertiles of c1, and max_violation_bin from train tertiles
+  of max_violation; clamp test values outside fitted edges to the nearest bin.'
+expected_signal: Balanced accuracy may improve because these features express physically
+  motivated quasar-targeting geometry as signed distances rather than raw colors alone,
+  helping models separate QSO-like objects from STAR and GALAXY contaminants while
+  the explicit bright-pocket terms capture a known region where color similarity can
+  otherwise cause minority-class confusion.
+risk: The c1/c3 constants and pocket thresholds come from SDSS-like target-selection
+  rules and may be miscalibrated for this dataset's photometry or preprocessing, so
+  they can introduce biased margins; train-quantile clipping and bins may suppress
+  rare valid extremes, and the group may be partly redundant with other engineered
+  color-plane or color-ratio features.
+schema_version: 1
+hypothesis_id: '000035'
+revision: 3
+enabled: true
+created_at: '2026-06-28T03:42:58'

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Soft-Assigned Dual Rest-Frame Break Contrast\",\n  \"group_name\": \"dual_restframe_break_alignment\",\n  \"family\": \"break_competition_geometry\",\n  \"summary\": \"Encode whether each object\u2019s redshift places a strong continuum discontinuity at the observed ugriz location expected for either the Lyman 1216 \u00c5 break or the 4000 \u00c5 break, then compare the two signals to distinguish quasar-like dropout structure, galaxy-like Balmer/4000 \u00c5 structure, and smoother stellar spectra.\",\n  \"depends_on\": [],\n  \"strategy\": \"Use ugriz magnitudes m=[u,g,r,i,z], SDSS effective wavelengths \u03bb=[3551,4670,6170,7480,8930] \u00c5, log wavelengths x=ln(\u03bb), and clipped redshift zc=clip(redshift,0,7). For each break \u03bbb in {1216,4000}, compute observed position xb=ln(\u03bbb*(1+zc)). If xb is outside [x0,x4], set miss_b=1 and all jump/residual features for that break to 0. Otherwise compute the four adjacent observed color jumps J_k=m_k-m_{k+1} for k=0..3 and assign soft interval weights w_k from triangular distance to interval midpoints c_k=(x_k+x_{k+1})/2: w_k=max(0,1-|xb-c_k|/h_k), where h_k is half the interval width plus half the nearest neighboring interval width; normalize weights to sum to 1. This preserves a primary aligned interval while reducing hard flips near filter boundaries. For each interval k with nonzero weight, estimate a smooth-continuum expected jump E_k from a least-squares line in magnitude versus log wavelength using all bands except the two bands straddling the candidate break when at least two outside bands exist; otherwise use the nearest two same-side bands. Set E_k=slope*(x_k-x_{k+1}). Define residual R_k=(J_k-E_k)/(median(|m0-m1|,|m1-m2|,|m2-m3|,|m3-m4|)+0.05), clipping each residual to [-8,8]. For each break output weighted raw jump J_b=sum(w_k*J_k), weighted expected jump E_b=sum(w_k*E_k), weighted residual R_b=sum(w_k*R_k), absolute weighted residual A_b=sum(w_k*abs(R_k)), alignment sharpness C_b=max(w_k), edge flag edge_b=1 if C_b<0.45 else 0, dominant interval index or one-hot interval flags, and regime flags lya_regime=(1.8<=zc<=6.6), balmer_regime=(0<=zc<=1.35). Build competition features only from valid breaks: lya_vs_balmer=R_1216*C_1216-R_4000*C_4000, abs_balance=A_1216*C_1216-A_4000*C_4000, signed_ratio=(R_1216*C_1216)/(abs(R_4000*C_4000)+1), and valid_pair=(1-miss_1216)*(1-miss_4000). Set invalid break terms to 0 while retaining miss and regime flags.\",\n  \"expected_signal\": \"Balanced accuracy may improve because the features emphasize class-relevant spectral geometry rather than absolute brightness: QSOs should often have stronger redshift-aligned Lyman-break residuals, galaxies should more often have stronger 4000 \u00c5 residuals at low redshift, and stars should tend to have weaker or less redshift-consistent break competition.\",\n  \"risk\": \"The signal depends strongly on the supplied redshift, so redshift errors or class-correlated redshift artifacts could dominate; broad ugriz filters make true break positions coarse, emission lines can mimic jumps, and these features may be partly redundant with raw colors and redshift unless regularized by the downstream model.\"\n}",
+  "usage": {
+    "threadId": "019f0bfb-ecc7-7071-99f8-8126280df094",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13046,
+        "outputTokens": 1353,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14399
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13046,
+        "outputTokens": 1353,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14399
+      }
+    },
+    "turnId": "019f0bfb-ece1-7721-8dbf-724911df31eb"
+  },
+  "wall_ms": 26046,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

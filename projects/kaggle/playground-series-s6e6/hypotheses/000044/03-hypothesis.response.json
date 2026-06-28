@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Redshift-aligned absorption trough residuals\",\n  \"group_name\": \"redshifted_absorption_trough_residuals\",\n  \"family\": \"absorption_line_geometry\",\n  \"summary\": \"Measure whether ugriz fluxes show physically aligned, redshift-dependent broadband depressions near major optical absorption complexes, using local continuum residuals to add line-blanketing geometry beyond ordinary colors.\",\n  \"depends_on\": [],\n  \"strategy\": \"Convert magnitudes to log-flux proxies directly as logf_b = -0.4*ln(10)*m_b for bands b={u,g,r,i,z}, with centers c=[3551,4686,6165,7481,8931] \u00c5 and approximate band edges e=[3000,4100,5500,7000,8200,9200] \u00c5. Use rest-frame absorption features CaII_K=3933.7, CaII_H=3968.5, Hdelta=4102, Gband=4304, Hgamma=4341, Hbeta=4861, Mgb=5175, and NaD=5893 \u00c5. For wavelength projection use z_eff=max(redshift,0) and add a negative_redshift_flag=1 when redshift<0. For each line compute lambda_obs=lambda_rest*(1+z_eff), visibility v=1 only if 3000<=lambda_obs<=9200, else set all residual features for that line to 0. For visible lines, find containing band j where e_j<=lambda_obs<e_{j+1}. Estimate continuum in log-flux/log-wavelength space without using the containing band: if bands j-1 and j+1 both exist, linearly interpolate between their log-flux values at log(lambda_obs); otherwise fit an ordinary least-squares line to the remaining four non-containing bands and predict at log(lambda_obs). Compute r_line=(exp(logf_cont)-exp(logf_j))/(exp(logf_cont)+1e-12), then deficit d_line=clip(max(r_line,0),0,3) and excess x_line=clip(max(-r_line,0),0,3). Define a band-position reliability weight q_line=clip(1 - 0.5*abs(lambda_obs-c_j)/max(c_j-e_j,e_{j+1}-c_j), 0.5, 1.0). Build visibility-weighted means, not raw sums, to avoid feature counts dominating: blue_abs_deficit=weighted_mean(d_line,q_line) over CaII_K,CaII_H,Hdelta,Gband,Hgamma; red_abs_deficit=weighted_mean(d_line,q_line) over Hbeta,Mgb,NaD; total_abs_deficit=weighted_mean(d_line,q_line) over all lines; total_abs_excess=weighted_mean(x_line,q_line) over all lines. Add contrasts metal_blanketing_skew=(blue_abs_deficit-red_abs_deficit)/(blue_abs_deficit+red_abs_deficit+1e-6), absorption_excess_ratio=total_abs_excess/(total_abs_deficit+1e-6), CaHK_to_Balmer=(weighted_mean CaII_K/CaII_H deficits)/(weighted_mean Hdelta/Hgamma deficits + 1e-6), and visible_line_weight=sum(v*q_line). Also add per-line visibility indicators and redshift-regime gated copies of the main aggregates for z_eff in [0,0.45), [0.45,1.1), [1.1,2.0), and [2.0,7.1], setting gated features to 0 outside their regime.\",\n  \"expected_signal\": \"These features may improve balanced accuracy by exposing class-specific absorption-blanketing structure that is aligned in rest-frame wavelength rather than fixed observed color space, helping separate galaxies, stars, and QSOs in regions where their raw ugriz colors and redshift values overlap.\",\n  \"risk\": \"Broadband filters dilute narrow absorption features, so residuals can be noisy and highly correlated with ordinary color, continuum-slope, and break features; the approximate passbands and continuum extrapolation at u/z edges can introduce systematic artifacts, and regime-gated variants increase dimensionality enough to require regularization or feature selection.\"\n}",
+  "usage": {
+    "threadId": "019f0bf6-dc82-7182-88e1-d08453be4d4e",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 12908,
+        "outputTokens": 1401,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14309
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 12908,
+        "outputTokens": 1401,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14309
+      }
+    },
+    "turnId": "019f0bf6-dc99-7123-b05e-14f200e6f45f"
+  },
+  "wall_ms": 27206,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nSDSS_EFFECTIVE_WAVELENGTHS_ANGSTROM = (3551.0, 4686.0, 6165.0, 7481.0, 8931.0)\n\n\ndef add_redshifted_4000a_break_curvature(raw, deps, aux):\n    lambda_u, lambda_g, lambda_r, lambda_i, lambda_z = SDSS_EFFECTIVE_WAVELENGTHS_ANGSTROM\n\n    redshift = raw[\"redshift\"].astype(\"float64\")\n    u_mag = raw[\"u\"].astype(\"float64\")\n    g_mag = raw[\"g\"].astype(\"float64\")\n    r_mag = raw[\"r\"].astype(\"float64\")\n    i_mag = raw[\"i\"].astype(\"float64\")\n    z_mag = raw[\"z\"].astype(\"float64\")\n\n    lambda_break = 4000.0 * (1.0 + redshift)\n\n    c_ug = u_mag - g_mag\n    c_gr = g_mag - r_mag\n    c_ri = r_mag - i_mag\n    c_iz = i_mag - z_mag\n\n    in_ug = (lambda_break >= lambda_u) & (lambda_break < lambda_g)\n    in_gr = (lambda_break >= lambda_g) & (lambda_break < lambda_r)\n    in_ri = (lambda_break >= lambda_r) & (lambda_break < lambda_i)\n    in_iz = (lambda_break >= lambda_i) & (lambda_break < lambda_z)\n    out_of_band = ~(in_ug | in_gr | in_ri | in_iz)\n\n    p = pd.Series(0.0, index=raw.index, dtype=\"float64\")\n    p_ug = ((lambda_break - lambda_u) / (lambda_g - lambda_u)).clip(0.0, 1.0)\n    p_gr = ((lambda_break - lambda_g) / (lambda_r - lambda_g)).clip(0.0, 1.0)\n    p_ri = ((lambda_break - lambda_r) / (lambda_i - lambda_r)).clip(0.0, 1.0)\n    p_iz = ((lambda_break - lambda_i) / (lambda_z - lambda_i)).clip(0.0, 1.0)\n\n    p = p.mask(in_ug, p_ug)\n    p = p.mask(in_gr, p_gr)\n    p = p.mask(in_ri, p_ri)\n    p = p.mask(in_iz, p_iz)\n\n    w = 4.0 * p * (1.0 - p)\n\n    jump_ug = c_ug - c_gr\n    jump_gr = c_gr - 0.5 * (c_ug + c_ri)\n    jump_ri = c_ri - 0.5 * (c_gr + c_iz)\n    jump_iz = c_iz - c_ri\n\n    curv_ug = c_ug - 2.0 * c_gr + c_ri\n    curv_gr = c_ug - 2.0 * c_gr + c_ri\n    curv_ri = c_gr - 2.0 * c_ri + c_iz\n    curv_iz = c_gr - 2.0 * c_ri + c_iz\n\n    return pd.DataFrame(\n        {\n            \"break_position_p\": p,\n            \"break_centrality_w\": w,\n            \"in_ug\": in_ug.astype(\"int8\"),\n            \"in_gr\": in_gr.astype(\"int8\"),\n            \"in_ri\": in_ri.astype(\"int8\"),\n            \"in_iz\": in_iz.astype(\"int8\"),\n            \"out_of_band\": out_of_band.astype(\"int8\"),\n            \"ug_weighted_jump\": in_ug.astype(\"float64\") * w * jump_ug,\n            \"gr_weighted_jump\": in_gr.astype(\"float64\") * w * jump_gr,\n            \"ri_weighted_jump\": in_ri.astype(\"float64\") * w * jump_ri,\n            \"iz_weighted_jump\": in_iz.astype(\"float64\") * w * jump_iz,\n            \"ug_weighted_curvature\": in_ug.astype(\"float64\") * w * curv_ug,\n            \"gr_weighted_curvature\": in_gr.astype(\"float64\") * w * curv_gr,\n            \"ri_weighted_curvature\": in_ri.astype(\"float64\") * w * curv_ri,\n            \"iz_weighted_curvature\": in_iz.astype(\"float64\") * w * curv_iz,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"redshifted_4000a_break_curvature\",\n        \"fn\": add_redshifted_4000a_break_curvature,\n        \"depends_on\": [],\n        \"description\": \"Encodes redshift-localized ugriz curvature around the observed 4000 Angstrom break.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f0c23-ed6c-7080-8915-bdd3070c5042",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 11979,
+        "outputTokens": 1583,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13562
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 11979,
+        "outputTokens": 1583,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13562
+      }
+    },
+    "turnId": "019f0c23-ed85-7ca1-b089-56a88eb42853"
+  },
+  "wall_ms": 30799,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

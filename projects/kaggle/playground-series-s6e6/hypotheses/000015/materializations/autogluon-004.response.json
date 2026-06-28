@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\n_TEMPLATE_DOMAINS = (\n    (\"star\", -0.004002769142205858, 0.004002769142205858),\n    (\"galaxy\", -0.01, 1.0),\n    (\"qso\", 0.0333, 7.0),\n)\n\n_BREAKPOINTS = (-0.01, 0.0, 0.0333, 1.0, 2.2, 3.0, 3.5, 4.5, 5.0, 7.0)\n\n_CLIP_LO = -10.0\n_CLIP_HI = 10.0\n_STELLAR_SCALE = 0.004002769142205858\n\n\ndef _finite_clipped(values):\n    arr = np.asarray(values, dtype=np.float64)\n    clipped = np.clip(arr, _CLIP_LO, _CLIP_HI)\n    return np.where(np.isfinite(arr), clipped, clipped)\n\n\ndef _signed_log_abs(values):\n    clipped = _finite_clipped(values)\n    logged = np.sign(clipped) * np.log1p(np.abs(clipped))\n    return np.where(np.isfinite(logged), logged, clipped)\n\n\ndef _add_continuous_pair(out, name, values):\n    out[name] = _finite_clipped(values).astype(np.float32)\n    out[name + \"_log_abs_signed\"] = _signed_log_abs(values).astype(np.float32)\n\n\ndef add_redshift_template_domain_margins(raw, deps, aux):\n    z = pd.to_numeric(raw[\"redshift\"], errors=\"coerce\").to_numpy(dtype=np.float64, copy=True)\n    z_finite = np.where(np.isfinite(z), z, 0.0)\n\n    out = pd.DataFrame(index=raw.index)\n\n    for domain_name, lo, hi in _TEMPLATE_DOMAINS:\n        in_domain = (z_finite >= lo) & (z_finite <= hi)\n        lower_margin = z_finite - lo\n        upper_margin = hi - z_finite\n        outside_signed = np.where(z_finite < lo, z_finite - lo, np.where(z_finite > hi, z_finite - hi, 0.0))\n        outside_gap = np.maximum(lo - z_finite, 0.0) + np.maximum(z_finite - hi, 0.0)\n\n        out[domain_name + \"_in_domain\"] = in_domain.astype(np.int8)\n        _add_continuous_pair(out, domain_name + \"_lower_margin\", lower_margin)\n        _add_continuous_pair(out, domain_name + \"_upper_margin\", upper_margin)\n        _add_continuous_pair(out, domain_name + \"_outside_signed_distance\", outside_signed)\n        _add_continuous_pair(out, domain_name + \"_outside_abs_gap\", outside_gap)\n\n    _add_continuous_pair(out, \"redshift_sign\", np.sign(z_finite))\n    _add_continuous_pair(out, \"redshift_abs\", np.abs(z_finite))\n    _add_continuous_pair(out, \"star_velocity_scaled\", z_finite / _STELLAR_SCALE)\n\n    breakpoints = np.asarray(_BREAKPOINTS, dtype=np.float64)\n    interval_id = np.searchsorted(breakpoints, z_finite, side=\"right\") - 1\n    interval_id = np.clip(interval_id, 0, len(breakpoints) - 2)\n    out[\"breakpoint_interval_id\"] = interval_id.astype(np.int8)\n\n    breakpoint_distances = np.abs(z_finite[:, None] - breakpoints[None, :])\n    nearest_index = np.argmin(breakpoint_distances, axis=1)\n    nearest_distance = breakpoint_distances[np.arange(len(z_finite)), nearest_index]\n\n    _add_continuous_pair(out, \"nearest_breakpoint_distance\", nearest_distance)\n    out[\"nearest_breakpoint_index\"] = nearest_index.astype(np.int8)\n\n    for idx, breakpoint in enumerate(_BREAKPOINTS):\n        label = str(breakpoint).replace(\"-\", \"neg_\").replace(\".\", \"p\")\n        _add_continuous_pair(out, \"breakpoint_\" + label + \"_lower_edge_distance\", z_finite - breakpoint)\n        _add_continuous_pair(out, \"breakpoint_\" + label + \"_upper_edge_distance\", breakpoint - z_finite)\n\n    return out\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"redshift_template_domain_margins\",\n        \"fn\": add_redshift_template_domain_margins,\n        \"depends_on\": [],\n        \"description\": \"Redshift feasibility margins and breakpoint geometry for stellar, galaxy, and quasar template domains.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f0c0d-f840-7233-8127-ca66a4348bc3",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 11878,
+        "outputTokens": 1504,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13382
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 11878,
+        "outputTokens": 1504,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13382
+      }
+    },
+    "turnId": "019f0c0d-f859-78a3-b846-68aaa1f3ab00"
+  },
+  "wall_ms": 29161,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

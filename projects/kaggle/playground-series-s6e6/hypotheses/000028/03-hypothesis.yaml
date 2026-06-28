@@ -1,0 +1,39 @@
+title: Calibrated dust-vector color decomposition
+group_name: foreground_reddening_geometry
+family: reddening_invariant
+summary: This feature group decomposes broadband photometry into foreground-dust amplitude,
+  dereddened color geometry, and sky-extinction context so classification relies more
+  on intrinsic SED differences than on line-of-sight reddening.
+depends_on: []
+strategy: Convert alpha and delta from ICRS degrees to Galactic longitude and latitude
+  using a fixed deterministic coordinate transform. Query a preloaded SFD98 E(B-V)
+  map rescaled by the Schlafly-Finkbeiner factor 0.86; if lookup fails, impute from
+  train-fitted 5 degree by 5 degree Galactic-coordinate bin medians among rows with
+  valid map values, then from the nearest non-empty train bin within 10 degrees, then
+  from the global train median. Store ebv_raw, ebv_clipped=clip(ebv_raw,0,1.2), and
+  is_ebv_imputed. Use SDSS extinction coefficients [A_u,A_g,A_r,A_i,A_z]=[5.155,3.793,2.751,2.086,1.479]*ebv_clipped
+  and compute dereddened magnitudes u0,g0,r0,i0,z0 by subtracting extinction from
+  observed magnitudes. Form observed colors C=[u-g,g-r,r-i,i-z] and dereddened colors
+  C0=[u0-g0,g0-r0,r0-i0,i0-z0]. Define the color-excess vector k=[1.362,1.042,0.665,0.607]
+  and unit reddening direction d=k/||k||2. Add parallel_obs=C dot d, parallel_dered=C0
+  dot d, dust_parallel=parallel_obs-parallel_dered, and orthogonal dereddened residuals
+  R=C0-(parallel_dered*d), keeping R_ug,R_gr,R_ri,R_iz and ||R||2. Add compact context
+  terms abs_b=|b|, signed_b=b, train-fitted decile bins of ebv_clipped and abs_b,
+  plus interactions dust_parallel*abs_b, ebv_clipped*redshift, and ebv_clipped*galaxy_population
+  encoded as two binary interactions. Fit all percentile cut points and bin edges
+  on training data only, then clip continuous generated features to train-derived
+  0.5th and 99.5th percentiles before applying the same transform to test rows.
+expected_signal: Balanced accuracy may improve because dust reddening shifts objects
+  along a predictable color direction that can otherwise blur STAR, GALAXY, and QSO
+  boundaries, while the orthogonal dereddened residuals retain class-specific SED
+  curvature and redshift-related color structure.
+risk: External dust-map calibration, coordinate-transform mistakes, or extinction
+  coefficients mismatched to the survey passbands can inject systematic noise; the
+  dust amplitude and latitude features may also duplicate information already learnable
+  from colors, redshift, and sky position, so validation must check for marginal gain
+  rather than assumed benefit.
+schema_version: 1
+hypothesis_id: 000028
+revision: 3
+enabled: true
+created_at: '2026-06-28T03:36:34'

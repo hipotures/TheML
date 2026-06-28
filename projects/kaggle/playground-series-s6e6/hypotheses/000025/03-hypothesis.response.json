@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Robust auxiliary reference distance\",\n  \"group_name\": \"aide_aux_reference_distribution_distance\",\n  \"family\": \"aide_auxiliary_reference\",\n  \"summary\": \"Compare each object with an external auxiliary reference population to encode how typical or outlying its sky position, photometry, and redshift profile is under a robust survey-like distribution.\",\n  \"depends_on\": [],\n  \"strategy\": \"Load the auxiliary reference table when present and build reference statistics only from overlapping numeric predictors among alpha, delta, u, g, r, i, z, and redshift; exclude target-like, identifier, and categorical fields from this feature group. Apply identical deterministic cleaning to auxiliary, train, and test rows: set photometry values <= -9000 to missing, clip redshift below 0 to 0, wrap alpha into [0, 360), and replace raw alpha in joint geometry with sin_alpha=sin(2*pi*alpha/360) and cos_alpha=cos(2*pi*alpha/360) while retaining delta as linear. For each usable marginal column in {sin_alpha, cos_alpha, delta, u, g, r, i, z, redshift}, compute auxiliary median m_j and robust scale s_j using 1.4826*MAD, falling back to IQR/1.349 and then to the median positive scale across usable columns; drop a column from distance calculations if no positive scale can be determined. For every row, emit per-column robust_z_j=(x_j-m_j)/s_j clipped to [-8,8], abs_robust_z_j, signed_median_delta_j=x_j-m_j, abs_median_delta_j, and empirical_cdf_j based on searchsorted over sorted nonmissing auxiliary values with plotting-position smoothing p=(count_less+0.5*count_equal+0.5)/(n_ref+1), clipped away from exactly 0 and 1. Emit missing flags for each usable column plus missing_count and available_ratio. Aggregate available marginal columns into mean_abs_z, max_abs_z, rms_abs_z, mean_rank_shift=mean(abs(empirical_cdf_j-0.5)), max_rank_shift, and mean_signed_z so that both outlier magnitude and directional offset are represented. For joint distance, form the standardized vector of clipped robust z values over the same usable columns, estimate the auxiliary covariance on rows complete across those columns after clipping standardized values to [-6,6], and regularize C with ridge lambda=max(1e-6*trace(C)/d, 1e-8); if the complete auxiliary sample is too small, covariance rank is unusable, or d<2, fall back to diagonal covariance. Compute a missingness-aware Mahalanobis squared distance using only coordinates available for the row and the corresponding covariance submatrix, then rescale by d_full/d_available to keep rows with fewer coordinates comparable; emit mahalanobis_sq, mahalanobis, log1p_mahalanobis_sq, joint_available_count, and joint_available_ratio. If the auxiliary table is absent or fewer than three usable columns remain, emit neutral constants for all distance aggregates and explicit unavailable indicators. Fit all reference statistics once from auxiliary data only and apply them unchanged to train and test features; do not use class labels or train a classifier inside this hypothesis.\",\n  \"expected_signal\": \"Objects from different stellar classes should occupy different parts of the joint color, magnitude, redshift, and sky-position manifold, so robust auxiliary-distance features can expose class-specific typicality and outlier structure that a balanced-accuracy model may use especially for minority QSO or STAR separation.\",\n  \"risk\": \"The auxiliary reference may have a different footprint, calibration, or selection function than the competition data, causing distances to encode distribution shift rather than class signal; covariance estimates can be noisy in sparse complete cases, and these features may be redundant with raw predictors or dominate if the downstream model overweights broad outlier scores.\"\n}",
+  "usage": {
+    "threadId": "019f0bdd-79a0-7d33-9c4e-04c83b7cb008",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 12429,
+        "outputTokens": 1332,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13761
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 12429,
+        "outputTokens": 1332,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13761
+      }
+    },
+    "turnId": "019f0bdd-79ad-77a0-b5e4-ffd005db2498"
+  },
+  "wall_ms": 26057,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

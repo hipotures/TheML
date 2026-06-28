@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nREDSHIFT_BIN_EDGES = (-np.inf, 0.0, 0.1, 0.4, 1.0, 1.4, 2.0, 2.8, 3.5, 4.5, np.inf)\nI_BIN_EDGES = (-np.inf, 17.0, 18.0, 19.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, np.inf)\nL4_BETA = 150.0\nL3_BETA = 250.0\nL2_BETA = 400.0\nEPSILON = 1e-6\n\n\ndef _safe_series(raw, name, default):\n    if name in raw.columns:\n        return raw[name]\n    return pd.Series(default, index=raw.index)\n\n\ndef _frequency_for_key(key_frame):\n    counts = key_frame.value_counts(dropna=False)\n    total = float(len(key_frame))\n    if total <= 0.0:\n        return pd.Series(0.0, index=key_frame.index)\n    freq = key_frame.merge(\n        counts.rename(\"__count__\").reset_index(),\n        how=\"left\",\n        on=list(key_frame.columns),\n        sort=False,\n    )[\"__count__\"].astype(float)\n    return pd.Series(freq.to_numpy() / total, index=key_frame.index)\n\n\ndef _count_for_key(key_frame):\n    counts = key_frame.value_counts(dropna=False)\n    count_values = key_frame.merge(\n        counts.rename(\"__count__\").reset_index(),\n        how=\"left\",\n        on=list(key_frame.columns),\n        sort=False,\n    )[\"__count__\"].astype(float)\n    return pd.Series(count_values.to_numpy(), index=key_frame.index)\n\n\ndef add_metadata_redshift_magnitude_class_priors(raw, deps, aux):\n    spectral = _safe_series(raw, \"spectral_type\", \"__missing__\").astype(\"string\").fillna(\"__missing__\")\n    population = _safe_series(raw, \"galaxy_population\", \"__missing__\").astype(\"string\").fillna(\"__missing__\")\n    redshift = pd.to_numeric(_safe_series(raw, \"redshift\", np.nan), errors=\"coerce\")\n    i_mag = pd.to_numeric(_safe_series(raw, \"i\", np.nan), errors=\"coerce\")\n\n    redshift_bin = pd.cut(\n        redshift,\n        bins=list(REDSHIFT_BIN_EDGES),\n        labels=False,\n        include_lowest=True,\n    ).astype(\"float64\").fillna(-1.0)\n\n    i_bin = pd.cut(\n        i_mag,\n        bins=list(I_BIN_EDGES),\n        labels=False,\n        include_lowest=True,\n    ).astype(\"float64\").fillna(-1.0)\n\n    l2 = pd.DataFrame(\n        {\n            \"spectral_type\": spectral,\n            \"galaxy_population\": population,\n        },\n        index=raw.index,\n    )\n    l3 = pd.DataFrame(\n        {\n            \"spectral_type\": spectral,\n            \"galaxy_population\": population,\n            \"redshift_bin\": redshift_bin,\n        },\n        index=raw.index,\n    )\n    l4 = pd.DataFrame(\n        {\n            \"spectral_type\": spectral,\n            \"galaxy_population\": population,\n            \"redshift_bin\": redshift_bin,\n            \"i_bin\": i_bin,\n        },\n        index=raw.index,\n    )\n\n    l2_count = _count_for_key(l2)\n    l3_count = _count_for_key(l3)\n    l4_count = _count_for_key(l4)\n\n    l2_freq = _frequency_for_key(l2).clip(EPSILON, 1.0)\n    l3_freq = _frequency_for_key(l3).clip(EPSILON, 1.0)\n    l4_freq = _frequency_for_key(l4).clip(EPSILON, 1.0)\n\n    l2_reliability = l2_count / (l2_count + L2_BETA)\n    l3_reliability = l3_count / (l3_count + L3_BETA)\n    l4_reliability = l4_count / (l4_count + L4_BETA)\n\n    blended_context_freq = (\n        l4_reliability * l4_freq\n        + (1.0 - l4_reliability)\n        * (\n            l3_reliability * l3_freq\n            + (1.0 - l3_reliability) * (l2_reliability * l2_freq + (1.0 - l2_reliability))\n        )\n    ).clip(EPSILON, 1.0)\n\n    inverse_context_freq = (1.0 - blended_context_freq).clip(EPSILON, 1.0)\n    context_log_lift = np.log(blended_context_freq / l2_freq.clip(EPSILON, 1.0))\n    context_surprisal = -np.log(blended_context_freq)\n\n    return pd.DataFrame(\n        {\n            \"redshift_bin\": redshift_bin.astype(\"int16\"),\n            \"i_bin\": i_bin.astype(\"int16\"),\n            \"l2_count\": l2_count.astype(\"float32\"),\n            \"l3_count\": l3_count.astype(\"float32\"),\n            \"l4_count\": l4_count.astype(\"float32\"),\n            \"l2_frequency\": l2_freq.astype(\"float32\"),\n            \"l3_frequency\": l3_freq.astype(\"float32\"),\n            \"l4_frequency\": l4_freq.astype(\"float32\"),\n            \"l2_reliability\": l2_reliability.astype(\"float32\"),\n            \"l3_reliability\": l3_reliability.astype(\"float32\"),\n            \"l4_reliability\": l4_reliability.astype(\"float32\"),\n            \"blended_context_frequency\": blended_context_freq.astype(\"float32\"),\n            \"inverse_context_frequency\": inverse_context_freq.astype(\"float32\"),\n            \"context_log_lift_vs_l2\": context_log_lift.astype(\"float32\"),\n            \"context_surprisal\": context_surprisal.astype(\"float32\"),\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"metadata_redshift_magnitude_class_priors\",\n        \"fn\": add_metadata_redshift_magnitude_class_priors,\n        \"depends_on\": [],\n        \"description\": \"Covariate-only hierarchical metadata, redshift, and magnitude context prevalence features with smoothed reliability backoff.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f0c4f-048f-7702-991c-913a2fd3a4c6",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 12025,
+        "outputTokens": 1893,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13918
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 12025,
+        "outputTokens": 1893,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13918
+      }
+    },
+    "turnId": "019f0c4f-04ab-7003-a265-be5c62b73a66"
+  },
+  "wall_ms": 35817,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

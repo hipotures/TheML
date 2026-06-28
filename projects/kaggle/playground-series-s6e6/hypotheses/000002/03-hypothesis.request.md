@@ -1,0 +1,119 @@
+# Project Context
+
+## Goal
+Predict the stellar class for each test-set object.
+
+## Evaluation
+Submissions are evaluated using balanced accuracy between predicted class labels and the true class. Submission file must contain `id,class` with one label per test row, where `class` is one of GALAXY, STAR, or QSO.
+
+## Data description
+`train.csv` contains 577347 rows with 10 feature columns plus `id`, `galaxy_population`, `spectral_type`, and the target `class`. `test.csv` contains the same predictors without the target across 247435 rows. `sample_submission.csv` shows the required submission columns `id` and `class`. The target is a 3-class stellar classification problem with labels GALAXY, QSO, and STAR.
+
+# Data Overview
+
+-> sample_submission.csv has 247435 rows and 2 columns.
+Here is some information about the columns:
+id (int64) has range: 577347.00 - 824781.00, 0 nan values
+class (object) has 1 unique values: ['GALAXY'], 0 nan values
+
+-> test.csv has 247435 rows and 11 columns.
+Here is some information about the columns:
+id (int64) has range: 577347.00 - 824781.00, 0 nan values
+alpha (float64) has range: 0.01 - 360.00, 0 nan values
+delta (float64) has range: -17.96 - 79.17, 0 nan values
+u (float64) has range: 13.90 - 27.84, 0 nan values
+g (float64) has range: 13.37 - 27.17, 0 nan values
+r (float64) has range: 10.39 - 25.29, 0 nan values
+i (float64) has range: 10.03 - 24.57, 0 nan values
+z (float64) has range: 10.63 - 25.70, 0 nan values
+redshift (float64) has range: -0.01 - 7.01, 0 nan values
+spectral_type (object) has 4 unique values: ['G/K', 'M', 'O/B', 'A/F'], 0 nan values
+galaxy_population (object) has 2 unique values: ['Red_Sequence', 'Blue_Cloud'], 0 nan values
+
+-> train.csv has 577347 rows and 12 columns.
+Here is some information about the columns:
+id (int64) has range: 0.00 - 577346.00, 0 nan values
+alpha (float64) has range: 0.01 - 360.00, 0 nan values
+delta (float64) has range: -17.97 - 79.16, 0 nan values
+u (float64) has range: -0.14 - 28.25, 0 nan values
+g (float64) has range: 13.54 - 27.62, 0 nan values
+r (float64) has range: 12.58 - 25.25, 0 nan values
+i (float64) has range: 11.96 - 27.91, 0 nan values
+z (float64) has range: 11.68 - 26.83, 0 nan values
+redshift (float64) has range: -0.01 - 7.01, 0 nan values
+spectral_type (object) has 4 unique values: ['M', 'O/B', 'G/K', 'A/F'], 0 nan values
+galaxy_population (object) has 2 unique values: ['Red_Sequence', 'Blue_Cloud'], 0 nan values
+class (object) has 3 unique values: ['GALAXY', 'QSO', 'STAR'], 0 nan values
+
+# Project Target
+- ID column: id
+- Target column: class
+- Problem type: multiclass
+- Evaluation metric: balanced_accuracy
+- Submission kind: labels
+
+# Instruction
+
+Analyze the selected ROOT hypothesis, the project context, and the previous
+revisions.
+
+Create the next revision by expanding or improving the hypothesis while
+preserving its substantive feature-group idea. You are not writing code. You are
+not creating a new feature group.
+
+The revision should make the hypothesis more precise, internally consistent,
+implementable, or better justified. Improve the hypothesis text, especially
+`strategy`, when there is a concrete useful improvement. Do not force arbitrary
+changes.
+
+Use previous revisions only as context. If they contain useful details, use that
+context, but do not mechanically merge them. The output must be one coherent
+revised hypothesis using exactly the same JSON schema as a newly generated
+hypothesis.
+
+# Web Search
+
+Live web search is enabled. If internet verification is useful, use the
+`web_search` tool before writing the revised hypothesis. Check at most 3 sources.
+Use web search only to verify domain facts, feature-engineering background,
+validation risks, or implementation constraints relevant to the selected
+hypothesis. Do not use web search to invent a different feature-group idea, copy
+a public solution, or broaden the scope. If web search is not useful, continue
+without inventing sources.
+
+# Selected Hypothesis
+
+Hypothesis ID: 000002
+
+Previous versions:
+
+- rev 1: Redshift-Regime Catalog Consistency
+  group_name=redshift_regime_catalog_consistency
+  family=astrophysical_consistency
+  summary=Create redshift-regime features and cross them with the provided catalog tags to capture whether an object looks locally stellar, galactic, or quasar-like.
+  strategy=Use only `redshift`, `spectral_type`, and `galaxy_population`. First compute `abs_redshift = abs(redshift)` and `signed_log_redshift = sign(redshift) * log1p(abs_redshift)`. Add `negative_redshift_flag = 1[redshift < 0]`. Bin `abs_redshift` into four deterministic astrophysical regimes: `near_zero` for abs_redshift < 0.003, `low` for 0.003 <= abs_redshift < 0.08, `mid` for 0.08 <= abs_redshift < 0.8, and `high` for abs_redshift >= 0.8. Output the regime itself as a categorical feature, plus two crossed categorical features: `spectral_type x redshift_regime` and `galaxy_population x redshift_regime`. Edge handling: values exactly on a threshold go to the upper bin except 0.003 belongs to `low`; keep all rows, with no clipping beyond the `log1p` transform.
+  expected_signal=Balanced accuracy may improve because `redshift` is a strong class separator, while crossing it with `spectral_type` and `galaxy_population` helps distinguish ambiguous low-redshift galaxies from stars and high-redshift QSOs from ordinary blue objects.
+  risk=The thresholds are survey-specific and may hard-code class structure too aggressively, so small calibration shifts in redshift or different class priors could make the bins brittle and partly redundant with any raw redshift feature.
+
+- rev 2: Refined redshift-regime catalog consistency stratification
+  group_name=redshift_regime_catalog_consistency
+  family=astrophysical_consistency
+  summary=Capture how well each object’s distance regime inferred from redshift aligns with the available spectral and population metadata so the model can distinguish physically plausible class combinations from inconsistent edge cases.
+  strategy=Use only redshift, spectral_type, and galaxy_population. Compute abs_redshift = abs(redshift), redshift_sign_flag = 1[redshift < 0], and signed_log_redshift = sign(redshift) * log1p(abs_redshift). Discretize abs_redshift into deterministic bins: R0 if abs_redshift < 0.003, R1 if 0.003 ≤ abs_redshift < 0.0333, R2 if 0.0333 ≤ abs_redshift < 0.25, R3 if 0.25 ≤ abs_redshift < 1.0, R4 if 1.0 ≤ abs_redshift < 3.0, and R5 if abs_redshift ≥ 3.0. Boundary rule: bins are [lower, upper) with each exact-boundary value assigned to the next higher bin (except abs_redshift = 0 remains R0). Output redshift_regime as a categorical feature and add two crossed features: redshift_regime × spectral_type and redshift_regime × galaxy_population. Preserve all rows and apply no clipping before log1p except the absolute-value transform.
+  expected_signal=This adds a physics-aware partition where very low redshift values can isolate nearby stellar-like behavior, mid bins represent extragalactic galaxies, and high bins emphasize quasar-like objects, while interactions with the catalog tags help recover distinctions in overlapping regimes and reduce confusion around ambiguous blue/low-redshift examples.
+  risk=Hard-edged bins can be brittle if the redshift scale or preprocessing shifts between datasets, rare tag-regime combinations may be noisy, and regime×tag crosses can overfit when combined with strong nonlinear learners unless regularized.
+
+Return valid JSON only. Do not use markdown fences.
+
+Return exactly this JSON object:
+
+{
+  "title": "short descriptive title",
+  "group_name": "same concise_snake_case_group_name as the previous version",
+  "family": "compact feature-family label",
+  "summary": "one comprehensive sentence describing the semantic feature-set idea; do not list formulas, exact feature names, or implementation details here",
+  "depends_on": [],
+  "strategy": "concrete deterministic feature logic, formulas, bins, statistics, and edge handling",
+  "expected_signal": "why this group may improve or clarify the metric",
+  "risk": "specific overfitting, leakage, cost, redundancy, or instability risk"
+}

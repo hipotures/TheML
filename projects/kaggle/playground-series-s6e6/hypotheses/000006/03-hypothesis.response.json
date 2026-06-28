@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Confidence-weighted bandpass break localization\",\n  \"group_name\": \"bandpass_break_localization\",\n  \"family\": \"spectral_break\",\n  \"summary\": \"Encode the observed ugriz spectrum by the position, direction, concentration, and local context of its strongest adjacent-band discontinuity, distinguishing decisive spectral breaks from diffuse or noisy broadband curvature.\",\n  \"depends_on\": [],\n  \"strategy\": \"Use only the ordered magnitude bands u,g,r,i,z and convert each magnitude to a relative log-flux proxy l_b=-0.4*m_b. Compute adjacent signed slopes d_ug=l_u-l_g, d_gr=l_g-l_r, d_ri=l_r-l_i, and d_iz=l_i-l_z, with absolute amplitudes a_j=abs(d_j). Let A=sum_j a_j and eps=1e-8. If A<1e-6, mark break_present=0, set dominant position to a sentinel category, and set all numeric break descriptors to 0. Otherwise mark break_present=1, choose the dominant break k as the adjacent pair with maximum a_j using bluest-position tie breaking, and emit: signed amplitude d_k, absolute amplitude a_k, one-hot dominant position over ug/gr/ri/iz, direction sign sign(d_k), sharpness a_k/(A+eps), soft position sum_j p_j*idx(j) where p_j=a_j/(A+eps) and idx is 1..4, normalized entropy -sum_j p_j*log(max(p_j,eps))/log(4), signed blue-side mean and red-side mean of d values excluding k with 0 for empty sides, absolute blue-side mean and red-side mean of a values excluding k with 0 for empty sides, signed local contrast d_k minus the average signed side mean, absolute local contrast a_k minus the average absolute side mean, asymmetry as absolute blue-side mean minus absolute red-side mean, and neighbor sign-change count across the dominant break. Fit any optional sharpness or entropy quantile bins on the training fold only, then apply the same cutpoints to validation and test rows to avoid leakage.\",\n  \"expected_signal\": \"The strongest break location and its confidence should help separate galaxies with broad continuum breaks, QSOs whose redshifted features can create band-dependent jumps, and stars with smoother stellar continua, improving balanced accuracy especially for minority-class boundaries that are not fully resolved by raw colors.\",\n  \"risk\": \"The descriptors overlap with adjacent color features and the argmax position can be unstable for faint or near-flat spectra, so discrete location and bin features may overfit photometric noise or survey-specific calibration artifacts unless validated with fold-wise preprocessing.\"\n}",
+  "usage": {
+    "threadId": "019f0bd3-6005-7603-9f0c-36504b1f33f2",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 12422,
+        "outputTokens": 1076,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13498
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 12422,
+        "outputTokens": 1076,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 13498
+      }
+    },
+    "turnId": "019f0bd3-601d-7400-a318-9c7ac0cd1400"
+  },
+  "wall_ms": 21280,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

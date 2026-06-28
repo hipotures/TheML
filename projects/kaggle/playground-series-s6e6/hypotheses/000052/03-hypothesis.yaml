@@ -1,0 +1,48 @@
+title: Calibrated SEGUE subtype envelope margins
+group_name: segue_stellar_subtype_margins
+family: stellar_color_geometry
+summary: Represent each object by robust continuous distances to several canonical
+  SDSS-like stellar subtype envelopes, preserving subtype-specific color geometry
+  as structured evidence for or against stellar classification.
+depends_on: []
+strategy: 'Compute colors ug=u-g, gr=g-r, ri=r-i, iz=i-z, gi=g-i and linear colors
+  l_color=-0.436*u+1.129*g-0.119*r-0.574*i+0.1984, s_color=-0.249*u+0.794*g-0.555*r+0.234,
+  p1=0.91*ug+0.415*gr-1.280, v=0.283*ug-0.354*gr+0.455*ri+0.766*iz. For every primitive
+  or derived clause variable, fit training-only robust scale scale=max(MAD,0.01) and
+  training-only clipping limits at the 0.5/99.5 percentiles before applying penalties.
+  Use nonnegative normalized envelope penalties: interval_penalty(x,a,b)=0 inside
+  [a,b] else distance to nearest bound divided by scale_x; upper_penalty(x,k)=max(0,x-k)/scale_x;
+  lower_penalty(x,k)=max(0,k-x)/scale_x. Build prototype penalties as weighted means
+  of normalized clause penalties, with equal weights unless a prototype has alternative
+  branches, in which case take the minimum branch penalty. Prototypes: white_dwarf
+  uses gr in [-1.0,-0.2], ug in [-1.0,0.7], and ug+2*gr<=-0.1; cool_white_dwarf uses
+  r in [14.5,20.5], gi in [-2.0,1.7], and min of blue branch ug in [-0.4,1.0] for
+  gi<0.6 versus red branch ug in [-0.2,1.4] for gi>=0.6, including a small branch-boundary
+  penalty around gi=0.6; A_BHB uses ug in [0.8,1.5], gr in [-0.5,0.2], and v in [-0.15,0.15];
+  K_giants uses gr in [0.35,0.8], ri in [0.15,0.6], and l_color>=0.07; low_metallicity
+  uses gr in [-0.5,0.75], ug in [0.6,3.0], and l_color>=0.135; M_subdwarf uses ri<=0.9,
+  ri<=0.787*gr-0.356 expressed as upper_penalty(ri-0.787*gr+0.356,0), and gi in [1.8,2.4];
+  main_sequence_white_dwarf_pairs uses ug<=2.25, gr in [-0.2,1.2], ri in [0.5,2.0],
+  gr>-1.0*ri+1.13 expressed as lower_penalty(gr+ri-1.13,0), gr<0.95*ri+0.50 expressed
+  as upper_penalty(gr-0.95*ri-0.50,0), and min of iz in [-0.5,1.0] for ri<1.0 versus
+  iz in [-0.2,0.7] for ri>=1.0 with a small branch-boundary penalty around ri=1.0.
+  Emit each prototype penalty after clipping to a finite cap such as 20, plus aggregates
+  star_margin_best, star_margin_second, star_margin_gap, star_margin_mean_top3, star_inlier_count
+  using threshold <=0.05, and star_confidence=exp(-star_margin_best). Do not multiply
+  penalties by redshift, because redshift is already a highly discriminative measured
+  feature and a hand gate can suppress real low-redshift contaminants or unusual stars;
+  instead optionally emit redshift-adjusted interaction summaries such as star_margin_best*log1p(max(redshift,0))
+  if interactions are allowed within this group.'
+expected_signal: Continuous subtype-envelope proximity should help balanced accuracy
+  by giving the classifier explicit evidence for STAR-like color geometry and by distinguishing
+  objects that satisfy one broad color cut from objects that consistently match a
+  full stellar subtype region.
+risk: The boundaries are inherited from SDSS-style targeting logic and may be miscalibrated
+  for this synthetic or shifted sample; the features can be redundant with generic
+  color and redshift predictors, and compact quasars or galaxies with stellar-like
+  colors may receive misleadingly low penalties.
+schema_version: 1
+hypothesis_id: '000052'
+revision: 3
+enabled: true
+created_at: '2026-06-28T04:08:04'
