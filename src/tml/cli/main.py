@@ -22,7 +22,7 @@ from rich.text import Text
 from rich.tree import Tree
 from typer.core import TyperGroup
 
-from tml.branches.algorithms import BranchAlgorithmResult, branch_add_algorithmic
+from tml.branches.algorithms import BranchAlgorithmResult, branch_add_algorithmic, epsilon_delta, load_branch_algorithm, parse_score_epsilon
 from tml.branches.compose import (
     BranchDeletePlan,
     BranchRebasePlan,
@@ -2359,6 +2359,7 @@ def _print_existing_root_hypotheses(
     db_rows = root_hypothesis_rows(project_dir, mode=mode, profile_id=profile_id)
     best = best_score_value if best_score_value is not None else _best_numeric(row.get("best_score") for row in db_rows)
     baseline = _baseline_score(db_rows)
+    baseline_epsilon = _root_status_score_epsilon(project_dir, baseline)
     rows = []
     for db_row in db_rows:
         row = _root_hypothesis_row(
@@ -2366,6 +2367,7 @@ def _print_existing_root_hypotheses(
             created_ids=created_ids,
             best_score_value=best,
             baseline_score_value=baseline,
+            baseline_score_epsilon=baseline_epsilon,
         )
         if not row:
             continue
@@ -3131,6 +3133,15 @@ def _baseline_score(rows: list[dict[str, object]]) -> float | None:
     return None
 
 
+def _root_status_score_epsilon(project_dir: Path, baseline: float | None) -> float:
+    if baseline is None:
+        return 0.0
+    try:
+        return epsilon_delta(baseline, load_branch_algorithm(project_dir, "default").epsilon)
+    except Exception:
+        return epsilon_delta(baseline, parse_score_epsilon(None))
+
+
 def _rank_text(value: object, score: object) -> str:
     if not isinstance(score, int | float):
         return ""
@@ -3146,6 +3157,7 @@ def _score_text(
     best: float | None,
     style: str,
     baseline: float | None = None,
+    baseline_epsilon: float = 0.0,
     is_baseline: bool = False,
 ) -> str | Text:
     if not isinstance(value, int | float):
@@ -3154,9 +3166,12 @@ def _score_text(
     if best is not None and float(value) == best:
         return Text(text, style=style)
     if baseline is not None and not is_baseline:
-        if float(value) > baseline:
+        delta = float(value) - baseline
+        if abs(delta) < baseline_epsilon:
+            return text
+        if delta > 0:
             return Text(text, style="bright_green")
-        if float(value) < baseline:
+        if delta < 0:
             return Text(text, style="bright_red")
     return text
 
@@ -3353,6 +3368,7 @@ def _root_hypothesis_row(
     created_ids: set[str],
     best_score_value: float | None = None,
     baseline_score_value: float | None = None,
+    baseline_score_epsilon: float = 0.0,
 ) -> dict[str, object]:
     hypothesis_id = str(db_row.get("hypothesis_id") or "")
     return {
@@ -3365,6 +3381,7 @@ def _root_hypothesis_row(
             best=best_score_value,
             style="reverse",
             baseline=baseline_score_value,
+            baseline_epsilon=baseline_score_epsilon,
             is_baseline=hypothesis_id == "000000",
         ),
         "created_at": _short_datetime(db_row.get("created_at")),
