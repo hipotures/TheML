@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from tml.ai import ModelInvocation, run_model_invocation
+from tml.ai.client import ModelSpec
 from tml.ai.models import resolve_model_spec, resolve_role_model
 from tml.core.config import repo_models_for_project, repo_providers_for_project, repo_root_for_project
 from tml.db.state import upsert_hypothesis, upsert_hypothesis_revision, upsert_project
@@ -49,6 +50,14 @@ class RootReviseBatchItem:
 class RootReviseBatchPlan:
     requested_count: int
     max_revision: int | None
+    role: str
+    model: str
+    provider: str
+    provider_kind: object
+    resolved_model: str | None
+    reasoning_effort: str | None
+    timeout_seconds: object
+    sandbox: str
     items: list[RootReviseBatchItem]
 
     @property
@@ -67,11 +76,7 @@ def root_revise_plan(
     hid = normalize_hypothesis_id(hypothesis_id)
     hdir = project_dir / "hypotheses" / hid
     migrate_hypothesis_dir(project_dir, hdir)
-    models = repo_models_for_project(project_dir)
-    model, role_options = resolve_role_model(models, "hypothesis")
-    providers = repo_providers_for_project(project_dir)
-    spec = resolve_model_spec(model, providers)
-    provider_config = {**(spec.provider_config or {}), **role_options}
+    model, spec, provider_config = _hypothesis_model_config(project_dir)
     return RootRevisePlan(
         hypothesis_id=hid,
         count=_effective_revision_count(hdir, count=count, max_revision=max_revision),
@@ -89,6 +94,7 @@ def root_revise_plan(
 
 def root_revise_batch_plan(project_dir: Path, *, count: int, max_revision: int | None = None) -> RootReviseBatchPlan:
     upsert_project(project_dir)
+    model, spec, provider_config = _hypothesis_model_config(project_dir)
     candidates: list[RootReviseBatchItem] = []
     for hdir in sorted((project_dir / "hypotheses").glob("*")):
         if not hdir.is_dir() or hdir.name == "000000":
@@ -113,6 +119,14 @@ def root_revise_batch_plan(project_dir: Path, *, count: int, max_revision: int |
     return RootReviseBatchPlan(
         requested_count=count,
         max_revision=max_revision,
+        role="hypothesis",
+        model=model,
+        provider=spec.provider,
+        provider_kind=provider_config.get("kind"),
+        resolved_model=spec.model,
+        reasoning_effort=spec.reasoning_effort,
+        timeout_seconds=provider_config.get("timeout_seconds"),
+        sandbox="read_only",
         items=candidates[:count],
     )
 
@@ -194,6 +208,15 @@ def _effective_revision_count(hdir: Path, *, count: int, max_revision: int | Non
         return count
     remaining = max_revision - records[-1].revision
     return max(0, min(count, remaining))
+
+
+def _hypothesis_model_config(project_dir: Path) -> tuple[str, ModelSpec, dict[str, object]]:
+    models = repo_models_for_project(project_dir)
+    model, role_options = resolve_role_model(models, "hypothesis")
+    providers = repo_providers_for_project(project_dir)
+    spec = resolve_model_spec(model, providers)
+    provider_config = {**(spec.provider_config or {}), **role_options}
+    return model, spec, provider_config
 
 
 def revision_status_rows(project_dir: Path, *, hypothesis_id: str, mode: str, profile_id: str) -> list[dict[str, Any]]:

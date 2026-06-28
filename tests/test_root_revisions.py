@@ -195,6 +195,9 @@ def test_root_revise_cli_prints_planned_count_before_confirmation(monkeypatch, t
 
     assert result.exit_code == 0
     assert "Planned revisions" in result.output
+    assert "Model" in result.output
+    assert "Provider" in result.output
+    assert "mock" in result.output
     assert "2" in result.output
     assert "000002:2" in result.output
     assert "000003:2" in result.output
