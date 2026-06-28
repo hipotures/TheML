@@ -2859,7 +2859,7 @@ def _solution_tree_sort_key(entry: dict[str, object]) -> tuple[int, int, str]:
 
 
 def _solution_tree_label(kind: str, row: dict[str, object], *, best_metric: float | None) -> Text:
-    identifier = str(row.get("hypothesis_id") or "") if kind == "root" else _normalize_branch_display(row.get("branch_id"))
+    identifier = _solution_tree_identifier(kind, row)
     if kind == "branch":
         runtime_state = str(row.get("_runtime_state") or "")
         if runtime_state:
@@ -2890,6 +2890,15 @@ def _solution_tree_label(kind: str, row: dict[str, object], *, best_metric: floa
         style = "bold yellow" if materialization_status == "fixed" else "cyan"
         return Text(f"⌘ {identifier}", style=style)
     return Text(f"◇ {identifier}", style="dim")
+
+
+def _solution_tree_identifier(kind: str, row: dict[str, object]) -> str:
+    if kind == "root":
+        return str(row.get("hypothesis_id") or "")
+    source_ref = str(row.get("source_ref") or "").strip()
+    if source_ref:
+        return source_ref.zfill(6) if source_ref.isdigit() else _normalize_branch_display(source_ref)
+    return _normalize_branch_display(row.get("branch_id"))
 
 
 def _solution_tree_runtime_branch_label(identifier: str, runtime_state: str) -> Text:
