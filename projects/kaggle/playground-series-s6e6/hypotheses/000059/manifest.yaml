@@ -13,7 +13,7 @@ revisions:
     prefix: 03-hypothesis
 materializations:
   autogluon:
-    active: autogluon-002.py
+    active: autogluon-005.py
     files:
     - file: autogluon-001.py
       revision: 1
@@ -31,3 +31,7 @@ materializations:
       revision: 3
       sha256: 6208c68b0764416497a87c4f541257b44f8d1cc81b5fc0644622a3af93a7279a
       created_at: '2026-06-28T05:38:50'
+    - file: autogluon-005.py
+      revision: 3
+      sha256: 9b62045a81dd96f0797b456cb9a6cc2b1845dfb3c570ef5f73da4f575dda6c1d
+      created_at: '2026-06-28T08:18:51'
