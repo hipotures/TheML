@@ -2895,10 +2895,12 @@ def _solution_tree_label(kind: str, row: dict[str, object], *, best_metric: floa
 def _solution_tree_identifier(kind: str, row: dict[str, object]) -> str:
     if kind == "root":
         return str(row.get("hypothesis_id") or "")
+    branch_id = _normalize_branch_display(row.get("branch_id"))
     source_ref = str(row.get("source_ref") or "").strip()
     if source_ref:
-        return source_ref.zfill(6) if source_ref.isdigit() else _normalize_branch_display(source_ref)
-    return _normalize_branch_display(row.get("branch_id"))
+        source_display = source_ref.zfill(6) if source_ref.isdigit() else _normalize_branch_display(source_ref)
+        return f"{source_display}·{branch_id}" if branch_id else source_display
+    return branch_id
 
 
 def _solution_tree_runtime_branch_label(identifier: str, runtime_state: str) -> Text:
