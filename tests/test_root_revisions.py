@@ -3,14 +3,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from typer.testing import CliRunner
+
 from tml.ai.client import AiResponse
+from tml.cli.main import app
 from tml.db.connect import connect
 from tml.db.reindex import reindex_project
 from tml.db.state import materialization_rows, revision_status_rows, root_run_rows
 from tml.execution.result import ExecutionResult
 from tml.hypotheses.materialize import materialize_missing
 from tml.hypotheses.revisions import migrate_root_revisions
-from tml.hypotheses.revise import revise_root_hypothesis
+from tml.hypotheses.revise import revise_root_hypothesis, root_revise_batch_plan
 from tml.hypotheses.run import run_missing
 from tml.utils.hashing import sha256_file
 from tml.utils.yaml_io import read_yaml, write_yaml
@@ -79,6 +82,154 @@ def test_revise_creates_numbered_revision_and_no_change_skips(monkeypatch, tmp_p
     manifest = read_yaml(hdir / "manifest.yaml")
     assert manifest["hypothesis"]["latest_revision"] == 2
     assert manifest["revisions"][2]["prefix"] == "02-hypothesis"
+
+
+def test_root_revise_batch_plan_selects_enabled_below_max_in_fair_order(tmp_path: Path) -> None:
+    project_dir = _project(tmp_path)
+    for hypothesis_id in ("000000", "000001", "000002", "000003", "000004", "000005", "000006"):
+        _legacy_hypothesis(project_dir, hypothesis_id)
+    migrate_root_revisions(project_dir)
+    _write_revision(project_dir / "hypotheses" / "000001", 2)
+    _write_revision(project_dir / "hypotheses" / "000004", 2)
+    _set_enabled(project_dir / "hypotheses" / "000002", False)
+
+    plan = root_revise_batch_plan(project_dir, count=3, max_revision=2)
+
+    assert [(item.hypothesis_id, item.latest_revision, item.next_revision) for item in plan.items] == [
+        ("000003", 1, 2),
+        ("000005", 1, 2),
+        ("000006", 1, 2),
+    ]
+    assert plan.requested_count == 3
+    assert plan.planned_count == 3
+    assert plan.max_revision == 2
+
+
+def test_root_revise_batch_plan_replans_after_candidates_reach_max(tmp_path: Path) -> None:
+    project_dir = _project(tmp_path)
+    for hypothesis_id in ("000001", "000002", "000003", "000004"):
+        _legacy_hypothesis(project_dir, hypothesis_id)
+    migrate_root_revisions(project_dir)
+    _write_revision(project_dir / "hypotheses" / "000001", 2)
+    _write_revision(project_dir / "hypotheses" / "000002", 2)
+
+    plan = root_revise_batch_plan(project_dir, count=3, max_revision=2)
+
+    assert [item.hypothesis_id for item in plan.items] == ["000003", "000004"]
+    assert plan.planned_count == 2
+
+
+def test_root_revise_batch_plan_without_max_orders_by_latest_revision(tmp_path: Path) -> None:
+    project_dir = _project(tmp_path)
+    for hypothesis_id in ("000001", "000002", "000003", "000004"):
+        _legacy_hypothesis(project_dir, hypothesis_id)
+    migrate_root_revisions(project_dir)
+    _write_revision(project_dir / "hypotheses" / "000001", 2)
+    _write_revision(project_dir / "hypotheses" / "000003", 2)
+    _write_revision(project_dir / "hypotheses" / "000003", 3)
+
+    plan = root_revise_batch_plan(project_dir, count=3, max_revision=None)
+
+    assert [(item.hypothesis_id, item.latest_revision, item.next_revision) for item in plan.items] == [
+        ("000002", 1, 2),
+        ("000004", 1, 2),
+        ("000001", 2, 3),
+    ]
+
+
+def test_revise_single_hypothesis_stops_at_max_revision(monkeypatch, tmp_path: Path) -> None:
+    project_dir = _project(tmp_path)
+    hdir = _legacy_hypothesis(project_dir, "000005")
+    migrate_root_revisions(project_dir)
+    responses = [_revision_response("Two"), _revision_response("Three"), _revision_response("Four")]
+
+    def fake_invocation(*args, **kwargs):
+        payload = responses.pop(0)
+        artifact_dir = kwargs["artifact_dir"]
+        prefix = kwargs["response_prefix"]
+        (artifact_dir / f"{prefix}.request.md").write_text("request", encoding="utf-8")
+        (artifact_dir / f"{prefix}.response.md").write_text(json.dumps(payload), encoding="utf-8")
+        return AiResponse(text=json.dumps(payload), metadata={})
+
+    monkeypatch.setattr("tml.hypotheses.revise.run_model_invocation", fake_invocation)
+
+    created = revise_root_hypothesis(project_dir, hypothesis_id="000005", count=3, max_revision=4)
+
+    assert created == [
+        hdir / "02-hypothesis.yaml",
+        hdir / "03-hypothesis.yaml",
+        hdir / "04-hypothesis.yaml",
+    ]
+    assert not (hdir / "05-hypothesis.yaml").exists()
+    assert responses == []
+
+
+def test_revise_single_hypothesis_at_max_creates_nothing(monkeypatch, tmp_path: Path) -> None:
+    project_dir = _project(tmp_path)
+    hdir = _legacy_hypothesis(project_dir, "000005")
+    migrate_root_revisions(project_dir)
+    _write_revision(hdir, 2)
+
+    def fake_invocation(*args, **kwargs):
+        raise AssertionError("revise should not invoke the model when max is already reached")
+
+    monkeypatch.setattr("tml.hypotheses.revise.run_model_invocation", fake_invocation)
+
+    created = revise_root_hypothesis(project_dir, hypothesis_id="000005", count=3, max_revision=2)
+
+    assert created == []
+    assert not (hdir / "03-hypothesis.yaml").exists()
+
+
+def test_root_revise_cli_prints_planned_count_before_confirmation(monkeypatch, tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    project_dir = _workspace_project(workspace)
+    for hypothesis_id in ("000001", "000002", "000003"):
+        _legacy_hypothesis(project_dir, hypothesis_id)
+    migrate_root_revisions(project_dir)
+    _write_revision(project_dir / "hypotheses" / "000001", 2)
+    monkeypatch.setenv("TML_CWD", str(workspace))
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["root", "revise", "count=10", "max=2"], input="n\n")
+
+    assert result.exit_code == 0
+    assert "Planned revisions" in result.output
+    assert "2" in result.output
+    assert "000002:2" in result.output
+    assert "000003:2" in result.output
+    assert "Create 2 ROOT revisions?" in result.output
+    assert not (project_dir / "hypotheses" / "000002" / "02-hypothesis.yaml").exists()
+    assert not (project_dir / "hypotheses" / "000003" / "02-hypothesis.yaml").exists()
+
+
+def test_root_revise_cli_does_not_prompt_when_no_candidates(monkeypatch, tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    project_dir = _workspace_project(workspace)
+    for hypothesis_id in ("000001", "000002"):
+        hdir = _legacy_hypothesis(project_dir, hypothesis_id)
+        migrate_root_revisions(project_dir)
+        _write_revision(hdir, 2)
+    monkeypatch.setenv("TML_CWD", str(workspace))
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["root", "revise", "count=10", "max=2"])
+
+    assert result.exit_code == 0
+    assert "Planned revisions" in result.output
+    assert "0" in result.output
+    assert "No ROOT revisions to create" in result.output
+    assert "Create " not in result.output
+
+
+def test_root_revise_help_lists_add_parameters_without_delete_details() -> None:
+    result = CliRunner().invoke(app, ["root", "revise", "--help"])
+
+    assert result.exit_code == 0
+    assert "max=<M>" in result.output
+    assert "delete" not in result.output
+    assert "rev=<N>" not in result.output
+    assert "revision=<N>" not in result.output
 
 
 def test_materialize_revision_mapping(monkeypatch, tmp_path: Path) -> None:
@@ -309,7 +460,45 @@ def _project(tmp_path: Path) -> Path:
             "project_id": "test-project",
             "kind": "kaggle",
             "target": {"maximize": True},
-            "root": {"active_mode": "autogluon"},
+            "root": {"active_mode": "autogluon", "active_profiles": {"autogluon": "autogluon-root-start-v1"}},
+        },
+    )
+    (project_dir / "hypotheses").mkdir()
+    (project_dir / "runs").mkdir()
+    (project_dir / "prompts" / "root").mkdir(parents=True)
+    (project_dir / "prompts" / "blocks").mkdir(parents=True)
+    (project_dir / "prompts" / "root" / "revise-hypothesis.md.j2").write_text("revise {{ hypothesis_id }}", encoding="utf-8")
+    (project_dir / "prompts" / "root" / "materialize-autogluon.md.j2").write_text("materialize", encoding="utf-8")
+    (project_dir / "task.md").write_text("# Task\n", encoding="utf-8")
+    return project_dir
+
+
+def _workspace(tmp_path: Path) -> Path:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    write_yaml(
+        workspace / "tml.yaml",
+        {
+            "schema_version": 1,
+            "active_project": {"kind": "kaggle", "slug": "demo"},
+            "models": {"hypothesis": "mock"},
+            "providers": {"mock": {"kind": "mock"}},
+        },
+    )
+    return workspace
+
+
+def _workspace_project(workspace: Path) -> Path:
+    project_dir = workspace / "projects" / "kaggle" / "demo"
+    project_dir.mkdir(parents=True)
+    write_yaml(
+        project_dir / "project.yaml",
+        {
+            "schema_version": 1,
+            "project_id": "demo",
+            "kind": "kaggle",
+            "target": {"maximize": True},
+            "root": {"active_mode": "autogluon", "active_profiles": {"autogluon": "autogluon-root-start-v1"}},
         },
     )
     (project_dir / "hypotheses").mkdir()
@@ -340,6 +529,29 @@ def _legacy_hypothesis(project_dir: Path, hypothesis_id: str) -> Path:
         },
     )
     return hdir
+
+
+def _revision_response(title: str) -> dict[str, object]:
+    return {
+        "operation": "revise_existing_root_hypothesis",
+        "decision": "revise",
+        "title": title,
+        "group_name": "example_group",
+        "family": "example",
+        "summary": f"{title} summary.",
+        "depends_on": [],
+        "strategy": f"{title} strategy.",
+        "expected_signal": "May help.",
+        "risk": "May not help.",
+        "change_summary": f"{title} change.",
+        "semantic_goal_preserved": True,
+    }
+
+
+def _set_enabled(hdir: Path, enabled: bool) -> None:
+    revision = read_yaml(hdir / "01-hypothesis.yaml")
+    revision["enabled"] = enabled
+    write_yaml(hdir / "01-hypothesis.yaml", revision)
 
 
 def _write_revision(hdir: Path, revision: int) -> None:

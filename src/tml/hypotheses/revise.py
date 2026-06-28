@@ -15,7 +15,6 @@ from tml.prompts.context import project_prompt_context
 from tml.prompts.renderer import render_template
 
 from .revisions import (
-    load_revision,
     migrate_hypothesis_dir,
     next_revision_number,
     normalize_hypothesis_id,
@@ -39,7 +38,31 @@ class RootRevisePlan:
     sandbox: str
 
 
-def root_revise_plan(project_dir: Path, *, hypothesis_id: str, count: int) -> RootRevisePlan:
+@dataclass(frozen=True)
+class RootReviseBatchItem:
+    hypothesis_id: str
+    latest_revision: int
+    next_revision: int
+
+
+@dataclass(frozen=True)
+class RootReviseBatchPlan:
+    requested_count: int
+    max_revision: int | None
+    items: list[RootReviseBatchItem]
+
+    @property
+    def planned_count(self) -> int:
+        return len(self.items)
+
+
+def root_revise_plan(
+    project_dir: Path,
+    *,
+    hypothesis_id: str,
+    count: int,
+    max_revision: int | None = None,
+) -> RootRevisePlan:
     upsert_project(project_dir)
     hid = normalize_hypothesis_id(hypothesis_id)
     hdir = project_dir / "hypotheses" / hid
@@ -51,7 +74,7 @@ def root_revise_plan(project_dir: Path, *, hypothesis_id: str, count: int) -> Ro
     provider_config = {**(spec.provider_config or {}), **role_options}
     return RootRevisePlan(
         hypothesis_id=hid,
-        count=count,
+        count=_effective_revision_count(hdir, count=count, max_revision=max_revision),
         next_revision=next_revision_number(hdir),
         role="hypothesis",
         model=model,
@@ -64,11 +87,42 @@ def root_revise_plan(project_dir: Path, *, hypothesis_id: str, count: int) -> Ro
     )
 
 
+def root_revise_batch_plan(project_dir: Path, *, count: int, max_revision: int | None = None) -> RootReviseBatchPlan:
+    upsert_project(project_dir)
+    candidates: list[RootReviseBatchItem] = []
+    for hdir in sorted((project_dir / "hypotheses").glob("*")):
+        if not hdir.is_dir() or hdir.name == "000000":
+            continue
+        migrate_hypothesis_dir(project_dir, hdir)
+        records = revision_records(hdir)
+        if not records:
+            continue
+        latest = records[-1]
+        if not latest.payload.get("enabled", True):
+            continue
+        if max_revision is not None and latest.revision >= max_revision:
+            continue
+        candidates.append(
+            RootReviseBatchItem(
+                hypothesis_id=hdir.name,
+                latest_revision=latest.revision,
+                next_revision=latest.revision + 1,
+            )
+        )
+    candidates.sort(key=lambda item: (item.latest_revision, item.hypothesis_id))
+    return RootReviseBatchPlan(
+        requested_count=count,
+        max_revision=max_revision,
+        items=candidates[:count],
+    )
+
+
 def revise_root_hypothesis(
     project_dir: Path,
     *,
     hypothesis_id: str,
     count: int,
+    max_revision: int | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> list[Path]:
     upsert_project(project_dir)
@@ -82,7 +136,7 @@ def revise_root_hypothesis(
     provider_config = {**(spec.provider_config or {}), **role_options}
     web_search_enabled = _web_search_enabled(provider_config.get("web_search"))
     created: list[Path] = []
-    for _ in range(count):
+    for _ in range(_effective_revision_count(hdir, count=count, max_revision=max_revision)):
         previous = revision_records(hdir)
         if not previous:
             raise FileNotFoundError(f"Missing ROOT hypothesis {hid}")
@@ -120,6 +174,8 @@ def revise_root_hypothesis(
             response_prefix=f"{next_revision:02d}-hypothesis",
         )
         payload = _parse_revision_response(response.text)
+        if str(payload.get("decision") or "").strip().lower() == "no_change":
+            break
         revision_payload = _revision_payload_from_response(payload, latest)
         validate_root_hypothesis(revision_payload)
         _validate_revision_compatibility(previous[-1].payload, revision_payload)
@@ -128,6 +184,16 @@ def revise_root_hypothesis(
         upsert_hypothesis(project_dir, hdir)
         created.append(path)
     return created
+
+
+def _effective_revision_count(hdir: Path, *, count: int, max_revision: int | None) -> int:
+    if max_revision is None:
+        return count
+    records = revision_records(hdir)
+    if not records:
+        return count
+    remaining = max_revision - records[-1].revision
+    return max(0, min(count, remaining))
 
 
 def revision_status_rows(project_dir: Path, *, hypothesis_id: str, mode: str, profile_id: str) -> list[dict[str, Any]]:

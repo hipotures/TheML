@@ -77,7 +77,7 @@ from tml.hypotheses.generate import (
 from tml.hypotheses.baseline import ensure_root_baseline
 from tml.hypotheses.bugfix import RootBugfixPlan, bugfix_failed_materializations, root_bugfix_plan
 from tml.hypotheses.materialize import RootMaterializationPlan, materialize_missing, root_materialization_plan
-from tml.hypotheses.revise import RootRevisePlan, revise_root_hypothesis, root_revise_plan
+from tml.hypotheses.revise import RootReviseBatchPlan, RootRevisePlan, revise_root_hypothesis, root_revise_batch_plan, root_revise_plan
 from tml.hypotheses.revisions import delete_revision, normalize_hypothesis_id, set_active_materialization
 from tml.hypotheses.run import RootRunPlan, root_run_plan, run_missing
 from tml.metamodel.cli import meta_app
@@ -437,14 +437,12 @@ def root_generate_cmd(ctx: typer.Context) -> None:
         "Create ROOT hypothesis revisions or show revision status.\n\n"
         "Accepted positional arguments:\n"
         "  status            Print revision status. Without id, print all scored revisions.\n\n"
-        "  promote|prom      Promote active materializations to best scored revisions.\n\n"
-        "  delete|del        Delete one unmaterialized revision.\n\n"
         "Accepted key=value parameters:\n"
-        "  hypothesis=<id>    Hypothesis to revise.\n"
+        "  hypothesis=<id>    Optional hypothesis to revise.\n"
         "  id=<id>            Alias for hypothesis=<id>.\n"
-        "  count=<N>          Maximum number of new revisions.\n"
-        "  rev=<N>            Revision to delete.\n"
-        "  revision=<N>       Alias for rev=<N>.\n"
+        "  count=<N>          Maximum number of new revisions to create.\n"
+        "  max=<M>            Maximum revision number per hypothesis.\n"
+        "  mode=<name>        Mode used for the final revision status overview.\n"
         "  yes=true           Accepted for scripted workflows."
     ),
 )
@@ -457,12 +455,15 @@ def root_revise_cmd(ctx: typer.Context) -> None:
         promote_requested = positional in (["promote"], ["prom"])
         status_only = False if delete_requested or promote_requested else _command_status_requested(ctx.args, "tml root revise")
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"hypothesis", "id", "count", "mode", "revision", "rev", "yes"}, "tml root revise")
+        _validate_override_keys(overrides, {"hypothesis", "id", "count", "max", "mode", "revision", "rev", "yes"}, "tml root revise")
         hypothesis_id = _optional_text(overrides.get("hypothesis") or overrides.get("id"))
         hid = normalize_hypothesis_id(hypothesis_id) if hypothesis_id else None
         config = load_project_config(ref.path)
         mode = str(overrides.get("mode") or active_mode(config))
         profile_id = active_profile_id(config, mode)
+        if "max" in overrides and "count" not in overrides and not status_only and not delete_requested and not promote_requested:
+            raise TmlError("max=<M> requires count=<N>.")
+        max_revision = _max_revision_override(overrides)
         if status_only:
             if hid:
                 _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={hid})
@@ -498,6 +499,41 @@ def root_revise_cmd(ctx: typer.Context) -> None:
             _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={hid})
             return
         if not hid:
+            if "count" in overrides:
+                count = int(overrides.get("count") or 0)
+                if count < 1:
+                    raise TmlError("count=<N> must be greater than 0.")
+                plan = root_revise_batch_plan(ref.path, count=count, max_revision=max_revision)
+                _print_root_revise_batch_plan(ref.slug, plan)
+                if plan.planned_count == 0:
+                    console.print("No ROOT revisions to create for the requested constraints.")
+                    return
+                if not _bool(overrides.get("yes")) and not Confirm.ask(
+                    f"Create {plan.planned_count} ROOT revisions?",
+                    default=False,
+                    console=console,
+                ):
+                    console.print("ROOT revision batch cancelled.")
+                    return
+                created: list[Path] = []
+                for item in plan.items:
+                    created.extend(
+                        revise_root_hypothesis(
+                            ref.path,
+                            hypothesis_id=item.hypothesis_id,
+                            count=1,
+                            max_revision=max_revision,
+                            progress=console.print,
+                        )
+                    )
+                console.print(f"Created ROOT revisions: {len(created)}")
+                _print_root_revision_overview(
+                    ref.path,
+                    mode=mode,
+                    profile_id=profile_id,
+                    hypothesis_ids={item.hypothesis_id for item in plan.items},
+                )
+                return
             _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id)
             return
         if "count" not in overrides:
@@ -508,9 +544,19 @@ def root_revise_cmd(ctx: typer.Context) -> None:
         count = int(overrides.get("count") or 0)
         if count < 1:
             raise TmlError("count=<N> must be greater than 0.")
-        plan = root_revise_plan(ref.path, hypothesis_id=hid, count=count)
+        plan = root_revise_plan(ref.path, hypothesis_id=hid, count=count, max_revision=max_revision)
         _print_root_revise_plan(ref.slug, plan)
-        created = revise_root_hypothesis(ref.path, hypothesis_id=hid, count=count, progress=console.print)
+        if plan.count == 0:
+            console.print("No ROOT revisions to create for the requested constraints.")
+            _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={hid})
+            return
+        created = revise_root_hypothesis(
+            ref.path,
+            hypothesis_id=hid,
+            count=count,
+            max_revision=max_revision,
+            progress=console.print,
+        )
         console.print(f"Created ROOT revisions: {len(created)}")
         _print_root_revision_overview(ref.path, mode=mode, profile_id=profile_id, hypothesis_ids={hid})
     except Exception as exc:
@@ -1626,6 +1672,19 @@ def _revision_override(overrides: dict[str, object]) -> int | None:
     return revision
 
 
+def _max_revision_override(overrides: dict[str, object]) -> int | None:
+    raw = overrides.get("max")
+    if raw is None:
+        return None
+    try:
+        max_revision = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise TmlError(f"Invalid max: {raw}. Use a numeric revision.") from exc
+    if max_revision < 1:
+        raise TmlError("max=<M> must be >= 1.")
+    return max_revision
+
+
 def _reject_positional(args: list[str], command: str) -> None:
     positional = _positional(args)
     if positional:
@@ -1830,6 +1889,23 @@ def _print_root_revise_plan(project_slug: str, plan: RootRevisePlan) -> None:
     table.add_row("Sandbox", plan.sandbox)
     table.add_row("Next revision", str(plan.next_revision))
     table.add_row("Max revisions to create", str(plan.count))
+    console.print(table)
+
+
+def _print_root_revise_batch_plan(project_slug: str, plan: RootReviseBatchPlan) -> None:
+    revisions = [f"{item.hypothesis_id}:{item.next_revision}" for item in plan.items]
+    if len(revisions) > 8:
+        revision_text = f"{revisions[0]} ... {revisions[-1]}"
+    else:
+        revision_text = ", ".join(revisions)
+    table = Table(title="ROOT revise batch plan", box=box.SIMPLE_HEAVY, show_header=False, pad_edge=False)
+    table.add_column("Parameter", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_row("Project", project_slug)
+    table.add_row("Requested count", str(plan.requested_count))
+    table.add_row("Max revision", str(plan.max_revision or "unlimited"))
+    table.add_row("Planned revisions", str(plan.planned_count))
+    table.add_row("Hypothesis revisions", revision_text or "none")
     console.print(table)
 
 
