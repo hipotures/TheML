@@ -1,0 +1,25 @@
+schema_version: 1
+profile_id: ag-s6e6-boost-gpu-cat-prune-holdout-8m-v1
+source_profile: tml.s6e6_boost_gpu_cat_prune_holdout_8m
+mode: autogluon
+included_model_types:
+- CAT
+presets: medium_quality
+time_limit: 480
+preprocess_timeout: 90
+validation_strategy: holdout
+seed: 42
+class_balance: balanced
+use_gpu: true
+feature_prune_kwargs: {}
+hyperparameters:
+  CAT:
+  - task_type: GPU
+    devices: '0'
+    gpu_ram_part: 0.8
+    ag_args_fit:
+      num_gpus: 1
+fit_args:
+  save_space: true
+  fit_weighted_ensemble: false
+  auto_stack: false
