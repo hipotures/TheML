@@ -929,7 +929,14 @@ def hypothesis_records(project_dir: Path) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
-def root_hypothesis_rows(project_dir: Path, *, mode: str | None = None, profile_id: str | None = None) -> list[dict[str, Any]]:
+def root_hypothesis_rows(
+    project_dir: Path,
+    *,
+    mode: str | None = None,
+    profile_id: str | None = None,
+    sort_by: str = "id",
+    sort_order: str | None = None,
+) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
     complete_filters = ["e.kind='root'", "e.status='complete'", "e.metric IS NOT NULL"]
     failed_filters = ["e.kind='root'", "e.status='failed'"]
@@ -987,8 +994,8 @@ def root_hypothesis_rows(project_dir: Path, *, mode: str | None = None, profile_
           END AS status_icon
         FROM hypotheses h
         LEFT JOIN best_eval ON best_eval.hypothesis_id=h.hypothesis_id
-        ORDER BY h.hypothesis_id
     """
+    sql += _root_hypothesis_order_clause(sort_by, sort_order)
     if mode:
         params.append(mode)
     if profile_id:
@@ -998,6 +1005,44 @@ def root_hypothesis_rows(project_dir: Path, *, mode: str | None = None, profile_
     with connect(db_path) as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
+
+
+def _root_hypothesis_order_clause(sort_by: str, sort_order: str | None) -> str:
+    sort_key = str(sort_by or "id").strip().lower()
+    order_key = str(sort_order or ("desc" if sort_key == "score" else "asc")).strip().lower()
+    if order_key not in {"asc", "desc"}:
+        raise ValueError(f"Invalid ROOT status order: {sort_order}. Use asc or desc.")
+    direction = order_key.upper()
+    sort_columns = {
+        "id": "h.hypothesis_id",
+        "hypothesis": "h.hypothesis_id",
+        "hypothesis_id": "h.hypothesis_id",
+        "score": "best_eval.metric",
+        "created": "h.created_at",
+        "created_at": "h.created_at",
+        "status": "status_icon",
+        "rev": "best_eval.hypothesis_revision",
+        "revision": "best_eval.hypothesis_revision",
+        "model": "h.model",
+        "tokens": "h.total_tokens",
+        "total_tokens": "h.total_tokens",
+        "reasoning_tokens": "h.reasoning_tokens",
+        "gen": "h.generation_seconds",
+        "duration": "h.generation_seconds",
+        "generation_seconds": "h.generation_seconds",
+        "file": "best_eval.materialization_file",
+        "materialization": "best_eval.materialization_file",
+        "summary": "h.summary",
+    }
+    column = sort_columns.get(sort_key)
+    if column is None:
+        allowed = ", ".join(sorted(sort_columns))
+        raise ValueError(f"Invalid ROOT status sort: {sort_by}. Use one of: {allowed}.")
+    if column == "h.hypothesis_id":
+        return f" ORDER BY {column} {direction}"
+    if column == "status_icon":
+        return f" ORDER BY status_icon {direction}, h.hypothesis_id"
+    return f" ORDER BY CASE WHEN {column} IS NULL THEN 1 ELSE 0 END, {column} {direction}, h.hypothesis_id"
 
 
 def materialization_candidates(project_dir: Path, hypothesis_id: str | None = None) -> list[dict[str, Any]]:

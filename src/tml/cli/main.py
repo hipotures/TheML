@@ -311,6 +311,8 @@ def root_tree_cmd(ctx: typer.Context) -> None:
     help=(
         "Show ROOT progress, counts, and hypothesis table.\n\n"
         "Accepted key=value parameters:\n"
+        "  sort=<field>       Sort rows by id, score, created, status, rev, model, tokens, gen, file, or summary.\n"
+        "  order=<asc|desc>   Sort direction; defaults to desc for score and asc otherwise.\n"
         "  json=true          Print machine-readable JSON.\n"
         "  json_output=true   Alias for json=true.\n\n"
         "Options:\n"
@@ -325,7 +327,9 @@ def root_status_cmd(
 ) -> None:
     try:
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"json", "json_output"}, "tml root status")
+        _validate_override_keys(overrides, {"json", "json_output", "sort", "order"}, "tml root status")
+        sort_by = str(overrides.get("sort") or "id")
+        sort_order = _optional_text(overrides.get("order"))
         json_output = (
             json_flag
             or json_output_flag
@@ -350,6 +354,8 @@ def root_status_cmd(
                 counts=counts,
                 best=best,
                 project_dir=ref.path,
+                sort_by=sort_by,
+                sort_order=sort_order,
             )
             return
         console.print(f"Active project: {ref.slug}")
@@ -367,6 +373,8 @@ def root_status_cmd(
             mode=mode,
             profile_id=profile_id,
             best_score_value=best,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
     except Exception as exc:
         _abort(exc)
@@ -2469,6 +2477,8 @@ def _print_existing_root_hypotheses(
     mode: str | None = None,
     profile_id: str | None = None,
     best_score_value: float | None = None,
+    sort_by: str = "id",
+    sort_order: str | None = None,
 ) -> None:
     table = Table(title="Existing ROOT hypotheses", box=box.SIMPLE_HEAVY)
     for column in ROOT_HYPOTHESIS_COLUMNS:
@@ -2482,7 +2492,7 @@ def _print_existing_root_hypotheses(
             ratio=int(column["ratio"]) if column.get("ratio") else None,
         )
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
-    db_rows = root_hypothesis_rows(project_dir, mode=mode, profile_id=profile_id)
+    db_rows = root_hypothesis_rows(project_dir, mode=mode, profile_id=profile_id, sort_by=sort_by, sort_order=sort_order)
     best = best_score_value if best_score_value is not None else _best_numeric(row.get("best_score") for row in db_rows)
     baseline = _baseline_score(db_rows)
     baseline_epsilon = _root_status_score_epsilon(project_dir, baseline)
@@ -2527,6 +2537,8 @@ def _print_root_status_json(
     counts: dict[str, int],
     best: float | None,
     project_dir: Path,
+    sort_by: str = "id",
+    sort_order: str | None = None,
 ) -> None:
     payload = {
         "project": project_slug,
@@ -2538,7 +2550,7 @@ def _print_root_status_json(
         "best_root_score": best,
         "hypotheses": [
             _root_hypothesis_json_row(row, created_ids=set())
-            for row in root_hypothesis_rows(project_dir, mode=mode, profile_id=profile_id)
+            for row in root_hypothesis_rows(project_dir, mode=mode, profile_id=profile_id, sort_by=sort_by, sort_order=sort_order)
         ],
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
