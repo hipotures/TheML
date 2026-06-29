@@ -185,16 +185,49 @@ def run_missing(
         upsert_node_start(project_dir, node_dir, start_payload)
         shutil.copy2(load_revision(hdir, selected_revision).path, node_dir / "01-hypothesis.yaml")
         group_code = materialization.read_text(encoding="utf-8")
-        validate_group_code_source(group_code)
-        atomic_write_text(
-            node_dir / "02-code.py",
-            build_wrapped_materialization_source(
-                mode,
-                group_code,
+        try:
+            validate_group_code_source(group_code)
+            atomic_write_text(
+                node_dir / "02-code.py",
+                build_wrapped_materialization_source(
+                    mode,
+                    group_code,
+                    project_dir,
+                    profile_overrides=profile_overrides,
+                ),
+            )
+        except (SyntaxError, ValueError) as exc:
+            finished_at = datetime.now().isoformat(timespec="seconds")
+            error = str(exc)
+            write_yaml(
+                node_dir / "failed.yaml",
+                {
+                    "schema_version": 1,
+                    "node_id": nid,
+                    "hypothesis_id": hid,
+                    "hypothesis_revision": selected_revision,
+                    "materialization_file": materialization_file,
+                    "mode": mode,
+                    "profile_id": profile_id,
+                    "code_hash": code_hash,
+                    "status": "failed",
+                    "error": error,
+                    "created_at": finished_at,
+                },
+            )
+            upsert_node_result(
                 project_dir,
-                profile_overrides=profile_overrides,
-            ),
-        )
+                node_dir,
+                status="failed",
+                metric=None,
+                code_hash=code_hash,
+                finished_at=finished_at,
+                error=error,
+            )
+            if progress is not None:
+                progress(f"ROOT run {hid} {mode} ({pending_index}/{pending_total}): failed")
+            ran.append(f"{hid}:{selected_revision}")
+            continue
         write_yaml(node_dir / "started.yaml", {"created_at": datetime.now().isoformat(timespec="seconds")})
         if progress is not None:
             progress(f"ROOT run {hid} {mode} ({pending_index}/{pending_total}): executing node {nid}")
