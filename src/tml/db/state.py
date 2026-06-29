@@ -1666,6 +1666,45 @@ def root_run_rows(
     return [dict(row) for row in rows]
 
 
+def root_evaluation_rows(
+    project_dir: Path,
+    *,
+    mode: str,
+    profile_id: str,
+    hypothesis_id: str | None = None,
+) -> list[dict[str, Any]]:
+    db_path = ensure_project_db(project_dir)
+    sql = """
+        SELECT
+          n.hypothesis_id,
+          n.hypothesis_revision,
+          n.materialization_file,
+          n.status AS node_status,
+          n.node_id,
+          n.run_id,
+          n.step,
+          n.created_at,
+          n.finished_at,
+          n.run_seconds,
+          e.status AS evaluation_status,
+          e.metric,
+          e.feature_count,
+          e.decision_score,
+          e.code_hash
+        FROM nodes n
+        JOIN evaluations e ON e.node_id=n.node_id
+        WHERE n.kind='root' AND n.mode=? AND n.profile_id=?
+    """
+    params: list[Any] = [mode, profile_id]
+    if hypothesis_id:
+        sql += " AND n.hypothesis_id=?"
+        params.append(hypothesis_id.zfill(6))
+    sql += " ORDER BY n.hypothesis_id, n.hypothesis_revision, n.materialization_file, n.step, n.node_id"
+    with connect(db_path) as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(row) for row in rows]
+
+
 def revision_status_rows(
     project_dir: Path,
     *,

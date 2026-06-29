@@ -55,6 +55,7 @@ from tml.db.state import (
     mark_submission_submitted,
     revision_status_rows as db_revision_status_rows,
     root_counts,
+    root_evaluation_rows,
     root_hypothesis_rows,
     root_revision_overview_rows,
     root_revision_promote_targets,
@@ -367,6 +368,24 @@ def root_status_cmd(
             profile_id=profile_id,
             best_score_value=best,
         )
+    except Exception as exc:
+        _abort(exc)
+
+
+@root_app.command("evals", context_settings=EXTRA, help="Show ROOT evaluation rows by materialization.")
+@root_app.command("evaluations", context_settings=EXTRA, help="Show ROOT evaluation rows by materialization.")
+def root_evals_cmd(ctx: typer.Context) -> None:
+    try:
+        _reject_positional(ctx.args, "tml root evals")
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"mode", "hypothesis", "id"}, "tml root evals")
+        ref = active_project_ref()
+        ensure_root_baseline(ref.path)
+        config = load_project_config(ref.path)
+        mode = str(overrides.get("mode") or active_mode(config))
+        profile_id = active_profile_id(config, mode)
+        hypothesis_id = _optional_text(overrides.get("hypothesis") or overrides.get("id"))
+        _print_root_evaluations(ref.path, mode=mode, profile_id=profile_id, hypothesis_id=hypothesis_id)
     except Exception as exc:
         _abort(exc)
 
@@ -2558,6 +2577,53 @@ def _print_root_materializations(
     console.print(table)
     if created_count is not None:
         _print_failed_materialization_summary(rows)
+
+
+def _print_root_evaluations(
+    project_dir: Path,
+    *,
+    mode: str,
+    profile_id: str,
+    hypothesis_id: str | None,
+) -> None:
+    target_id = hypothesis_id.zfill(6) if hypothesis_id else None
+    rows = root_evaluation_rows(project_dir, mode=mode, profile_id=profile_id, hypothesis_id=target_id)
+    table = Table(title="ROOT evaluations", box=box.SIMPLE_HEAVY)
+    table.add_column("ID", style="bold", no_wrap=True)
+    table.add_column("Rev", justify="right", no_wrap=True)
+    table.add_column("File", no_wrap=True)
+    table.add_column("S", justify="center", no_wrap=True, width=1)
+    table.add_column("Score", justify="right", no_wrap=True)
+    table.add_column("Dec", justify="right", no_wrap=True)
+    table.add_column("Feat", justify="right", no_wrap=True)
+    table.add_column("Node", no_wrap=True)
+    previous_hypothesis_id: str | None = None
+    group_index = -1
+    for row in rows:
+        current_hypothesis_id = str(row.get("hypothesis_id") or "")
+        if current_hypothesis_id != previous_hypothesis_id:
+            group_index += 1
+            previous_hypothesis_id = current_hypothesis_id
+        status = str(row.get("evaluation_status") or row.get("node_status") or "")
+        table.add_row(
+            current_hypothesis_id,
+            str(row.get("hypothesis_revision") or ""),
+            str(row.get("materialization_file") or ""),
+            _run_status_text(status),
+            _format_score(row.get("metric")) or "-",
+            _format_score(row.get("decision_score")) or "-",
+            str(row.get("feature_count") or "-"),
+            _short_node_id(row.get("node_id")),
+            style=_zebra_style(group_index),
+        )
+    console.print(table)
+
+
+def _short_node_id(value: object) -> str:
+    node_id = str(value or "")
+    if not node_id:
+        return ""
+    return node_id.rsplit("-", 1)[-1]
 
 
 def _print_root_revision_status(project_dir: Path, *, hypothesis_id: str, mode: str) -> None:
