@@ -2596,7 +2596,7 @@ def _print_root_evaluations(
     table.add_column("Score", justify="right", no_wrap=True)
     table.add_column("Dec", justify="right", no_wrap=True)
     table.add_column("Feat", justify="right", no_wrap=True)
-    table.add_column("Node", no_wrap=True)
+    table.add_column("Step", justify="right", no_wrap=True)
     previous_hypothesis_id: str | None = None
     group_index = -1
     for row in rows:
@@ -2613,17 +2613,10 @@ def _print_root_evaluations(
             _format_score(row.get("metric")) or "-",
             _format_score(row.get("decision_score")) or "-",
             str(row.get("feature_count") or "-"),
-            _short_node_id(row.get("node_id")),
+            str(row.get("step") or "-"),
             style=_zebra_style(group_index),
         )
     console.print(table)
-
-
-def _short_node_id(value: object) -> str:
-    node_id = str(value or "")
-    if not node_id:
-        return ""
-    return node_id.rsplit("-", 1)[-1]
 
 
 def _print_root_revision_status(project_dir: Path, *, hypothesis_id: str, mode: str) -> None:
