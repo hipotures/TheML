@@ -2142,6 +2142,7 @@ def _print_branch_algorithm_summary(project_slug: str, project_dir: Path, result
     table.add_row("Mode", result.mode)
     table.add_row("Active profile", result.profile_id)
     table.add_row("Algorithm", result.algorithm_id)
+    table.add_row("Score field", result.score_field)
     table.add_row("Config", _repo_relative(workspace_root(), result.config_path))
     table.add_row("Steps", str(result.requested_steps))
     table.add_row("Planned" if result.dry_run else "Created", str(len(result.items)))
@@ -2210,6 +2211,7 @@ def _print_branch_grow_plan(project_slug: str, plan: BranchGrowPlan) -> None:
     table.add_row("Mode", plan.mode)
     table.add_row("Active profile", plan.profile_id)
     table.add_row("Algorithm", plan.algorithm_id)
+    table.add_row("Score field", plan.score_field)
     table.add_row("Node", plan.node_ref or "auto")
     table.add_row("Config", _repo_relative(workspace_root(), plan.config_path))
     table.add_row("Steps", str(plan.requested_steps))
@@ -2225,6 +2227,7 @@ def _print_branch_grow_summary(result: BranchGrowResult) -> None:
     table.add_row("Mode", result.mode)
     table.add_row("Active profile", result.profile_id)
     table.add_row("Algorithm", result.algorithm_id)
+    table.add_row("Score field", result.score_field)
     table.add_row("Node", result.node_ref or "auto")
     table.add_row("Steps", str(result.requested_steps))
     table.add_row("Processed", str(result.processed_steps))
@@ -2240,22 +2243,31 @@ def _print_branch_grow_summary(result: BranchGrowResult) -> None:
     item_table.add_column("Source", no_wrap=True)
     item_table.add_column("Run", no_wrap=True)
     item_table.add_column("Score", justify="right", no_wrap=True)
+    if result.score_field == "decision_score":
+        item_table.add_column("Raw", justify="right", no_wrap=True)
     item_table.add_column("Δ Parent", justify="right", no_wrap=True)
     item_table.add_column("Time", justify="right", no_wrap=True)
     item_table.add_column("Node", no_wrap=True)
-    best_metric = _best_numeric(item.metric for item in result.items)
+    best_score = _best_numeric(item.score for item in result.items)
     for item in result.items:
-        item_table.add_row(
+        row = [
             str(item.step_index),
             item.branch_id,
             item.parent_ref or "-",
             item.source_ref or "-",
             item.run_status,
-            _score_text(item.metric, best=best_metric, style="reverse"),
-            _format_score_delta(item.parent_score, item.metric),
-            _seconds_text(item.run_seconds),
-            item.node_id or "",
+            _score_text(item.score, best=best_score, style="reverse"),
+        ]
+        if result.score_field == "decision_score":
+            row.append(_format_score(item.metric) or "-")
+        row.extend(
+            [
+                _format_score_delta(item.parent_score, item.score),
+                _seconds_text(item.run_seconds),
+                item.node_id or "",
+            ]
         )
+        item_table.add_row(*row)
     if result.items:
         console.print(item_table)
     else:
@@ -2727,6 +2739,8 @@ def _print_branch_status(
     table.add_column("File", no_wrap=True)
     table.add_column("Run", justify="right", no_wrap=True)
     table.add_column("Score", justify="right", no_wrap=True)
+    table.add_column("Decision", justify="right", no_wrap=True)
+    table.add_column("Source score", justify="right", no_wrap=True)
     table.add_column("Node", no_wrap=True)
     table.add_column("Summary", overflow="fold", min_width=36, ratio=1)
     summary_limit = 30 + max(0, _env_int("TML_WIDE_TERMINAL", 0))
@@ -2754,16 +2768,19 @@ def _branch_status_row(db_row: dict[str, object], *, summary_limit: int) -> list
     if node_status:
         status = _run_status_text(node_status)
         score = _format_score(db_row.get("metric"))
+        decision_score = _format_score(db_row.get("decision_score"))
         node = str(db_row.get("node_id") or "")
         run_duration = _seconds_text(db_row.get("run_seconds"))
     elif str(db_row.get("branch_status") or "") == "materialized":
         status = Text("⌘", style="cyan")
         score = ""
+        decision_score = ""
         node = ""
         run_duration = ""
     else:
         status = Text("◇", style="dim")
         score = ""
+        decision_score = ""
         node = ""
         run_duration = ""
     return [
@@ -2774,6 +2791,7 @@ def _branch_status_row(db_row: dict[str, object], *, summary_limit: int) -> list
         str(db_row.get("materialization_file") or ""),
         run_duration,
         score,
+        decision_score,
         _format_score(db_row.get("source_metric")) or "",
         node,
         _short_text(str(db_row.get("summary") or ""), summary_limit),

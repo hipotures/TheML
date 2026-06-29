@@ -16,6 +16,7 @@ from tml.db.state import (
     branch_already_evaluated,
     branch_run_candidates,
     node_record,
+    evaluation_record,
     next_node_step,
     pending_branch_run_candidates,
     upsert_node_result,
@@ -52,6 +53,7 @@ class BranchRunItem:
     metric: float | None
     node_id: str
     run_seconds: int | None
+    decision_score: float | None = None
 
 
 def branch_run_plan(
@@ -282,6 +284,7 @@ def _run_branch_record(
     finally:
         clear_branch_runtime_state()
     node = node_record(project_dir, nid)
+    evaluation = evaluation_record(project_dir, nid) or {}
     run_seconds_value = node.get("run_seconds")
     return BranchRunItem(
         branch_id=bid,
@@ -289,7 +292,16 @@ def _run_branch_record(
         metric=result.metric,
         node_id=nid,
         run_seconds=int(run_seconds_value) if isinstance(run_seconds_value, int) else None,
+        decision_score=_optional_float(evaluation.get("decision_score")),
     )
+
+
+def _optional_float(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    return None
 
 
 def _branch_component_version_notices(project_dir: Path, branch_payload: dict[str, Any]) -> list[dict[str, Any]]:

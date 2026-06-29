@@ -106,6 +106,7 @@ def main():
         "ignored_columns",
         "aux_file",
         "auxiliary_file",
+        "selection_score",
     }}
 
     class _TeeWriter:

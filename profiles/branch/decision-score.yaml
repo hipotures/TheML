@@ -1,0 +1,50 @@
+schema_version: 1
+algorithm_id: decision-score
+kind: branch_add_algorithm
+
+description: >
+  Greedy branch expansion using the calibrated decision_score field. Use with
+  the CatBoost holdout ranker profile so feature-count penalties influence
+  parent/source selection without overwriting raw local metrics.
+
+score:
+  mode: active
+  profile: active
+  status: complete
+  field: decision_score
+  order: desc
+  epsilon: 0.0003
+
+selection:
+  parent_kinds:
+    - root
+    - branch
+  source_kinds:
+    - root
+
+limits:
+  max_children: 10
+
+deduplication:
+  unit: component
+  component_key:
+    - source_type
+    - source_id
+    - mode
+    - file
+    - code_hash
+  require_new_component: true
+  reject_existing_composition: true
+
+tie_breakers:
+  parent:
+    - score_desc
+    - kind_order
+    - id_asc
+  source:
+    - score_desc
+    - kind_order
+    - id_asc
+
+dry_run:
+  show_rejected_candidates: true

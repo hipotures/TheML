@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from tml.core.profiles import load_profile
+from tml.core.selection_score import evaluation_selection_fields
 from tml.utils.hashing import sha256_file, sha256_text
 from tml.utils.yaml_io import read_yaml
 from tml.hypotheses.revisions import (
@@ -344,6 +346,14 @@ def branch_by_id(project_dir: Path, branch_id: str) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+def _evaluation_score_column(score_field: str) -> str:
+    if score_field == "metric":
+        return "e.metric"
+    if score_field == "decision_score":
+        return "e.decision_score"
+    raise ValueError(f"Unsupported branch score field: {score_field!r}")
+
+
 def branch_algorithm_candidate_pairs(
     project_dir: Path,
     *,
@@ -353,6 +363,7 @@ def branch_algorithm_candidate_pairs(
     source_kinds: list[str],
     max_children: int,
     limit: int,
+    score_field: str = "metric",
     parent_ref: str | None = None,
 ) -> list[dict[str, Any]]:
     parent_ref_kinds = [_branch_algorithm_db_kind(kind) for kind in parent_kinds]
@@ -365,6 +376,7 @@ def branch_algorithm_candidate_pairs(
     parent_order = _branch_algorithm_kind_order_sql("p.ref_kind", parent_ref_kinds)
     source_order = _branch_algorithm_kind_order_sql("s.ref_kind", source_ref_kinds)
     parent_ref_filter = "AND p.ref = ?" if parent_ref else ""
+    score_column = _evaluation_score_column(score_field)
     db_path = ensure_project_db(project_dir)
     params: list[Any] = [
         mode,
@@ -389,7 +401,7 @@ def branch_algorithm_candidate_pairs(
                     'hypothesis' AS ref_kind,
                     h.hypothesis_id AS ref_id,
                     h.hypothesis_id AS ref,
-                    e.metric AS score,
+                    {score_column} AS score,
                     e.node_id AS node_id,
                     m.file AS file,
                     m.code_hash AS code_hash
@@ -406,7 +418,7 @@ def branch_algorithm_candidate_pairs(
                  AND e.code_hash = m.code_hash
                  AND e.status = 'complete'
                 WHERE h.hypothesis_id <> '000000'
-                  AND e.metric IS NOT NULL
+                  AND {score_column} IS NOT NULL
 
                 UNION ALL
 
@@ -414,7 +426,7 @@ def branch_algorithm_candidate_pairs(
                     'branch' AS ref_kind,
                     b.branch_id AS ref_id,
                     b.branch_id AS ref,
-                    e.metric AS score,
+                    {score_column} AS score,
                     e.node_id AS node_id,
                     b.materialization_file AS file,
                     b.code_hash AS code_hash
@@ -428,7 +440,7 @@ def branch_algorithm_candidate_pairs(
                  AND e.status = 'complete'
                 WHERE b.mode = ?
                   AND b.status = 'materialized'
-                  AND e.metric IS NOT NULL
+                  AND {score_column} IS NOT NULL
             ),
             node_components AS (
                 SELECT
@@ -574,6 +586,13 @@ def node_record(project_dir: Path, node_id: str) -> dict[str, Any]:
     if row is None:
         raise ValueError(f"No node record found: {node_id}")
     return dict(row)
+
+
+def evaluation_record(project_dir: Path, node_id: str) -> dict[str, Any] | None:
+    db_path = ensure_project_db(project_dir)
+    with connect(db_path) as conn:
+        row = conn.execute("SELECT * FROM evaluations WHERE node_id=?", (node_id,)).fetchone()
+    return dict(row) if row else None
 
 
 def root_materialization_by_code_hash(
@@ -774,6 +793,13 @@ def upsert_node_result(
     db_path = ensure_project_db(project_dir)
     start = read_yaml(node_dir / "node.start.yaml")
     manifest = read_yaml(node_dir / "artifact-manifest.yaml")
+    feature_count, decision_score = _selection_fields_for_evaluation(
+        project_dir,
+        mode=start.get("mode"),
+        profile_id=start.get("profile_id"),
+        metric=metric,
+        manifest=manifest,
+    )
     run_seconds = _elapsed_seconds(start.get("created_at"), finished_at)
     with connect(db_path) as conn:
         conn.execute(
@@ -788,9 +814,9 @@ def upsert_node_result(
             """
             INSERT INTO evaluations(
               node_id, kind, hypothesis_id, hypothesis_revision, materialization_file,
-              branch_id, mode, profile_id, code_hash, metric, status
+              branch_id, mode, profile_id, code_hash, metric, feature_count, decision_score, status
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(node_id) DO UPDATE SET
               kind=excluded.kind,
               hypothesis_id=excluded.hypothesis_id,
@@ -801,6 +827,8 @@ def upsert_node_result(
               profile_id=excluded.profile_id,
               code_hash=excluded.code_hash,
               metric=excluded.metric,
+              feature_count=excluded.feature_count,
+              decision_score=excluded.decision_score,
               status=excluded.status
             """,
             (
@@ -814,6 +842,8 @@ def upsert_node_result(
                 start.get("profile_id"),
                 code_hash,
                 metric,
+                feature_count,
+                decision_score,
                 status,
             ),
         )
@@ -852,6 +882,30 @@ def upsert_node_result(
             ),
         )
         conn.commit()
+
+
+def _selection_fields_for_evaluation(
+    project_dir: Path,
+    *,
+    mode: object,
+    profile_id: object,
+    metric: float | None,
+    manifest: dict[str, Any],
+) -> tuple[int | None, float | None]:
+    run_stats = manifest.get("run_stats") if isinstance(manifest.get("run_stats"), dict) else None
+    profile = _load_evaluation_profile(project_dir, mode=mode, profile_id=profile_id)
+    return evaluation_selection_fields(metric=metric, run_stats=run_stats, profile=profile)
+
+
+def _load_evaluation_profile(project_dir: Path, *, mode: object, profile_id: object) -> dict[str, object] | None:
+    mode_text = str(mode or "").strip()
+    profile_text = str(profile_id or "").strip()
+    if not mode_text or not profile_text:
+        return None
+    try:
+        return load_profile(project_dir, mode_text, profile_text)
+    except FileNotFoundError:
+        return None
 
 
 def next_hypothesis_number(project_dir: Path) -> int:
@@ -1919,6 +1973,7 @@ def branch_rows(
           b.created_at, b.materialization_file, b.code_hash, b.composition_hash, b.summary,
           n.node_id, n.status AS node_status, n.run_seconds,
           e.metric AS metric,
+          e.decision_score AS decision_score,
           (
             SELECT e_source.metric
             FROM evaluations e_source
@@ -1957,6 +2012,8 @@ def _branch_order_clause(sort_by: str, sort_order: str | None) -> str:
         "branch": "b.branch_id",
         "branch_id": "b.branch_id",
         "score": "e.metric",
+        "decision": "e.decision_score",
+        "decision_score": "e.decision_score",
         "created": "b.created_at",
         "created_at": "b.created_at",
         "parent": "b.parent_ref",
@@ -1970,6 +2027,8 @@ def _branch_order_clause(sort_by: str, sort_order: str | None) -> str:
         raise ValueError(f"Invalid branch status sort: {sort_by}. Use one of: {allowed}.")
     if sort_key == "score":
         return f" ORDER BY CASE WHEN e.metric IS NULL THEN 1 ELSE 0 END, e.metric {direction}, b.branch_id"
+    if sort_key in {"decision", "decision_score"}:
+        return f" ORDER BY CASE WHEN e.decision_score IS NULL THEN 1 ELSE 0 END, e.decision_score {direction}, b.branch_id"
     if column == "b.branch_id":
         return f" ORDER BY {column} {direction}"
     return f" ORDER BY CASE WHEN {column} IS NULL THEN 1 ELSE 0 END, {column} {direction}, b.branch_id"

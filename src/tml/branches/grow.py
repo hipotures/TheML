@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from tml.branches.algorithms import branch_add_algorithmic_one, branch_algorithm_top_parent, load_branch_algorithm, score_improves
+from tml.branches.algorithms import branch_add_algorithmic_one, branch_algorithm_top_parent, load_branch_algorithm, score_from_fields, score_improves
 from tml.branches.run import next_pending_branch, run_one_branch
 from tml.core.config import active_mode, active_profile_id, load_project_config
 from tml.core.errors import TmlError
@@ -22,6 +22,7 @@ class BranchGrowPlan:
     pending_branch_runs: int
     execution_timeout_seconds: int
     config_path: Path
+    score_field: str = "metric"
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,8 @@ class BranchGrowItem:
     composition_hash: str | None
     run_status: str
     metric: float | None
+    score: float | None
+    decision_score: float | None
     node_id: str | None
     run_seconds: int | None
 
@@ -45,6 +48,7 @@ class BranchGrowResult:
     mode: str
     profile_id: str
     algorithm_id: str
+    score_field: str
     node_ref: str | None
     requested_steps: int
     processed_steps: int
@@ -76,6 +80,7 @@ def branch_grow_plan(
         mode=active_run_mode,
         profile_id=profile_id,
         algorithm_id=algorithm.algorithm_id,
+        score_field=algorithm.score_field,
         node_ref=node_ref,
         requested_steps=steps,
         pending_branch_runs=len(pending),
@@ -124,7 +129,8 @@ def branch_grow(
             if run_item is None:
                 stop_reason = f"Pending branch disappeared before execution: {branch_id}"
                 break
-            _emit(progress, _run_progress_line(step_index, steps, run_item.branch_id, run_item.run_status, run_item.metric))
+            run_score = score_from_fields(metric=run_item.metric, decision_score=run_item.decision_score, score_field=algorithm.score_field)
+            _emit(progress, _run_progress_line(step_index, steps, run_item.branch_id, run_item.run_status, run_score))
             items.append(
                 BranchGrowItem(
                     step_index=step_index,
@@ -137,14 +143,16 @@ def branch_grow(
                     composition_hash=str(pending.get("composition_hash") or "") or None,
                     run_status=run_item.run_status,
                     metric=run_item.metric,
+                    score=run_score,
+                    decision_score=run_item.decision_score,
                     node_id=run_item.node_id,
                     run_seconds=run_item.run_seconds,
                 )
             )
-            if run_item.run_status == "complete" and run_item.metric is not None:
-                if accepted_top_score is None or score_improves(run_item.metric, accepted_top_score, algorithm.epsilon):
+            if run_item.run_status == "complete" and run_score is not None:
+                if accepted_top_score is None or score_improves(run_score, accepted_top_score, algorithm.epsilon):
                     accepted_parent_ref = run_item.branch_id
-                    accepted_top_score = run_item.metric
+                    accepted_top_score = run_score
             continue
 
         added = branch_add_algorithmic_one(
@@ -171,7 +179,8 @@ def branch_grow(
         if run_item is None:
             stop_reason = f"New branch could not be executed: {added.branch_id}"
             break
-        _emit(progress, _run_progress_line(step_index, steps, run_item.branch_id, run_item.run_status, run_item.metric))
+        run_score = score_from_fields(metric=run_item.metric, decision_score=run_item.decision_score, score_field=algorithm.score_field)
+        _emit(progress, _run_progress_line(step_index, steps, run_item.branch_id, run_item.run_status, run_score))
         items.append(
             BranchGrowItem(
                 step_index=step_index,
@@ -184,14 +193,16 @@ def branch_grow(
                 composition_hash=added.composition_hash,
                 run_status=run_item.run_status,
                 metric=run_item.metric,
+                score=run_score,
+                decision_score=run_item.decision_score,
                 node_id=run_item.node_id,
                 run_seconds=run_item.run_seconds,
             )
         )
-        if run_item.run_status == "complete" and run_item.metric is not None:
-            if accepted_top_score is None or score_improves(run_item.metric, accepted_top_score, algorithm.epsilon):
+        if run_item.run_status == "complete" and run_score is not None:
+            if accepted_top_score is None or score_improves(run_score, accepted_top_score, algorithm.epsilon):
                 accepted_parent_ref = run_item.branch_id
-                accepted_top_score = run_item.metric
+                accepted_top_score = run_score
 
     if not stop_reason and len(items) >= steps:
         stop_reason = "Requested steps satisfied."
@@ -200,6 +211,7 @@ def branch_grow(
         mode=plan.mode,
         profile_id=plan.profile_id,
         algorithm_id=plan.algorithm_id,
+        score_field=plan.score_field,
         node_ref=node_ref,
         requested_steps=steps,
         processed_steps=len(items),

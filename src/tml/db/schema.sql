@@ -146,6 +146,8 @@ CREATE TABLE IF NOT EXISTS evaluations (
   profile_id TEXT,
   code_hash TEXT,
   metric REAL,
+  feature_count INTEGER,
+  decision_score REAL,
   status TEXT NOT NULL
 );
 

@@ -6,6 +6,8 @@ from typing import Any
 
 from tml.branches.runtime_state import clear_branch_runtime_state
 from tml.core.config import load_project_config, repo_root_for_project
+from tml.core.profiles import load_profile
+from tml.core.selection_score import evaluation_selection_fields
 from tml.hypotheses.baseline import ensure_root_baseline
 from tml.hypotheses.revisions import (
     materialization_revision,
@@ -320,13 +322,21 @@ def _index_runs(conn, project_dir: Path) -> None:
                 ),
             )
             if manifest or done or failed:
+                metric = _optional_float(manifest.get("metric"))
+                feature_count, decision_score = _selection_fields_for_evaluation(
+                    project_dir,
+                    mode=identity["mode"],
+                    profile_id=identity["profile_id"],
+                    metric=metric,
+                    manifest=manifest,
+                )
                 conn.execute(
                     """
                     INSERT INTO evaluations(
                       node_id, kind, hypothesis_id, hypothesis_revision, materialization_file,
-                      branch_id, mode, profile_id, code_hash, metric, status
+                      branch_id, mode, profile_id, code_hash, metric, feature_count, decision_score, status
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         node_id,
@@ -338,7 +348,9 @@ def _index_runs(conn, project_dir: Path) -> None:
                         identity["mode"],
                         identity["profile_id"],
                         identity["code_hash"],
-                        manifest.get("metric"),
+                        metric,
+                        feature_count,
+                        decision_score,
                         status,
                     ),
                 )
@@ -537,6 +549,38 @@ def _token_total(response: dict[str, Any]) -> dict[str, Any]:
         return {}
     total = token_usage.get("total")
     return total if isinstance(total, dict) else {}
+
+
+def _selection_fields_for_evaluation(
+    project_dir: Path,
+    *,
+    mode: object,
+    profile_id: object,
+    metric: float | None,
+    manifest: dict[str, Any],
+) -> tuple[int | None, float | None]:
+    run_stats = manifest.get("run_stats") if isinstance(manifest.get("run_stats"), dict) else None
+    profile = _load_evaluation_profile(project_dir, mode=mode, profile_id=profile_id)
+    return evaluation_selection_fields(metric=metric, run_stats=run_stats, profile=profile)
+
+
+def _load_evaluation_profile(project_dir: Path, *, mode: object, profile_id: object) -> dict[str, object] | None:
+    mode_text = str(mode or "").strip()
+    profile_text = str(profile_id or "").strip()
+    if not mode_text or not profile_text:
+        return None
+    try:
+        return load_profile(project_dir, mode_text, profile_text)
+    except FileNotFoundError:
+        return None
+
+
+def _optional_float(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    return None
 
 
 def _elapsed_seconds(start_value: Any, end_value: Any) -> int | None:

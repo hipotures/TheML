@@ -37,6 +37,7 @@ RESERVED_PROFILE_KEYS = {
     "ignored_columns",
     "aux_file",
     "auxiliary_file",
+    "selection_score",
 }
 
 

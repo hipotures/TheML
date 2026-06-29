@@ -39,6 +39,8 @@ def migrate(db_path: Path) -> None:
         _ensure_column(conn, "evaluations", "branch_id", "TEXT")
         _ensure_column(conn, "evaluations", "hypothesis_revision", "INTEGER")
         _ensure_column(conn, "evaluations", "materialization_file", "TEXT")
+        _ensure_column(conn, "evaluations", "feature_count", "INTEGER")
+        _ensure_column(conn, "evaluations", "decision_score", "REAL")
         _ensure_column(conn, "submissions", "hypothesis_revision", "INTEGER")
         _ensure_column(conn, "submissions", "materialization_file", "TEXT")
         _ensure_column(conn, "submissions", "submitted_at", "TEXT")

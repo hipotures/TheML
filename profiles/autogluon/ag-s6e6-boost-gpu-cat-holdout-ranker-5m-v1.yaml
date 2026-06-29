@@ -1,0 +1,27 @@
+schema_version: 1
+profile_id: ag-s6e6-boost-gpu-cat-holdout-ranker-5m-v1
+source_profile: tml.s6e6_boost_gpu_cat_holdout_ranker_5m
+mode: autogluon
+included_model_types:
+- CAT
+presets: medium_quality
+time_limit: 300
+preprocess_timeout: 90
+validation_strategy: holdout
+seed: 42
+class_balance: balanced
+use_gpu: true
+selection_score:
+  kind: feature_count_penalty
+  penalty_per_feature: 0.000002
+hyperparameters:
+  CAT:
+  - task_type: GPU
+    devices: '0'
+    gpu_ram_part: 0.8
+    ag_args_fit:
+      num_gpus: 1
+fit_args:
+  save_space: true
+  fit_weighted_ensemble: false
+  auto_stack: false

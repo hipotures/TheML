@@ -31,6 +31,7 @@ class BranchAlgorithmConfig:
     source_kinds: list[str]
     max_children: int
     epsilon: ScoreEpsilon
+    score_field: str = "metric"
     candidate_limit: int = 500
 
 
@@ -56,6 +57,7 @@ class BranchAlgorithmResult:
     mode: str
     profile_id: str
     algorithm_id: str
+    score_field: str
     requested_steps: int
     dry_run: bool
     config_path: Path
@@ -111,6 +113,7 @@ def branch_add_algorithmic(
         mode=active_run_mode,
         profile_id=profile_id,
         algorithm_id=algorithm.algorithm_id,
+        score_field=algorithm.score_field,
         requested_steps=steps,
         dry_run=dry_run,
         config_path=algorithm.path,
@@ -165,6 +168,7 @@ def branch_algorithm_top_parent(
         parent_kinds=algorithm.parent_kinds,
         source_kinds=algorithm.source_kinds,
         max_children=algorithm.max_children,
+        score_field=algorithm.score_field,
         limit=1,
     )
     if not candidates:
@@ -214,6 +218,7 @@ def _parse_branch_algorithm(path: Path, algo_id: str, payload: dict[str, Any]) -
     if max_children <= 0:
         raise TmlError("Branch algorithm limits.max_children must be positive.")
     epsilon = parse_score_epsilon(score.get("epsilon"))
+    score_field = parse_score_field(score.get("field"))
 
     return BranchAlgorithmConfig(
         algorithm_id=configured_id,
@@ -221,6 +226,7 @@ def _parse_branch_algorithm(path: Path, algo_id: str, payload: dict[str, Any]) -
         parent_kinds=parent_kinds,
         source_kinds=source_kinds,
         max_children=max_children,
+        score_field=score_field,
         epsilon=epsilon,
     )
 
@@ -246,6 +252,7 @@ def _branch_add_algorithmic_next(
         parent_kinds=algorithm.parent_kinds,
         source_kinds=algorithm.source_kinds,
         max_children=algorithm.max_children,
+        score_field=algorithm.score_field,
         limit=algorithm.candidate_limit,
         parent_ref=preferred_parent_ref if require_preferred_parent else None,
     )
@@ -339,6 +346,23 @@ def parse_score_epsilon(value: object) -> ScoreEpsilon:
         _validate_epsilon_number(parsed, value)
         return ScoreEpsilon(raw=value, kind="absolute", value=parsed)
     raise TmlError(f"Invalid score.epsilon: {value!r}")
+
+
+def parse_score_field(value: object) -> str:
+    if value is None:
+        return "metric"
+    text = str(value).strip()
+    if text in {"metric", "decision_score"}:
+        return text
+    raise TmlError("Invalid score.field: use metric or decision_score.")
+
+
+def score_from_fields(*, metric: float | None, decision_score: float | None, score_field: str) -> float | None:
+    if score_field == "metric":
+        return metric
+    if score_field == "decision_score":
+        return decision_score
+    raise TmlError("Invalid score.field: use metric or decision_score.")
 
 
 def epsilon_delta(reference_score: float, epsilon: ScoreEpsilon) -> float:
