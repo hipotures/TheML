@@ -15,10 +15,8 @@ active_project:
 active_run: null
 root:
   active_profiles:
-    autogluon: ag-s6e6-boost-gpu-cat-holdout-ranker-5m-v1
+    autogluon: ag-s6e6-boost-gpu-ens-v1
     legacy: legacy-root-start-v1
-branch:
-  active_algorithm: decision-score
 rerun:
   autogluon: ag-s6e6-boost-gpu-best-ens-stack-ds0-30m-v1
 models:
