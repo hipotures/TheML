@@ -61,6 +61,8 @@ ROOT_CONFIG_DEFAULTS: dict[str, Any] = {
 def ensure_root_config(root: Path) -> dict[str, Any]:
     path = context_path(root)
     existing = read_yaml(path)
+    if not isinstance(existing, dict):
+        existing = {}
     merged = _merge_root_config(existing)
     if existing != merged:
         write_yaml(path, merged)
@@ -164,6 +166,7 @@ def use_project(root: Path, slug: str) -> ProjectRef:
 
 def _merge_root_config(existing: dict[str, Any]) -> dict[str, Any]:
     merged = {
+        **existing,
         "schema_version": existing.get("schema_version", ROOT_CONFIG_DEFAULTS["schema_version"]),
         "defaults": {
             **ROOT_CONFIG_DEFAULTS["defaults"],

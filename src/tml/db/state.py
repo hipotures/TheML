@@ -1020,6 +1020,7 @@ def run_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = Non
         FROM hypotheses h
         JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
           AND m.status IN ('active', 'fixed')
+          AND m.active=1
     """
     params: list[Any] = [mode]
     conditions: list[str] = []

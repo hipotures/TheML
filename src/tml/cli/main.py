@@ -280,6 +280,31 @@ def tree_cmd(ctx: typer.Context) -> None:
 
 
 @root_app.command(
+    "tree",
+    context_settings=EXTRA,
+    help=(
+        "Show the active project's ROOT-only solution tree.\n\n"
+        "Accepted key=value parameters:\n"
+        "  mode=<name>        Tree mode; defaults to the active mode.\n"
+        "  node=<id>          Start from a ROOT hypothesis id."
+    ),
+)
+def root_tree_cmd(ctx: typer.Context) -> None:
+    try:
+        _reject_positional(ctx.args, "tml root tree")
+        overrides = _overrides(ctx.args)
+        ref = active_project_ref()
+        ensure_root_baseline(ref.path)
+        _validate_override_keys(overrides, {"mode", "node"}, "tml root tree")
+        config = load_project_config(ref.path)
+        mode = _optional_text(overrides.get("mode")) or active_mode(config)
+        node_ref = _optional_text(overrides.get("node"))
+        _print_solution_tree(ref.path, mode=mode, node_ref=node_ref, root_only=True)
+    except Exception as exc:
+        _abort(exc)
+
+
+@root_app.command(
     "status",
     context_settings=EXTRA,
     help=(
@@ -2798,12 +2823,12 @@ def _branch_status_row(db_row: dict[str, object], *, summary_limit: int) -> list
     ]
 
 
-def _print_solution_tree(project_dir: Path, *, mode: str, node_ref: str | None = None) -> None:
+def _print_solution_tree(project_dir: Path, *, mode: str, node_ref: str | None = None, root_only: bool = False) -> None:
     config = load_project_config(project_dir)
     profile_id = active_profile_id(config, mode)
     root_rows = solution_tree_root_rows(project_dir, mode=mode, profile_id=profile_id)
-    branch_db_rows = solution_tree_branch_rows(project_dir, mode=mode, profile_id=profile_id)
-    runtime_state = read_branch_runtime_state(project_dir, mode=mode, profile_id=profile_id)
+    branch_db_rows = [] if root_only else solution_tree_branch_rows(project_dir, mode=mode, profile_id=profile_id)
+    runtime_state = None if root_only else read_branch_runtime_state(project_dir, mode=mode, profile_id=profile_id)
     runtime_branch_id = _normalize_branch_display(runtime_state.branch_id) if runtime_state else ""
     runtime_display_state = "running" if runtime_state and runtime_state.is_running else "stale" if runtime_state else ""
     best_metric = _best_tree_metric([*root_rows, *branch_db_rows])
