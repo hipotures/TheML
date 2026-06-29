@@ -1,0 +1,27 @@
+schema_version: 1
+profile_id: ag-s6e6-boost-gpu-cat-cv5-8m-v1
+source_profile: tml.s6e6_boost_gpu_cat_cv5_8m
+mode: autogluon
+included_model_types:
+- CAT
+presets: medium_quality
+time_limit: 480
+preprocess_timeout: 90
+validation_strategy: autogluon
+seed: 42
+class_balance: balanced
+use_gpu: true
+hyperparameters:
+  CAT:
+  - task_type: GPU
+    devices: '0'
+    gpu_ram_part: 0.8
+    ag_args_fit:
+      num_gpus: 1
+fit_args:
+  save_space: true
+  fit_weighted_ensemble: false
+  auto_stack: false
+  num_bag_folds: 5
+  num_bag_sets: 1
+  num_stack_levels: 0
