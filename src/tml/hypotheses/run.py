@@ -42,6 +42,7 @@ class RootRunPlan:
     profile_hash: str
     execution_timeout_seconds: int
     force: bool
+    all_revisions: bool
     run_id: str | None
     run_path: str
     next_node_step: int
@@ -61,6 +62,7 @@ def root_run_plan(
     profile_overrides: dict[str, object] | None = None,
     force: bool = False,
     new_run: bool = False,
+    all_revisions: bool = False,
 ) -> RootRunPlan:
     upsert_project(project_dir)
     ensure_root_baseline(project_dir)
@@ -72,7 +74,13 @@ def root_run_plan(
     pending_ids: list[str] = []
     pending_files: list[str] = []
     already_done = 0
-    candidates = run_candidates(project_dir, active_run_mode, hypothesis_id=hypothesis_id, revision=revision)
+    candidates = run_candidates(
+        project_dir,
+        active_run_mode,
+        hypothesis_id=hypothesis_id,
+        revision=revision,
+        active_only=not all_revisions,
+    )
     for record in candidates:
         hid = str(record["hypothesis_id"])
         code_hash = str(record["code_hash"])
@@ -93,6 +101,7 @@ def root_run_plan(
         profile_hash=profile_hash(project_dir, active_run_mode, profile_id),
         execution_timeout_seconds=_execution_timeout_seconds(profile_overrides),
         force=force,
+        all_revisions=all_revisions,
         run_id=run_id_value,
         run_path=f"runs/{run_id_value}" if run_id_value else "new run on start",
         next_node_step=next_node_step(project_dir, run_id_value) if run_id_value else 1,
@@ -113,6 +122,7 @@ def run_missing(
     profile_overrides: dict[str, object] | None = None,
     force: bool = False,
     new_run: bool = False,
+    all_revisions: bool = False,
     progress: Callable[[str], None] | None = None,
 ) -> list[str]:
     upsert_project(project_dir)
@@ -124,7 +134,13 @@ def run_missing(
     run = create_run(project_dir) if new_run else active_or_create_run(project_dir)
     ran: list[str] = []
     next_step = next_node_step(project_dir, run.name)
-    records = run_candidates(project_dir, mode, hypothesis_id=hypothesis_id, revision=revision)
+    records = run_candidates(
+        project_dir,
+        mode,
+        hypothesis_id=hypothesis_id,
+        revision=revision,
+        active_only=not all_revisions,
+    )
     pending_records = [
         record
         for record in records

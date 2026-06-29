@@ -1013,17 +1013,25 @@ def materialization_candidates(project_dir: Path, hypothesis_id: str | None = No
     return [dict(row) for row in rows]
 
 
-def run_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = None, revision: int | None = None) -> list[dict[str, Any]]:
+def run_candidates(
+    project_dir: Path,
+    mode: str,
+    hypothesis_id: str | None = None,
+    revision: int | None = None,
+    *,
+    active_only: bool = True,
+) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
     sql = """
         SELECT h.hypothesis_id, h.path, m.file, m.code_hash, m.hypothesis_revision
         FROM hypotheses h
         JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
-          AND m.status IN ('active', 'fixed')
-          AND m.active=1
+          AND m.status IN ('active', 'fixed', 'inactive')
     """
     params: list[Any] = [mode]
     conditions: list[str] = []
+    if active_only:
+        conditions.append("m.active=1")
     if hypothesis_id:
         conditions.append("h.hypothesis_id=?")
         params.append(hypothesis_id.zfill(6))
@@ -1167,7 +1175,7 @@ def bugfix_candidates(project_dir: Path, mode: str, hypothesis_id: str | None = 
             FROM materializations ready
             WHERE ready.hypothesis_id=h.hypothesis_id
               AND ready.mode=m.mode
-              AND ready.status IN ('active', 'fixed')
+              AND ready.status IN ('active', 'fixed', 'inactive')
               AND COALESCE(ready.hypothesis_revision, 1)=COALESCE(m.hypothesis_revision, 1)
           )
         )
