@@ -1243,15 +1243,19 @@ def active_or_create_run(project_dir: Path) -> Path:
         row = conn.execute("SELECT run_id FROM runs ORDER BY run_id DESC LIMIT 1").fetchone()
     if row:
         run_dir = project_dir / "runs" / str(row["run_id"])
-    else:
-        from tml.core.ids import run_id
+        upsert_run(project_dir, run_dir)
+        return run_dir
+    return create_run(project_dir)
 
-        run_dir = project_dir / "runs" / run_id()
-        run_dir.mkdir(parents=True, exist_ok=True)
-        from tml.utils.yaml_io import write_yaml
 
-        write_yaml(run_dir / "run.yaml", {"schema_version": 1, "run_id": run_dir.name, "created_at": datetime.now().isoformat(timespec="seconds")})
-        (run_dir / "artifacts").mkdir(exist_ok=True)
+def create_run(project_dir: Path) -> Path:
+    from tml.core.ids import run_id
+    from tml.utils.yaml_io import write_yaml
+
+    run_dir = project_dir / "runs" / run_id()
+    run_dir.mkdir(parents=True, exist_ok=True)
+    write_yaml(run_dir / "run.yaml", {"schema_version": 1, "run_id": run_dir.name, "created_at": datetime.now().isoformat(timespec="seconds")})
+    (run_dir / "artifacts").mkdir(exist_ok=True)
     upsert_run(project_dir, run_dir)
     return run_dir
 

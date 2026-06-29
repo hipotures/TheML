@@ -12,6 +12,7 @@ from tml.core.profiles import profile_hash
 from tml.db.state import (
     active_or_create_run,
     already_evaluated,
+    create_run,
     latest_run_id,
     next_node_step,
     run_candidates,
@@ -59,6 +60,7 @@ def root_run_plan(
     revision: int | None = None,
     profile_overrides: dict[str, object] | None = None,
     force: bool = False,
+    new_run: bool = False,
 ) -> RootRunPlan:
     upsert_project(project_dir)
     ensure_root_baseline(project_dir)
@@ -66,7 +68,7 @@ def root_run_plan(
     config = load_project_config(project_dir)
     active_run_mode = mode or active_mode(config)
     profile_id = active_profile_id(config, active_run_mode)
-    run_id_value = latest_run_id(project_dir)
+    run_id_value = None if new_run else latest_run_id(project_dir)
     pending_ids: list[str] = []
     pending_files: list[str] = []
     already_done = 0
@@ -110,6 +112,7 @@ def run_missing(
     revision: int | None = None,
     profile_overrides: dict[str, object] | None = None,
     force: bool = False,
+    new_run: bool = False,
     progress: Callable[[str], None] | None = None,
 ) -> list[str]:
     upsert_project(project_dir)
@@ -118,7 +121,7 @@ def run_missing(
     config = load_project_config(project_dir)
     mode = mode or active_mode(config)
     profile_id = active_profile_id(config, mode)
-    run = active_or_create_run(project_dir)
+    run = create_run(project_dir) if new_run else active_or_create_run(project_dir)
     ran: list[str] = []
     next_step = next_node_step(project_dir, run.name)
     records = run_candidates(project_dir, mode, hypothesis_id=hypothesis_id, revision=revision)
