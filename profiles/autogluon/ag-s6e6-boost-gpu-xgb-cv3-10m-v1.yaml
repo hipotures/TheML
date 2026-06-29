@@ -1,0 +1,28 @@
+schema_version: 1
+profile_id: ag-s6e6-boost-gpu-xgb-cv3-10m-v1
+source_profile: tml.s6e6_boost_gpu_xgb_cv3_10m
+mode: autogluon
+included_model_types:
+- XGB
+presets: medium_quality
+time_limit: 600
+preprocess_timeout: 120
+validation_strategy: autogluon
+seed: 42
+class_balance: balanced
+use_gpu: true
+hyperparameters:
+  XGB:
+  - device: cuda
+    tree_method: hist
+    ag_args:
+      priority: 999
+    ag_args_fit:
+      num_gpus: 1
+fit_args:
+  save_space: true
+  fit_weighted_ensemble: true
+  auto_stack: false
+  num_bag_folds: 3
+  num_bag_sets: 1
+  num_stack_levels: 0
