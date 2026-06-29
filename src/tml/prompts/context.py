@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from tml.branches.algorithms import epsilon_delta, load_branch_algorithm, parse_score_epsilon
-from tml.core.config import load_project_config
+from tml.core.config import active_branch_algorithm_id, load_project_config
 from tml.db.state import root_hypothesis_rows
 from tml.hypotheses.model import enabled_hypotheses
 
@@ -96,7 +96,8 @@ def _score_epsilon(project_dir: Path, baseline: float | None) -> float:
     if baseline is None:
         return 0.0
     try:
-        return epsilon_delta(baseline, load_branch_algorithm(project_dir, "default").epsilon)
+        config = load_project_config(project_dir)
+        return epsilon_delta(baseline, load_branch_algorithm(project_dir, active_branch_algorithm_id(config)).epsilon)
     except Exception:
         return epsilon_delta(baseline, parse_score_epsilon(None))
 

@@ -28,6 +28,12 @@ def active_profile_id(config: dict[str, Any], mode: str | None = None) -> str:
     return str(profiles.get(mode) or global_profile or f"{mode}-root-start-v1")
 
 
+def active_branch_algorithm_id(config: dict[str, Any]) -> str:
+    project_branch = config.get("branch") if isinstance(config.get("branch"), dict) else {}
+    global_algorithm = _global_active_branch_algorithm_id(config)
+    return str(project_branch.get("active_algorithm") or global_algorithm or "default")
+
+
 def rerun_profile_id(project_dir: Path, mode: str) -> str:
     root_config = read_yaml(context_path(repo_root_for_project(project_dir)))
     rerun = root_config.get("rerun") if isinstance(root_config.get("rerun"), dict) else {}
@@ -48,6 +54,19 @@ def _global_active_profile_id(config: dict[str, Any], mode: str) -> str | None:
     root = root_config.get("root") if isinstance(root_config.get("root"), dict) else {}
     profiles = root.get("active_profiles") if isinstance(root.get("active_profiles"), dict) else {}
     value = profiles.get(mode)
+    return str(value) if value else None
+
+
+def _global_active_branch_algorithm_id(config: dict[str, Any]) -> str | None:
+    project_dir_value = config.get("_project_dir")
+    if not isinstance(project_dir_value, str):
+        return None
+    try:
+        root_config = read_yaml(context_path(repo_root_for_project(Path(project_dir_value))))
+    except Exception:
+        return None
+    branch = root_config.get("branch") if isinstance(root_config.get("branch"), dict) else {}
+    value = branch.get("active_algorithm")
     return str(value) if value else None
 
 

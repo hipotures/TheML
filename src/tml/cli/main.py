@@ -40,7 +40,7 @@ from tml.branches.grow import BranchGrowPlan, BranchGrowResult, branch_grow, bra
 from tml.branches.runtime_state import read_branch_runtime_state
 from tml.branches.run import BranchRunPlan, branch_run_plan, run_missing_branches
 from tml.cli.prompt_output import print_prompt_choices, print_prompt_probe_summary, print_prompt_render_summary
-from tml.core.config import active_mode, active_profile_id, load_project_config
+from tml.core.config import active_branch_algorithm_id, active_mode, active_profile_id, load_project_config
 from tml.core.errors import TmlError
 from tml.core.kaggle import download_competition_data, list_competition_submissions, submit_competition_file
 from tml.core.paths import active_project_ref, workspace_root
@@ -1097,7 +1097,7 @@ def branch_add_cmd(
         if has_algorithm:
             if "steps" not in overrides:
                 raise TmlError("Missing required parameter: steps=<N>.")
-            algo_id = str(overrides.get("algo") or "default")
+            algo_id = str(overrides.get("algo") or active_branch_algorithm_id(config))
             dry_run = _bool(overrides.get("dry-run", overrides.get("dry_run", False)))
             try:
                 steps = int(overrides["steps"])
@@ -1162,7 +1162,7 @@ def branch_grow_cmd(
             raise TmlError("steps must be a positive integer.") from exc
         if steps <= 0:
             raise TmlError("steps must be a positive integer.")
-        algo_id = str(overrides.get("algo") or "default")
+        algo_id = str(overrides.get("algo") or active_branch_algorithm_id(config))
         node_ref = _optional_text(overrides.get("node"))
         assume_yes = _bool(overrides.get("yes", False))
         run_overrides = {key: value for key, value in overrides.items() if key not in {"steps", "node", "algo", "mode", "yes"}}
@@ -3229,7 +3229,8 @@ def _root_status_score_epsilon(project_dir: Path, baseline: float | None) -> flo
     if baseline is None:
         return 0.0
     try:
-        return epsilon_delta(baseline, load_branch_algorithm(project_dir, "default").epsilon)
+        config = load_project_config(project_dir)
+        return epsilon_delta(baseline, load_branch_algorithm(project_dir, active_branch_algorithm_id(config)).epsilon)
     except Exception:
         return epsilon_delta(baseline, parse_score_epsilon(None))
 
