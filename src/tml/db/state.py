@@ -1022,12 +1022,6 @@ def run_candidates(
     active_only: bool = True,
 ) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
-    sql = """
-        SELECT h.hypothesis_id, h.path, m.file, m.code_hash, m.hypothesis_revision
-        FROM hypotheses h
-        JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
-          AND m.status IN ('active', 'fixed', 'inactive')
-    """
     params: list[Any] = [mode]
     conditions: list[str] = []
     if active_only:
@@ -1038,9 +1032,38 @@ def run_candidates(
     if revision is not None:
         conditions.append("m.hypothesis_revision=?")
         params.append(int(revision))
-    if conditions:
-        sql += " WHERE " + " AND ".join(conditions)
-    sql += " ORDER BY h.hypothesis_id, m.hypothesis_revision, m.file"
+    where_sql = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    if active_only:
+        sql = f"""
+            SELECT h.hypothesis_id, h.path, m.file, m.code_hash, m.hypothesis_revision
+            FROM hypotheses h
+            JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
+              AND m.status IN ('active', 'fixed', 'inactive')
+            {where_sql}
+            ORDER BY h.hypothesis_id, m.hypothesis_revision, m.file
+        """
+    else:
+        sql = f"""
+            SELECT hypothesis_id, path, file, code_hash, hypothesis_revision
+            FROM (
+              SELECT
+                h.hypothesis_id,
+                h.path,
+                m.file,
+                m.code_hash,
+                m.hypothesis_revision,
+                ROW_NUMBER() OVER (
+                  PARTITION BY h.hypothesis_id, m.mode, COALESCE(m.hypothesis_revision, 1)
+                  ORDER BY m.file DESC
+                ) AS rn
+              FROM hypotheses h
+              JOIN materializations m ON m.hypothesis_id=h.hypothesis_id AND m.mode=?
+                AND m.status IN ('active', 'fixed', 'inactive')
+              {where_sql}
+            )
+            WHERE rn=1
+            ORDER BY hypothesis_id, hypothesis_revision, file
+        """
     with connect(db_path) as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]

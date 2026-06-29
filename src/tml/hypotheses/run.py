@@ -161,6 +161,7 @@ def run_missing(
         selected_revision = int(record.get("hypothesis_revision") or 1)
         materialization_file = materialization.name
         code_hash = str(record["code_hash"])
+        run_label = f"ROOT run {hid} rev={selected_revision} file={materialization_file} {mode} ({pending_index}/{pending_total})"
         nid = node_id(next_step)
         next_step += 1
         node_dir = run / "artifacts" / nid
@@ -225,12 +226,12 @@ def run_missing(
                 error=error,
             )
             if progress is not None:
-                progress(f"ROOT run {hid} {mode} ({pending_index}/{pending_total}): failed")
+                progress(f"{run_label}: failed")
             ran.append(f"{hid}:{selected_revision}")
             continue
         write_yaml(node_dir / "started.yaml", {"created_at": datetime.now().isoformat(timespec="seconds")})
         if progress is not None:
-            progress(f"ROOT run {hid} {mode} ({pending_index}/{pending_total}): executing node {nid}")
+            progress(f"{run_label}: executing node {nid}")
         result = run_python_script(
             node_dir / "02-code.py",
             node_dir / "work",
@@ -282,7 +283,7 @@ def run_missing(
                 error=result.error,
             )
         if progress is not None:
-            progress(f"ROOT run {hid} {mode} ({pending_index}/{pending_total}): {result.status}")
+            progress(f"{run_label}: {result.status}")
         ran.append(f"{hid}:{selected_revision}")
     return ran
 
