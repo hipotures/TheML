@@ -2088,6 +2088,21 @@ def branch_rows(
 ) -> list[dict[str, Any]]:
     db_path = ensure_project_db(project_dir)
     sql = """
+        WITH latest_branch_evaluations AS (
+          SELECT *
+          FROM (
+            SELECT
+              e.*,
+              ROW_NUMBER() OVER (
+                PARTITION BY e.branch_id, e.mode, e.profile_id, e.code_hash
+                ORDER BY COALESCE(n.finished_at, n.created_at, '') DESC, n.step DESC, e.node_id DESC
+              ) AS rn
+            FROM evaluations e
+            LEFT JOIN nodes n ON n.node_id=e.node_id
+            WHERE e.kind='branch'
+          )
+          WHERE rn=1
+        )
         SELECT
           b.branch_id, b.parent_ref, b.source_ref, b.mode, b.status AS branch_status,
           b.created_at, b.materialization_file, b.code_hash, b.composition_hash, b.summary,
@@ -2106,7 +2121,7 @@ def branch_rows(
             LIMIT 1
           ) AS source_metric
         FROM branches b
-        LEFT JOIN evaluations e ON e.kind='branch'
+        LEFT JOIN latest_branch_evaluations e ON e.kind='branch'
           AND e.branch_id=b.branch_id AND e.mode=b.mode AND e.profile_id=? AND e.code_hash=b.code_hash
         LEFT JOIN nodes n ON n.node_id=e.node_id
         WHERE b.mode=?
@@ -2210,6 +2225,21 @@ def solution_tree_branch_rows(project_dir: Path, *, mode: str, profile_id: str) 
     with connect(db_path) as conn:
         rows = conn.execute(
             """
+            WITH latest_branch_evaluations AS (
+              SELECT *
+              FROM (
+                SELECT
+                  e.*,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY e.branch_id, e.mode, e.profile_id, e.code_hash
+                    ORDER BY COALESCE(n.finished_at, n.created_at, '') DESC, n.step DESC, e.node_id DESC
+                  ) AS rn
+                FROM evaluations e
+                LEFT JOIN nodes n ON n.node_id=e.node_id
+                WHERE e.kind='branch'
+              )
+              WHERE rn=1
+            )
             SELECT
               b.branch_id, b.parent_ref, b.source_ref, b.mode,
               b.status AS branch_status, b.created_at, b.materialization_file,
@@ -2219,7 +2249,7 @@ def solution_tree_branch_rows(project_dir: Path, *, mode: str, profile_id: str) 
               e.metric
             FROM branches b
             LEFT JOIN branch_edges be ON be.branch_id=b.branch_id
-            LEFT JOIN evaluations e
+            LEFT JOIN latest_branch_evaluations e
               ON e.kind='branch'
              AND e.branch_id=b.branch_id
              AND e.mode=b.mode
