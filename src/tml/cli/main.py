@@ -1322,10 +1322,10 @@ def branch_run_cmd(
         typer.Argument(
             help=(
                 "Optional positional command/status token and key=value parameters. "
-                "Accepted command token: status. Accepted fixed keys: mode, branch, id, yes. "
+                "Accepted command token: status. Accepted fixed keys: mode, branch, id, force, yes. "
                 "Profile override keys are also accepted for the active mode."
             ),
-            metavar="[status] [mode=<name>] [branch=<id>] [id=<id>] [yes=true] [profile_key=<value>]",
+            metavar="[status] [mode=<name>] [branch=<id>] [id=<id>] [force=true] [yes=true] [profile_key=<value>]",
         ),
     ] = None,
 ) -> None:
@@ -1337,15 +1337,16 @@ def branch_run_cmd(
         mode = str(overrides["mode"]) if "mode" in overrides else None
         config = load_project_config(ref.path)
         active_run_mode = mode or active_mode(config)
-        allowed = {"mode", "branch", "id", "yes"} | _profile_override_keys(ref.path, active_run_mode)
+        allowed = {"mode", "branch", "id", "force", "yes"} | _profile_override_keys(ref.path, active_run_mode)
         _validate_override_keys(overrides, allowed, "tml branch run")
         branch_id = _optional_text(overrides.get("branch") or overrides.get("id"))
+        force = _bool(overrides.get("force", False))
         if status_only:
             _print_branch_status(ref.path, mode=active_run_mode, branch_id=branch_id, executed_ids=set(), executed_count=None)
             return
         assume_yes = _bool(overrides.get("yes", False))
-        run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "branch", "id", "yes"}}
-        plan = branch_run_plan(ref.path, mode=mode, branch_id=branch_id, profile_overrides=run_overrides)
+        run_overrides = {key: value for key, value in overrides.items() if key not in {"mode", "branch", "id", "force", "yes"}}
+        plan = branch_run_plan(ref.path, mode=mode, branch_id=branch_id, profile_overrides=run_overrides, force=force)
         _print_branch_run_plan(ref.slug, plan, branch_id=branch_id)
         if plan.iteration_count == 0:
             console.print("No BRANCH runs to execute.")
@@ -1359,6 +1360,7 @@ def branch_run_cmd(
             mode=mode,
             branch_id=branch_id,
             profile_overrides=run_overrides,
+            force=force,
             progress=console.print,
         )
         _print_branch_status(
@@ -2132,6 +2134,7 @@ def _print_root_run_plan(project_slug: str, plan: RootRunPlan, *, hypothesis_id:
     table.add_row("Active profile", plan.profile_id)
     table.add_row("Profile hash", plan.profile_hash)
     table.add_row("Execution timeout seconds", str(plan.execution_timeout_seconds))
+    table.add_row("Force", "true" if plan.force else "false")
     table.add_row("Run", plan.run_id or "new")
     table.add_row("Run path", plan.run_path)
     table.add_row("Next node step", str(plan.next_node_step))
@@ -2139,7 +2142,6 @@ def _print_root_run_plan(project_slug: str, plan: RootRunPlan, *, hypothesis_id:
     table.add_row("Hypothesis filter", str(hypothesis_id).zfill(6) if hypothesis_id else "all")
     table.add_row("Candidate materializations", str(plan.candidate_count))
     table.add_row("Already evaluated", str(plan.already_evaluated_count))
-    table.add_row("Force", "true" if plan.force else "false")
     table.add_row("Iterations to run", str(plan.iteration_count))
     table.add_row("Files", file_text)
     table.add_row("Hypothesis IDs", id_text)
@@ -2308,6 +2310,7 @@ def _print_branch_run_plan(project_slug: str, plan: BranchRunPlan, *, branch_id:
     table.add_row("Active profile", plan.profile_id)
     table.add_row("Profile hash", plan.profile_hash)
     table.add_row("Execution timeout seconds", str(plan.execution_timeout_seconds))
+    table.add_row("Force", "true" if plan.force else "false")
     table.add_row("Run", plan.run_id or "new")
     table.add_row("Run path", plan.run_path)
     table.add_row("Next node step", str(plan.next_node_step))

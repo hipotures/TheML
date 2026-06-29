@@ -37,6 +37,7 @@ class BranchRunPlan:
     profile_id: str
     profile_hash: str
     execution_timeout_seconds: int
+    force: bool
     run_id: str | None
     run_path: str
     next_node_step: int
@@ -62,6 +63,7 @@ def branch_run_plan(
     *,
     branch_id: str | None = None,
     profile_overrides: dict[str, object] | None = None,
+    force: bool = False,
 ) -> BranchRunPlan:
     upsert_project(project_dir)
     config = load_project_config(project_dir)
@@ -76,7 +78,7 @@ def branch_run_plan(
     for record in candidates:
         bid = str(record["branch_id"])
         code_hash = str(record["code_hash"])
-        if branch_already_evaluated(project_dir, branch_id=bid, mode=active_run_mode, profile_id=profile_id, code_hash=code_hash):
+        if not force and branch_already_evaluated(project_dir, branch_id=bid, mode=active_run_mode, profile_id=profile_id, code_hash=code_hash):
             already_done += 1
             continue
         pending_ids.append(bid)
@@ -85,6 +87,7 @@ def branch_run_plan(
         profile_id=profile_id,
         profile_hash=profile_hash(project_dir, active_run_mode, profile_id),
         execution_timeout_seconds=_execution_timeout_seconds(profile_overrides),
+        force=force,
         run_id=run_id_value,
         run_path=f"runs/{run_id_value}" if run_id_value else "new run on start",
         next_node_step=next_node_step(project_dir, run_id_value) if run_id_value else 1,
@@ -142,6 +145,7 @@ def run_missing_branches(
     *,
     branch_id: str | None = None,
     profile_overrides: dict[str, object] | None = None,
+    force: bool = False,
     progress: Callable[[str], None] | None = None,
 ) -> list[str]:
     upsert_project(project_dir)
@@ -151,7 +155,11 @@ def run_missing_branches(
     run = active_or_create_run(project_dir)
     ran: list[str] = []
     next_step = next_node_step(project_dir, run.name)
-    pending_records = pending_branch_run_candidates(project_dir, mode=mode, profile_id=profile_id, branch_id=branch_id)
+    pending_records = (
+        branch_run_candidates(project_dir, mode, branch_id=branch_id)
+        if force
+        else pending_branch_run_candidates(project_dir, mode=mode, profile_id=profile_id, branch_id=branch_id)
+    )
     pending_total = len(pending_records)
     for pending_index, record in enumerate(pending_records, start=1):
         item = _run_branch_record(

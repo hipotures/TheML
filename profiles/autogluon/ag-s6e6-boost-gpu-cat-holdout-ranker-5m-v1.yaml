@@ -6,7 +6,7 @@ included_model_types:
 - CAT
 presets: medium_quality
 time_limit: 300
-preprocess_timeout: 90
+preprocess_timeout: 900
 validation_strategy: holdout
 seed: 42
 class_balance: balanced
