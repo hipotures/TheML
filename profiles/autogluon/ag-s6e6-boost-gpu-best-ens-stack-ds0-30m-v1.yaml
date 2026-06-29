@@ -1,0 +1,40 @@
+schema_version: 1
+profile_id: ag-s6e6-boost-gpu-best-ens-stack-ds0-30m-v1
+source_profile: tml.s6e6_boost_gpu_best_ens_stack_ds0_30m
+mode: autogluon
+included_model_types:
+- XGB
+- GBM
+- CAT
+presets: best_quality
+time_limit: 1450
+preprocess_timeout: 120
+validation_strategy: autogluon
+seed: 42
+class_balance: balanced
+use_gpu: true
+hyperparameters:
+  XGB:
+  - device: cuda
+    tree_method: hist
+    ag_args:
+      priority: 999
+    ag_args_fit:
+      num_gpus: 1
+  GBM:
+  - device: cuda
+    ag_args_fit:
+      num_gpus: 1
+  CAT:
+  - task_type: GPU
+    devices: '0'
+    gpu_ram_part: 0.8
+    ag_args_fit:
+      num_gpus: 1
+fit_args:
+  dynamic_stacking: false
+  num_bag_folds: 8
+  num_bag_sets: 1
+  num_stack_levels: 1
+  fit_weighted_ensemble: true
+  save_space: true

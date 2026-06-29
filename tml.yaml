@@ -18,7 +18,7 @@ root:
     autogluon: ag-s6e6-boost-gpu-ens-v1
     legacy: legacy-root-start-v1
 rerun:
-  autogluon: ag-s6e6-boost-gpu-best-ens-stack-2h-v1
+  autogluon: ag-s6e6-boost-gpu-best-ens-stack-ds0-30m-v1
 models:
   metadata:
     provider: codex
