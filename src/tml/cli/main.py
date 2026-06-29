@@ -2914,20 +2914,24 @@ def _print_branch_status(
     )
     if only_executed and executed_ids:
         rows = [row for row in rows if str(row.get("branch_id") or "") in executed_ids]
+    best_score = _best_numeric(row.get("metric") for row in rows)
     displayed_index = 0
     for db_row in rows:
         bid = str(db_row.get("branch_id") or "")
         extra = "bold" if bid in executed_ids else None
-        table.add_row(*_branch_status_row(db_row, summary_limit=summary_limit), style=_zebra_style(displayed_index, extra=extra))
+        table.add_row(
+            *_branch_status_row(db_row, summary_limit=summary_limit, best_score=best_score),
+            style=_zebra_style(displayed_index, extra=extra),
+        )
         displayed_index += 1
     console.print(table)
 
 
-def _branch_status_row(db_row: dict[str, object], *, summary_limit: int) -> list[object]:
+def _branch_status_row(db_row: dict[str, object], *, summary_limit: int, best_score: float | None) -> list[object]:
     node_status = str(db_row.get("node_status") or "")
     if node_status:
         status = _run_status_text(node_status)
-        score = _format_score(db_row.get("metric"))
+        score = _score_text(db_row.get("metric"), best=best_score, style="reverse")
         decision_score = _format_score(db_row.get("decision_score"))
         node = str(db_row.get("node_id") or "")
         run_duration = _seconds_text(db_row.get("run_seconds"))
