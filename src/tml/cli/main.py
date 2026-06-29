@@ -1365,11 +1365,29 @@ def branch_delete_cmd(ctx: typer.Context) -> None:
         _abort(exc)
 
 
-@app.command("reindex", help="Rebuild the active project's local state database.")
-def reindex_cmd(scope: str | None = None, run_id: str | None = None) -> None:
+@app.command(
+    "reindex",
+    context_settings=EXTRA,
+    help=(
+        "Rebuild the active project's local state database.\n\n"
+        "Accepted key=value parameters:\n"
+        "  yes=true           Skip the confirmation prompt."
+    ),
+)
+def reindex_cmd(ctx: typer.Context) -> None:
     try:
-        _ = (scope, run_id)
+        _reject_positional(ctx.args, "tml reindex")
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"yes"}, "tml reindex")
+        assume_yes = _bool(overrides.get("yes", False))
         ref = active_project_ref()
+        if not assume_yes and not Confirm.ask(
+            f"Rebuild local state database for {ref.slug}? This clears local index tables first.",
+            default=False,
+            console=console,
+        ):
+            console.print("Reindex cancelled.")
+            return
         counts = reindex_project(ref.path, ref.db_path)
         console.print(
             f"Reindexed {counts['hypotheses']} hypotheses, "
