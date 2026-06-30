@@ -146,13 +146,84 @@ def main():
             return gz
         return data_dir / f"{{stem}}.csv"
 
-    def _root_external_enabled():
+    def _root_config():
         try:
-            root_config = read_yaml(context_path(repo_root_for_project(project_dir)))
+            return read_yaml(context_path(repo_root_for_project(project_dir)))
         except Exception:
-            root_config = {{}}
+            return {{}}
+
+    def _root_external_enabled():
+        root_config = _root_config()
         external = root_config.get("external") if isinstance(root_config.get("external"), dict) else {{}}
         return bool(external.get("enabled", False))
+
+    def _bool_option(value, default=False):
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {{"1", "true", "yes", "on"}}:
+                return True
+            if normalized in {{"0", "false", "no", "off"}}:
+                return False
+        raise ValueError(f"Invalid boolean option value: {{value!r}}")
+
+    def _positive_float_option(value, name):
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{{name}} must be numeric") from exc
+        if numeric <= 0:
+            raise ValueError(f"{{name}} must be greater than 0")
+        return numeric
+
+    def _fraction_option(value, name):
+        fraction = _positive_float_option(value, name)
+        if fraction >= 1:
+            raise ValueError(f"{{name}} must be greater than 0 and less than 1")
+        return fraction
+
+    def _positive_int_option(value, name):
+        try:
+            numeric = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{{name}} must be an integer") from exc
+        if numeric <= 0:
+            raise ValueError(f"{{name}} must be greater than 0")
+        return numeric
+
+    def _autogluon_runtime_options():
+        root_config = _root_config()
+        autogluon = root_config.get("autogluon") if isinstance(root_config.get("autogluon"), dict) else {{}}
+        audit = autogluon.get("audit_score") if isinstance(autogluon.get("audit_score"), dict) else {{}}
+        feature_importance = (
+            autogluon.get("feature_importance")
+            if isinstance(autogluon.get("feature_importance"), dict)
+            else {{}}
+        )
+        return {{
+            "audit_score": {{
+                "enabled": _bool_option(audit.get("enabled"), default=False),
+                "fraction": _fraction_option(audit.get("fraction", 0.1), "autogluon.audit_score.fraction"),
+            }},
+            "feature_importance": {{
+                "enabled": _bool_option(feature_importance.get("enabled"), default=False),
+                "subsample_size": _positive_float_option(
+                    feature_importance.get("subsample_size", 0.1),
+                    "autogluon.feature_importance.subsample_size",
+                ),
+                "num_shuffle_sets": _positive_int_option(
+                    feature_importance.get("num_shuffle_sets", 10),
+                    "autogluon.feature_importance.num_shuffle_sets",
+                ),
+                "include_confidence_band": _bool_option(
+                    feature_importance.get("include_confidence_band"),
+                    default=True,
+                ),
+            }},
+        }}
 
     def _project_external_file(config):
         external = config.get("external") if isinstance(config.get("external"), dict) else {{}}
@@ -249,7 +320,7 @@ def main():
             return value
         return str(value)
 
-    def _leaderboard_records(predictor):
+    def _leaderboard_records(predictor, leaderboard=None):
         keep_columns = [
             "model",
             "score_val",
@@ -259,29 +330,56 @@ def main():
             "fit_time_marginal",
             "pred_time_val",
             "pred_time_val_marginal",
+            "pred_time_test",
+            "pred_time_test_marginal",
             "stack_level",
             "can_infer",
             "fit_order",
         ]
-        try:
-            leaderboard = predictor.leaderboard(silent=True)
-        except Exception as exc:
-            return [{{"error": f"leaderboard unavailable: {{type(exc).__name__}}: {{exc}}"}}]
+        if leaderboard is None:
+            try:
+                leaderboard = predictor.leaderboard(silent=True)
+            except Exception as exc:
+                return [{{"error": f"leaderboard unavailable: {{type(exc).__name__}}: {{exc}}"}}]
         return [
             {{column: _json_safe_scalar(row.get(column)) for column in keep_columns if column in row}}
             for row in leaderboard.to_dict(orient="records")
         ]
 
-    def _metric_from_leaderboard(predictor):
-        try:
-            leaderboard = predictor.leaderboard(silent=True)
-        except Exception:
-            return None
-        for column in ("score_val", "score_test"):
+    def _metric_from_leaderboard(leaderboard, score_columns):
+        for column in score_columns:
             if column in leaderboard.columns and not leaderboard.empty:
-                value = leaderboard[column].max()
-                return float(value) if pd.notna(value) else None
+                values = leaderboard[column].dropna()
+                if not values.empty:
+                    return float(values.max())
         return None
+
+    def _best_model_from_leaderboard(leaderboard, score_column):
+        if score_column not in leaderboard.columns or "model" not in leaderboard.columns or leaderboard.empty:
+            return None
+        scored = leaderboard.dropna(subset=[score_column])
+        if scored.empty:
+            return None
+        return str(scored.sort_values(score_column, ascending=False).iloc[0]["model"])
+
+    def _print_leaderboard(leaderboard):
+        display_columns = [
+            "model",
+            "score_val",
+            "score_test",
+            "eval_metric",
+            "fit_time",
+            "pred_time_val",
+            "pred_time_test",
+            "stack_level",
+            "fit_order",
+        ]
+        available = [column for column in display_columns if column in leaderboard.columns]
+        print("TML_RUNTIME|leaderboard", flush=True)
+        if available and not leaderboard.empty:
+            print(leaderboard[available].to_string(index=False), flush=True)
+        else:
+            print("TML_RUNTIME|leaderboard|status=empty", flush=True)
 
     def _prediction_from_proba(proba):
         if isinstance(proba, pd.Series):
@@ -319,7 +417,20 @@ def main():
         frame.to_csv(path, index=False, compression="gzip")
         return path
 
-    def _save_autogluon_prediction_artifacts(predictor, train_target, test_model, test_ids, test_pred, eval_metric, id_col, target_col, valid_data, valid_pred):
+    def _save_autogluon_prediction_artifacts(
+        predictor,
+        train_target,
+        test_model,
+        test_ids,
+        test_pred,
+        eval_metric,
+        id_col,
+        target_col,
+        valid_data,
+        valid_pred,
+        audit_data,
+        audit_pred,
+    ):
         artifacts = {{}}
         test_predictions = pd.DataFrame({{
             id_col: pd.Series(test_ids).reset_index(drop=True),
@@ -402,7 +513,91 @@ def main():
             validation_path = _save_prediction_artifact(validation_frame, "validation_predictions.csv")
             artifacts["validation_predictions"] = str(validation_path)
             artifacts["validation_rows"] = int(len(validation_frame))
+        if audit_data is not None and audit_pred is not None:
+            audit_frame = pd.DataFrame({{
+                "row": np.arange(len(audit_data)),
+                "target": audit_data[target_col].reset_index(drop=True),
+                "prediction": pd.Series(audit_pred).reset_index(drop=True),
+            }})
+            audit_path = _save_prediction_artifact(audit_frame, "audit_predictions.csv")
+            artifacts["audit_predictions"] = str(audit_path)
+            artifacts["audit_rows"] = int(len(audit_frame))
         return artifacts
+
+    def _feature_importance_subsample_size(value, row_count):
+        numeric = _positive_float_option(value, "autogluon.feature_importance.subsample_size")
+        if numeric <= 1:
+            return max(1, int(round(row_count * numeric)))
+        return int(numeric)
+
+    def _compute_feature_importance(predictor, audit_data, valid_data, group_features, config):
+        stats = {{
+            "enabled": bool(config.get("enabled")),
+            "status": "disabled",
+        }}
+        if not stats["enabled"]:
+            return stats
+        source_name = None
+        source_data = None
+        if audit_data is not None:
+            source_name = "audit"
+            source_data = audit_data
+        elif valid_data is not None:
+            source_name = "validation"
+            source_data = valid_data
+        if source_data is None:
+            stats.update({{"status": "skipped", "reason": "no_audit_or_validation_data"}})
+            print("TML_RUNTIME|feature_importance|status=skipped|reason=no_audit_or_validation_data", flush=True)
+            return stats
+        available_features = set(predictor.feature_metadata_in.get_features())
+        fi_group_features = [feature for feature in group_features if feature in available_features]
+        if not fi_group_features:
+            stats.update({{"status": "skipped", "reason": "no_group_features_available"}})
+            print("TML_RUNTIME|feature_importance|status=skipped|reason=no_group_features_available", flush=True)
+            return stats
+        subsample_size = _feature_importance_subsample_size(config.get("subsample_size", 0.1), len(source_data))
+        feature_spec = [("TML_GROUP_FEATURES_ALL", fi_group_features), *fi_group_features]
+        print(
+            f"TML_RUNTIME|event=start|stage=feature_importance|source={{source_name}}|features={{len(fi_group_features)}}|subsample_size={{subsample_size}}",
+            flush=True,
+        )
+        started_at = time.time()
+        fi = predictor.feature_importance(
+            data=source_data,
+            features=feature_spec,
+            subsample_size=subsample_size,
+            num_shuffle_sets=int(config.get("num_shuffle_sets", 10)),
+            include_confidence_band=bool(config.get("include_confidence_band", True)),
+        )
+        elapsed = time.time() - started_at
+        fi_path = artifacts_dir / "feature_importance.csv.gz"
+        fi.to_csv(fi_path, index=True, compression="gzip")
+        negative_count = int((fi["importance"] < 0).sum()) if "importance" in fi.columns else None
+        high_columns = [column for column in fi.columns if str(column).endswith("_high")]
+        confident_negative_count = None
+        if high_columns:
+            confident_negative_count = int((fi[high_columns[0]] < 0).sum())
+        stats.update({{
+            "status": "ok",
+            "source": source_name,
+            "path": str(fi_path),
+            "source_rows": int(len(source_data)),
+            "subsample_size": int(subsample_size),
+            "group_feature_count": int(len(fi_group_features)),
+            "reported_rows": int(len(fi)),
+            "num_shuffle_sets": int(config.get("num_shuffle_sets", 10)),
+            "include_confidence_band": bool(config.get("include_confidence_band", True)),
+            "elapsed_s": float(elapsed),
+            "negative_count": negative_count,
+            "confident_negative_count": confident_negative_count,
+        }})
+        print(f"TML_RUNTIME|event=end|stage=feature_importance|elapsed_s={{elapsed:.3f}}", flush=True)
+        print(
+            f"TML_RUNTIME|feature_importance|status=ok|source={{source_name}}|features={{len(fi_group_features)}}|subsample_size={{subsample_size}}|elapsed_s={{elapsed:.3f}}|negative={{negative_count}}|confident_negative={{confident_negative_count}}",
+            flush=True,
+        )
+        print(f"TML_RUNTIME|artifact=feature_importance|path={{fi_path}}", flush=True)
+        return stats
 
     def _make_submission(sample, test_ids, test_pred, id_col, target_col):
         prediction_frame = pd.DataFrame({{
@@ -445,7 +640,20 @@ def main():
         weights_by_class = len(labels) / (len(counts) * counts.astype(float))
         return labels.map(weights_by_class).astype(float).to_numpy()
 
-    def _training_plan_from_profile(train_model, target_col, profile):
+    def _split_frame(frame, target_col, test_size, seed):
+        from sklearn.model_selection import train_test_split
+
+        if not 0 < float(test_size) < 1:
+            raise ValueError(f"split fraction must be between 0 and 1, got {{test_size!r}}")
+        stratify = frame[target_col] if _should_stratify_holdout(frame[target_col]) else None
+        return train_test_split(
+            frame,
+            test_size=float(test_size),
+            random_state=seed,
+            stratify=stratify,
+        )
+
+    def _training_plan_from_profile(train_model, target_col, profile, audit_config):
         train_model = train_model.copy()
         if profile.get("class_balance") == "balanced":
             train_model[class_weight_col] = _balanced_sample_weight(train_model[target_col])
@@ -453,27 +661,57 @@ def main():
         fit_args = dict(profile.get("fit_args") or {{}}) if isinstance(profile.get("fit_args"), dict) else {{}}
         bagged_mode = int(fit_args.get("num_bag_folds") or 0) > 0 or bool(fit_args.get("auto_stack"))
         defer_save_space = bool(bagged_mode and fit_args.pop("save_space", False))
+        seed = int(profile.get("seed", 42))
+        audit_enabled = bool(audit_config.get("enabled"))
+        audit_fraction = float(audit_config.get("fraction", 0.1)) if audit_enabled else 0.0
+        audit_data = None
+        split_stats = {{
+            "audit_enabled": audit_enabled,
+            "audit_fraction": audit_fraction if audit_enabled else None,
+            "validation_strategy": profile.get("validation_strategy"),
+            "bagged_mode": bagged_mode,
+        }}
+        if audit_enabled:
+            train_model, audit_data = _split_frame(
+                train_model,
+                target_col,
+                audit_fraction,
+                seed,
+            )
+            split_stats["audit_rows"] = int(len(audit_data))
+            print(
+                f"AutoGluon materialization: audit rows={{len(audit_data)}} remaining_rows={{len(train_model)}} fraction={{audit_fraction}}",
+                flush=True,
+            )
         if bagged_mode:
             print("AutoGluon materialization: bagged mode detected; using internal OOF validation without tuning_data", flush=True)
-            return train_model, None, fit_args, defer_save_space
+            split_stats["train_rows"] = int(len(train_model))
+            return train_model, None, audit_data, fit_args, defer_save_space, split_stats
 
         if profile.get("validation_strategy") == "holdout":
-            from sklearn.model_selection import train_test_split
-
-            stratify = train_model[target_col] if _should_stratify_holdout(train_model[target_col]) else None
-            train_data, valid_data = train_test_split(
+            validation_fraction = float(profile.get("validation_fraction", 0.1 if audit_enabled else 0.2))
+            if audit_enabled and audit_fraction + validation_fraction >= 1:
+                raise ValueError("audit_score.fraction + validation_fraction must be < 1")
+            holdout_test_size = validation_fraction / (1.0 - audit_fraction) if audit_enabled else validation_fraction
+            train_data, valid_data = _split_frame(
                 train_model,
-                test_size=float(profile.get("validation_fraction", 0.2)),
-                random_state=int(profile.get("seed", 42)),
-                stratify=stratify,
+                target_col,
+                holdout_test_size,
+                seed,
             )
+            split_stats.update({{
+                "validation_fraction": validation_fraction,
+                "validation_rows": int(len(valid_data)),
+                "train_rows": int(len(train_data)),
+            }})
             print(
                 f"AutoGluon materialization: holdout validation rows={{len(valid_data)}} train_rows={{len(train_data)}}",
                 flush=True,
             )
-            return train_data, valid_data, fit_args, defer_save_space
+            return train_data, valid_data, audit_data, fit_args, defer_save_space, split_stats
 
-        return train_model, None, fit_args, defer_save_space
+        split_stats["train_rows"] = int(len(train_model))
+        return train_model, None, audit_data, fit_args, defer_save_space, split_stats
 
     def _fit_kwargs_from_profile(profile, train_data, valid_data, fit_args):
         fit_kwargs = {{"train_data": train_data}}
@@ -495,6 +733,7 @@ def main():
                 target_col = str(target.get("target_column") or "target")
                 id_col = str(target.get("id_column") or "id")
                 metric = str(target.get("autogluon_metric") or target.get("metric") or "balanced_accuracy")
+                runtime_options = _autogluon_runtime_options()
                 profile_id = explicit_profile_id or active_profile_id(config, "autogluon")
                 profile = load_profile(project_dir, "autogluon", profile_id)
                 profile.update(profile_overrides)
@@ -542,12 +781,14 @@ def main():
                 if ignored_columns:
                     print(f"AutoGluon materialization: ignored_columns={{ignored_columns}}", flush=True)
                 train_out[target_col] = train[target_col].reset_index(drop=True)
-                train_target = train[target_col].reset_index(drop=True)
-                train_data, valid_data, fit_args, defer_save_space = _training_plan_from_profile(
+                group_features = [column for column in transformed.columns if str(column).startswith("G")]
+                train_data, valid_data, audit_data, fit_args, defer_save_space, split_stats = _training_plan_from_profile(
                     train_out,
                     target_col,
                     profile,
+                    runtime_options["audit_score"],
                 )
+                train_target = train_data[target_col].reset_index(drop=True)
 
                 predictor_args = dict(profile.get("predictor_args", {{}}) or {{}})
                 predictor_args.setdefault("label", target_col)
@@ -574,15 +815,35 @@ def main():
 
                 print("TML_RUNTIME|event=start|stage=autogluon_predict", flush=True)
                 valid_pred = None
-                metric_value = _metric_from_leaderboard(predictor)
+                audit_pred = None
+                leaderboard = predictor.leaderboard(data=audit_data, silent=True)
+                leaderboard_path = _save_prediction_artifact(leaderboard, "leaderboard.csv")
+                _print_leaderboard(leaderboard)
+                score_columns = ("score_test",) if audit_data is not None else ("score_val", "score_test")
+                metric_value = _metric_from_leaderboard(leaderboard, score_columns)
+                if audit_data is not None and metric_value is None:
+                    raise ValueError("Audit score is enabled but AutoGluon leaderboard did not produce score_test")
+                selected_model = _best_model_from_leaderboard(
+                    leaderboard,
+                    "score_test" if audit_data is not None else "score_val",
+                )
+                if selected_model:
+                    print(
+                        f"TML_RUNTIME|selected_model={{selected_model}}|score_source={{'audit_score_test' if audit_data is not None else 'autogluon_validation'}}",
+                        flush=True,
+                    )
                 lower_is_better = False
                 if valid_data is not None:
                     valid_features = valid_data.drop(columns=[target_col, class_weight_col], errors="ignore")
-                    valid_pred = _predict_values(predictor, valid_features, metric)
-                    scores = predictor.evaluate(valid_data, silent=True)
-                    if metric in scores:
-                        metric_value = float(scores[metric])
-                predictions = _predict_values(predictor, test_out, metric)
+                    valid_pred = _predict_values(predictor, valid_features, metric, model=selected_model)
+                    if audit_data is None and metric_value is None:
+                        scores = predictor.evaluate(valid_data, silent=True)
+                        if metric in scores:
+                            metric_value = float(scores[metric])
+                if audit_data is not None:
+                    audit_features = audit_data.drop(columns=[target_col, class_weight_col], errors="ignore")
+                    audit_pred = _predict_values(predictor, audit_features, metric, model=selected_model)
+                predictions = _predict_values(predictor, test_out, metric, model=selected_model)
                 prediction_artifacts = _save_autogluon_prediction_artifacts(
                     predictor,
                     train_target,
@@ -594,6 +855,16 @@ def main():
                     target_col,
                     valid_data,
                     valid_pred,
+                    audit_data,
+                    audit_pred,
+                )
+                prediction_artifacts["leaderboard"] = str(leaderboard_path)
+                feature_importance_stats = _compute_feature_importance(
+                    predictor,
+                    audit_data,
+                    valid_data,
+                    group_features,
+                    runtime_options["feature_importance"],
                 )
                 if defer_save_space:
                     try:
@@ -612,6 +883,9 @@ def main():
                     print(f"TML_RUNTIME|artifact=oof_predictions|status=unavailable|reason={{prediction_artifacts['oof_error']}}", flush=True)
                 if prediction_artifacts.get("validation_predictions"):
                     print(f"TML_RUNTIME|artifact=validation_predictions|path={{prediction_artifacts['validation_predictions']}}", flush=True)
+                if prediction_artifacts.get("audit_predictions"):
+                    print(f"TML_RUNTIME|artifact=audit_predictions|path={{prediction_artifacts['audit_predictions']}}", flush=True)
+                print(f"TML_RUNTIME|artifact=leaderboard|path={{leaderboard_path}}", flush=True)
                 print(f"TML_RUNTIME|artifact=test_predictions|path={{prediction_artifacts['test_predictions']}}", flush=True)
                 if metric_value is not None:
                     print(f"TML_RUNTIME|metric={{metric}}|value={{metric_value:.6f}}", flush=True)
@@ -629,8 +903,12 @@ def main():
                         "preprocess_time": float(preprocess_time),
                         "training_time": float(training_time),
                         "eval_metric": str(getattr(predictor.eval_metric, "name", predictor.eval_metric)),
-                        "models": _leaderboard_records(predictor),
+                        "score_source": "audit_score_test" if audit_data is not None else "autogluon_validation",
+                        "selected_model": selected_model,
+                        "split": split_stats,
+                        "models": _leaderboard_records(predictor, leaderboard),
                         "prediction_artifacts": prediction_artifacts,
+                        "feature_importance": feature_importance_stats,
                     }},
                 }}
                 print("TML_RESULT_JSON: " + json.dumps(result, sort_keys=True), flush=True)

@@ -23,6 +23,18 @@ ROOT_CONFIG_DEFAULTS: dict[str, Any] = {
     },
     "active_project": None,
     "active_run": None,
+    "autogluon": {
+        "audit_score": {
+            "enabled": False,
+            "fraction": 0.1,
+        },
+        "feature_importance": {
+            "enabled": False,
+            "subsample_size": 0.1,
+            "num_shuffle_sets": 10,
+            "include_confidence_band": True,
+        },
+    },
     "models": {
         "metadata": "mock",
         "hypothesis": "mock",
@@ -174,6 +186,10 @@ def _merge_root_config(existing: dict[str, Any]) -> dict[str, Any]:
         },
         "active_project": existing.get("active_project") if "active_project" in existing else None,
         "active_run": existing.get("active_run") if "active_run" in existing else None,
+        "autogluon": _merge_nested_config(
+            ROOT_CONFIG_DEFAULTS["autogluon"],
+            existing.get("autogluon"),
+        ),
         "models": {
             **ROOT_CONFIG_DEFAULTS["models"],
             **(existing.get("models") if isinstance(existing.get("models"), dict) else {}),
@@ -183,6 +199,21 @@ def _merge_root_config(existing: dict[str, Any]) -> dict[str, Any]:
             **(existing.get("providers") if isinstance(existing.get("providers"), dict) else {}),
         },
     }
+    return merged
+
+
+def _merge_nested_config(defaults: dict[str, Any], existing: object) -> dict[str, Any]:
+    existing_dict = existing if isinstance(existing, dict) else {}
+    merged: dict[str, Any] = {}
+    for key, default_value in defaults.items():
+        existing_value = existing_dict.get(key)
+        if isinstance(default_value, dict):
+            merged[key] = _merge_nested_config(default_value, existing_value)
+        else:
+            merged[key] = existing_value if key in existing_dict else default_value
+    for key, value in existing_dict.items():
+        if key not in merged:
+            merged[key] = value
     return merged
 
 

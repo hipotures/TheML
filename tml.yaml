@@ -7,6 +7,15 @@ defaults:
   probe_output: tmp
 external:
   enabled: true
+autogluon:
+  audit_score:
+    enabled: false
+    fraction: 0.1
+  feature_importance:
+    enabled: false
+    subsample_size: 0.1
+    num_shuffle_sets: 10
+    include_confidence_band: true
 env:
   TML_WIDE_TERMINAL: 80
 active_project:

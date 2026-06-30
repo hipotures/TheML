@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import signal
+import time
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,8 +46,10 @@ RESERVED_PROFILE_KEYS = {
 class TrainingPlan:
     train_data: Any
     valid_data: Any | None
+    audit_data: Any | None
     fit_args: dict[str, object]
     defer_save_space: bool
+    split_stats: dict[str, object]
 
 
 def run_autogluon_materialization(
@@ -127,6 +130,7 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path, profile_
     metric = str(target.get("autogluon_metric") or target.get("metric") or "balanced_accuracy")
     resolved_profile_id = profile_id or active_profile_id(config, "autogluon")
     profile = _load_profile(project_dir, resolved_profile_id)
+    runtime_options = _autogluon_runtime_options(project_dir)
 
     data_dir = project_dir / "data"
     train = pd.read_csv(_data_file(data_dir, "train.csv"))
@@ -167,7 +171,12 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path, profile_
     ignored_columns = _ignored_columns_from_profile(profile, id_col=id_col, columns=train_out.columns)
     train_out[target_col] = train[target_col].reset_index(drop=True)
 
-    training_plan = _training_plan_from_profile(train_out, target_col, profile)
+    training_plan = _training_plan_from_profile(
+        train_out,
+        target_col,
+        profile,
+        audit_config=runtime_options["audit_score"],
+    )
     predictor = TabularPredictor(
         **_predictor_kwargs_from_profile(
             label=target_col,
@@ -185,7 +194,13 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path, profile_
     )
     predictor.fit(**fit_kwargs)
 
-    predictions = predictor.predict(test_out)
+    leaderboard = predictor.leaderboard(data=training_plan.audit_data, silent=True)
+    score_columns = ("score_test",) if training_plan.audit_data is not None else ("score_val", "score_test")
+    selected_model = _best_model_from_leaderboard(
+        leaderboard,
+        score_column="score_test" if training_plan.audit_data is not None else "score_val",
+    )
+    predictions = predictor.predict(test_out, model=selected_model)
     submission = sample.copy()
     prediction_cols = [col for col in submission.columns if col != id_col]
     if not prediction_cols:
@@ -195,15 +210,36 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path, profile_
     artifacts.mkdir(exist_ok=True)
     submission.to_csv(artifacts / "submission.csv.gz", index=False, compression="gzip")
 
-    leaderboard = predictor.leaderboard(silent=True)
+    leaderboard.to_csv(artifacts / "leaderboard.csv.gz", index=False, compression="gzip")
+    if training_plan.audit_data is not None:
+        audit_features = training_plan.audit_data.drop(columns=[target_col, CLASS_WEIGHT_COL], errors="ignore")
+        audit_predictions = predictor.predict(audit_features, model=selected_model)
+        audit_frame = pd.DataFrame(
+            {
+                "row": range(len(training_plan.audit_data)),
+                "target": training_plan.audit_data[target_col].reset_index(drop=True),
+                "prediction": pd.Series(audit_predictions).reset_index(drop=True),
+            }
+        )
+        audit_frame.to_csv(artifacts / "audit_predictions.csv.gz", index=False, compression="gzip")
+    _maybe_write_feature_importance(
+        predictor,
+        audit_data=training_plan.audit_data,
+        valid_data=training_plan.valid_data,
+        group_features=[column for column in transformed.columns if str(column).startswith("G")],
+        config=runtime_options["feature_importance"],
+        artifacts_dir=artifacts,
+    )
     if training_plan.defer_save_space:
         try:
             predictor.save_space(remove_data=True, remove_fit_stack=True)
         except Exception:
             pass
-    if "score_val" in leaderboard.columns and not leaderboard.empty:
-        value = leaderboard.iloc[0]["score_val"]
-        return float(value) if pd.notna(value) else None
+    value = _metric_from_leaderboard(leaderboard, score_columns=score_columns)
+    if training_plan.audit_data is not None and value is None:
+        raise ValueError("Audit score is enabled but AutoGluon leaderboard did not produce score_test")
+    if value is not None:
+        return value
     return None
 
 
@@ -274,7 +310,89 @@ def _project_external_file(config: dict[str, Any]) -> object | None:
     return external.get("file") or external.get("path") or external.get("aux")
 
 
-def _training_plan_from_profile(train_model, target_col: str, profile: dict[str, object]) -> TrainingPlan:
+def _autogluon_runtime_options(project_dir: Path) -> dict[str, dict[str, object]]:
+    try:
+        root_config = read_yaml(context_path(repo_root_for_project(project_dir)))
+    except Exception:
+        root_config = {}
+    autogluon = root_config.get("autogluon") if isinstance(root_config.get("autogluon"), dict) else {}
+    audit = autogluon.get("audit_score") if isinstance(autogluon.get("audit_score"), dict) else {}
+    feature_importance = (
+        autogluon.get("feature_importance")
+        if isinstance(autogluon.get("feature_importance"), dict)
+        else {}
+    )
+    return {
+        "audit_score": {
+            "enabled": _bool_option(audit.get("enabled"), default=False),
+            "fraction": _fraction_option(audit.get("fraction", 0.1), "autogluon.audit_score.fraction"),
+        },
+        "feature_importance": {
+            "enabled": _bool_option(feature_importance.get("enabled"), default=False),
+            "subsample_size": _positive_float_option(
+                feature_importance.get("subsample_size", 0.1),
+                "autogluon.feature_importance.subsample_size",
+            ),
+            "num_shuffle_sets": _positive_int_option(
+                feature_importance.get("num_shuffle_sets", 10),
+                "autogluon.feature_importance.num_shuffle_sets",
+            ),
+            "include_confidence_band": _bool_option(
+                feature_importance.get("include_confidence_band"),
+                default=True,
+            ),
+        },
+    }
+
+
+def _bool_option(value: object, *, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    raise ValueError(f"Invalid boolean option value: {value!r}")
+
+
+def _fraction_option(value: object, name: str) -> float:
+    fraction = _positive_float_option(value, name)
+    if fraction >= 1:
+        raise ValueError(f"{name} must be greater than 0 and less than 1")
+    return fraction
+
+
+def _positive_float_option(value: object, name: str) -> float:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be numeric") from exc
+    if numeric <= 0:
+        raise ValueError(f"{name} must be greater than 0")
+    return numeric
+
+
+def _positive_int_option(value: object, name: str) -> int:
+    try:
+        numeric = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if numeric <= 0:
+        raise ValueError(f"{name} must be greater than 0")
+    return numeric
+
+
+def _training_plan_from_profile(
+    train_model,
+    target_col: str,
+    profile: dict[str, object],
+    *,
+    audit_config: dict[str, object],
+) -> TrainingPlan:
     train_model = train_model.copy()
     if profile.get("class_balance") == "balanced":
         train_model[CLASS_WEIGHT_COL] = _balanced_sample_weight(train_model[target_col])
@@ -282,27 +400,145 @@ def _training_plan_from_profile(train_model, target_col: str, profile: dict[str,
     fit_args = dict(profile.get("fit_args") or {}) if isinstance(profile.get("fit_args"), dict) else {}
     bagged_mode = int(fit_args.get("num_bag_folds") or 0) > 0 or bool(fit_args.get("auto_stack"))
     defer_save_space = bool(bagged_mode and fit_args.pop("save_space", False))
+    seed = int(profile.get("seed", 42))
+    audit_enabled = bool(audit_config.get("enabled"))
+    audit_fraction = float(audit_config.get("fraction", 0.1)) if audit_enabled else 0.0
+    audit_data = None
+    split_stats: dict[str, object] = {
+        "audit_enabled": audit_enabled,
+        "audit_fraction": audit_fraction if audit_enabled else None,
+        "validation_strategy": profile.get("validation_strategy"),
+        "bagged_mode": bagged_mode,
+    }
+    if audit_enabled:
+        train_model, audit_data = _split_frame(
+            train_model,
+            target_col,
+            test_size=audit_fraction,
+            seed=seed,
+        )
+        split_stats["audit_rows"] = int(len(audit_data))
+
     if bagged_mode:
-        return TrainingPlan(train_data=train_model, valid_data=None, fit_args=fit_args, defer_save_space=defer_save_space)
+        split_stats["train_rows"] = int(len(train_model))
+        return TrainingPlan(
+            train_data=train_model,
+            valid_data=None,
+            audit_data=audit_data,
+            fit_args=fit_args,
+            defer_save_space=defer_save_space,
+            split_stats=split_stats,
+        )
 
     if profile.get("validation_strategy") == "holdout":
-        from sklearn.model_selection import train_test_split
-
-        stratify = train_model[target_col] if _should_stratify_holdout(train_model[target_col]) else None
-        train_data, valid_data = train_test_split(
+        validation_fraction = float(
+            profile.get("validation_fraction", 0.1 if audit_enabled else 0.2)
+        )
+        if audit_enabled and audit_fraction + validation_fraction >= 1:
+            raise ValueError("audit_score.fraction + validation_fraction must be < 1")
+        holdout_test_size = validation_fraction / (1.0 - audit_fraction) if audit_enabled else validation_fraction
+        train_data, valid_data = _split_frame(
             train_model,
-            test_size=float(profile.get("validation_fraction", 0.2)),
-            random_state=int(profile.get("seed", 42)),
-            stratify=stratify,
+            target_col,
+            test_size=holdout_test_size,
+            seed=seed,
+        )
+        split_stats.update(
+            {
+                "validation_fraction": validation_fraction,
+                "validation_rows": int(len(valid_data)),
+                "train_rows": int(len(train_data)),
+            }
         )
         return TrainingPlan(
             train_data=train_data,
             valid_data=valid_data,
+            audit_data=audit_data,
             fit_args=fit_args,
             defer_save_space=defer_save_space,
+            split_stats=split_stats,
         )
 
-    return TrainingPlan(train_data=train_model, valid_data=None, fit_args=fit_args, defer_save_space=defer_save_space)
+    split_stats["train_rows"] = int(len(train_model))
+    return TrainingPlan(
+        train_data=train_model,
+        valid_data=None,
+        audit_data=audit_data,
+        fit_args=fit_args,
+        defer_save_space=defer_save_space,
+        split_stats=split_stats,
+    )
+
+
+def _split_frame(frame, target_col: str, *, test_size: float, seed: int):
+    from sklearn.model_selection import train_test_split
+
+    if not 0 < float(test_size) < 1:
+        raise ValueError(f"split fraction must be between 0 and 1, got {test_size!r}")
+    stratify = frame[target_col] if _should_stratify_holdout(frame[target_col]) else None
+    train_data, test_data = train_test_split(
+        frame,
+        test_size=float(test_size),
+        random_state=seed,
+        stratify=stratify,
+    )
+    return train_data, test_data
+
+
+def _metric_from_leaderboard(leaderboard, *, score_columns: tuple[str, ...]) -> float | None:
+    for column in score_columns:
+        if column in leaderboard.columns and not leaderboard.empty:
+            values = leaderboard[column].dropna()
+            if not values.empty:
+                return float(values.max())
+    return None
+
+
+def _best_model_from_leaderboard(leaderboard, *, score_column: str) -> str | None:
+    if score_column not in leaderboard.columns or "model" not in leaderboard.columns or leaderboard.empty:
+        return None
+    scored = leaderboard.dropna(subset=[score_column])
+    if scored.empty:
+        return None
+    return str(scored.sort_values(score_column, ascending=False).iloc[0]["model"])
+
+
+def _maybe_write_feature_importance(
+    predictor,
+    *,
+    audit_data,
+    valid_data,
+    group_features: list[object],
+    config: dict[str, object],
+    artifacts_dir: Path,
+) -> None:
+    if not bool(config.get("enabled")):
+        return
+    source_data = audit_data if audit_data is not None else valid_data
+    if source_data is None:
+        return
+    available_features = set(predictor.feature_metadata_in.get_features())
+    fi_group_features = [feature for feature in group_features if feature in available_features]
+    if not fi_group_features:
+        return
+    subsample_size = _feature_importance_subsample_size(config.get("subsample_size", 0.1), len(source_data))
+    started_at = time.perf_counter()
+    fi = predictor.feature_importance(
+        data=source_data,
+        features=[("TML_GROUP_FEATURES_ALL", fi_group_features), *fi_group_features],
+        subsample_size=subsample_size,
+        num_shuffle_sets=int(config.get("num_shuffle_sets", 10)),
+        include_confidence_band=bool(config.get("include_confidence_band", True)),
+    )
+    fi["elapsed_s"] = time.perf_counter() - started_at
+    fi.to_csv(artifacts_dir / "feature_importance.csv.gz", index=True, compression="gzip")
+
+
+def _feature_importance_subsample_size(value: object, row_count: int) -> int:
+    numeric = _positive_float_option(value, "autogluon.feature_importance.subsample_size")
+    if numeric <= 1:
+        return max(1, int(round(row_count * numeric)))
+    return int(numeric)
 
 
 def _fit_kwargs_from_profile(
