@@ -9,10 +9,10 @@ external:
   enabled: true
 autogluon:
   audit_score:
-    enabled: false
+    enabled: true
     fraction: 0.1
   feature_importance:
-    enabled: false
+    enabled: true
     subsample_size: 0.1
     num_shuffle_sets: 10
     include_confidence_band: true
