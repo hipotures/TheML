@@ -13,7 +13,7 @@ revisions:
     prefix: 03-hypothesis
 materializations:
   autogluon:
-    active: autogluon-004.py
+    active: autogluon-003.py
     files:
     - file: autogluon-001.py
       revision: 1
