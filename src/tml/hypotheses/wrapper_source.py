@@ -225,6 +225,20 @@ def main():
             }},
         }}
 
+    def _print_autogluon_runtime_options(options):
+        audit = options["audit_score"]
+        feature_importance = options["feature_importance"]
+        print(
+            "TML_RUNTIME|autogluon_options"
+            f"|audit_score_enabled={{bool(audit.get('enabled'))}}"
+            f"|audit_fraction={{audit.get('fraction')}}"
+            f"|feature_importance_enabled={{bool(feature_importance.get('enabled'))}}"
+            f"|fi_subsample_size={{feature_importance.get('subsample_size')}}"
+            f"|fi_num_shuffle_sets={{feature_importance.get('num_shuffle_sets')}}"
+            f"|fi_include_confidence_band={{bool(feature_importance.get('include_confidence_band'))}}",
+            flush=True,
+        )
+
     def _project_external_file(config):
         external = config.get("external") if isinstance(config.get("external"), dict) else {{}}
         return external.get("file") or external.get("path") or external.get("aux")
@@ -556,9 +570,11 @@ def main():
             print("TML_RUNTIME|feature_importance|status=skipped|reason=no_group_features_available", flush=True)
             return stats
         subsample_size = _feature_importance_subsample_size(config.get("subsample_size", 0.1), len(source_data))
+        num_shuffle_sets = int(config.get("num_shuffle_sets", 10))
+        include_confidence_band = bool(config.get("include_confidence_band", True))
         feature_spec = [("TML_GROUP_FEATURES_ALL", fi_group_features), *fi_group_features]
         print(
-            f"TML_RUNTIME|event=start|stage=feature_importance|source={{source_name}}|features={{len(fi_group_features)}}|subsample_size={{subsample_size}}",
+            f"TML_RUNTIME|event=start|stage=feature_importance|source={{source_name}}|features={{len(fi_group_features)}}|subsample_size={{subsample_size}}|configured_subsample_size={{config.get('subsample_size', 0.1)}}|num_shuffle_sets={{num_shuffle_sets}}|include_confidence_band={{include_confidence_band}}",
             flush=True,
         )
         started_at = time.time()
@@ -566,8 +582,8 @@ def main():
             data=source_data,
             features=feature_spec,
             subsample_size=subsample_size,
-            num_shuffle_sets=int(config.get("num_shuffle_sets", 10)),
-            include_confidence_band=bool(config.get("include_confidence_band", True)),
+            num_shuffle_sets=num_shuffle_sets,
+            include_confidence_band=include_confidence_band,
         )
         elapsed = time.time() - started_at
         fi_path = artifacts_dir / "feature_importance.csv.gz"
@@ -583,17 +599,18 @@ def main():
             "path": str(fi_path),
             "source_rows": int(len(source_data)),
             "subsample_size": int(subsample_size),
+            "configured_subsample_size": _json_safe_scalar(config.get("subsample_size", 0.1)),
             "group_feature_count": int(len(fi_group_features)),
             "reported_rows": int(len(fi)),
-            "num_shuffle_sets": int(config.get("num_shuffle_sets", 10)),
-            "include_confidence_band": bool(config.get("include_confidence_band", True)),
+            "num_shuffle_sets": num_shuffle_sets,
+            "include_confidence_band": include_confidence_band,
             "elapsed_s": float(elapsed),
             "negative_count": negative_count,
             "confident_negative_count": confident_negative_count,
         }})
         print(f"TML_RUNTIME|event=end|stage=feature_importance|elapsed_s={{elapsed:.3f}}", flush=True)
         print(
-            f"TML_RUNTIME|feature_importance|status=ok|source={{source_name}}|features={{len(fi_group_features)}}|subsample_size={{subsample_size}}|elapsed_s={{elapsed:.3f}}|negative={{negative_count}}|confident_negative={{confident_negative_count}}",
+            f"TML_RUNTIME|feature_importance|status=ok|source={{source_name}}|features={{len(fi_group_features)}}|subsample_size={{subsample_size}}|configured_subsample_size={{config.get('subsample_size', 0.1)}}|num_shuffle_sets={{num_shuffle_sets}}|include_confidence_band={{include_confidence_band}}|elapsed_s={{elapsed:.3f}}|negative={{negative_count}}|confident_negative={{confident_negative_count}}",
             flush=True,
         )
         print(f"TML_RUNTIME|artifact=feature_importance|path={{fi_path}}", flush=True)
@@ -734,6 +751,7 @@ def main():
                 id_col = str(target.get("id_column") or "id")
                 metric = str(target.get("autogluon_metric") or target.get("metric") or "balanced_accuracy")
                 runtime_options = _autogluon_runtime_options()
+                _print_autogluon_runtime_options(runtime_options)
                 profile_id = explicit_profile_id or active_profile_id(config, "autogluon")
                 profile = load_profile(project_dir, "autogluon", profile_id)
                 profile.update(profile_overrides)

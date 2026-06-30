@@ -131,6 +131,7 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path, profile_
     resolved_profile_id = profile_id or active_profile_id(config, "autogluon")
     profile = _load_profile(project_dir, resolved_profile_id)
     runtime_options = _autogluon_runtime_options(project_dir)
+    _print_autogluon_runtime_options(runtime_options)
 
     data_dir = project_dir / "data"
     train = pd.read_csv(_data_file(data_dir, "train.csv"))
@@ -345,6 +346,21 @@ def _autogluon_runtime_options(project_dir: Path) -> dict[str, dict[str, object]
     }
 
 
+def _print_autogluon_runtime_options(options: dict[str, dict[str, object]]) -> None:
+    audit = options["audit_score"]
+    feature_importance = options["feature_importance"]
+    print(
+        "TML_RUNTIME|autogluon_options"
+        f"|audit_score_enabled={bool(audit.get('enabled'))}"
+        f"|audit_fraction={audit.get('fraction')}"
+        f"|feature_importance_enabled={bool(feature_importance.get('enabled'))}"
+        f"|fi_subsample_size={feature_importance.get('subsample_size')}"
+        f"|fi_num_shuffle_sets={feature_importance.get('num_shuffle_sets')}"
+        f"|fi_include_confidence_band={bool(feature_importance.get('include_confidence_band'))}",
+        flush=True,
+    )
+
+
 def _bool_option(value: object, *, default: bool) -> bool:
     if value is None:
         return default
@@ -522,16 +538,30 @@ def _maybe_write_feature_importance(
     if not fi_group_features:
         return
     subsample_size = _feature_importance_subsample_size(config.get("subsample_size", 0.1), len(source_data))
+    num_shuffle_sets = int(config.get("num_shuffle_sets", 10))
+    include_confidence_band = bool(config.get("include_confidence_band", True))
+    print(
+        "TML_RUNTIME|event=start|stage=feature_importance"
+        f"|source={'audit' if audit_data is not None else 'validation'}"
+        f"|features={len(fi_group_features)}"
+        f"|subsample_size={subsample_size}"
+        f"|configured_subsample_size={config.get('subsample_size', 0.1)}"
+        f"|num_shuffle_sets={num_shuffle_sets}"
+        f"|include_confidence_band={include_confidence_band}",
+        flush=True,
+    )
     started_at = time.perf_counter()
     fi = predictor.feature_importance(
         data=source_data,
         features=[("TML_GROUP_FEATURES_ALL", fi_group_features), *fi_group_features],
         subsample_size=subsample_size,
-        num_shuffle_sets=int(config.get("num_shuffle_sets", 10)),
-        include_confidence_band=bool(config.get("include_confidence_band", True)),
+        num_shuffle_sets=num_shuffle_sets,
+        include_confidence_band=include_confidence_band,
     )
-    fi["elapsed_s"] = time.perf_counter() - started_at
+    elapsed = time.perf_counter() - started_at
+    fi["elapsed_s"] = elapsed
     fi.to_csv(artifacts_dir / "feature_importance.csv.gz", index=True, compression="gzip")
+    print(f"TML_RUNTIME|event=end|stage=feature_importance|elapsed_s={elapsed:.3f}", flush=True)
 
 
 def _feature_importance_subsample_size(value: object, row_count: int) -> int:
