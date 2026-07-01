@@ -3419,8 +3419,6 @@ def _submission_display_rows(rows: list[dict[str, object]]) -> list[tuple[str, d
 
 
 def _submission_row_style(group_index: int, *, is_child: bool) -> str:
-    if is_child:
-        return "on grey11"
     return "on grey23" if group_index % 2 else "on grey11"
 
 
