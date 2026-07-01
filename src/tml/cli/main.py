@@ -3633,7 +3633,7 @@ def _run_status_text(status: str) -> Text:
     if status == "started":
         return Text("●", style="cyan")
     if status == "execution_interrupted":
-        return Text("⏸", style="yellow")
+        return Text("✖", style="yellow")
     return Text(status.upper() or "?", style="yellow")
 
 
