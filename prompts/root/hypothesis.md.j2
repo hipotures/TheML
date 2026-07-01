@@ -2,6 +2,10 @@ You are designing feature-group hypothesis.
 
 {% include "blocks/task-context.md.j2" %}
 
+{% if external_description %}
+{{ external_description }}
+{% endif %}
+
 {% include "blocks/existing-root-hypotheses.md.j2" %}
 
 # Web search
