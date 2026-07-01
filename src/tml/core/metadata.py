@@ -293,6 +293,10 @@ def _build_data_overview(files: list[Path]) -> str:
     return "\n\n".join(section for section in sections if section).strip()
 
 
+def summarize_csv_data_file(path: Path) -> str:
+    return _summarize_csv_file(path)
+
+
 def _data_overview_body(text: str) -> str:
     stripped = text.strip()
     heading = "# Data Overview"

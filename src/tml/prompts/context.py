@@ -5,6 +5,7 @@ from typing import Any
 
 from tml.branches.algorithms import epsilon_delta, load_branch_algorithm, parse_score_epsilon
 from tml.core.config import active_branch_algorithm_id, load_project_config
+from tml.core.metadata import summarize_csv_data_file
 from tml.db.state import root_hypothesis_rows
 from tml.hypotheses.model import enabled_hypotheses
 
@@ -27,7 +28,14 @@ def project_prompt_context(project_dir: Path, **extra: Any) -> dict[str, Any]:
     task_text = task_file.read_text(encoding="utf-8") if task_file.exists() else ""
     data_overview_file = project_dir / "docs" / "data-overview.md"
     data_overview = data_overview_file.read_text(encoding="utf-8") if data_overview_file.exists() else ""
-    external_description = _external_description(project_dir, project)
+    external_description = "\n\n".join(
+        part
+        for part in (
+            _external_data_overview(project_dir, project),
+            _external_description(project_dir, project),
+        )
+        if part
+    )
     materialization_data_overview = _materialization_data_overview(
         data_overview,
         target_column=project.get("target", {}).get("target_column"),
@@ -147,8 +155,53 @@ def _external_description(project_dir: Path, project: dict[str, Any]) -> str:
     text = path.read_text(encoding="utf-8").strip()
     if not text:
         return ""
-    file_name = _display_path(project_dir, external.get("file") or external.get("path") or external.get("aux") or path.name)
+    file_value = _external_file_value(external)
+    file_name = _display_external_file(project_dir, project, file_value) if file_value else _display_path(project_dir, path)
     return f"# External Data Description for {file_name}\n\n{text}"
+
+
+def _external_data_overview(project_dir: Path, project: dict[str, Any]) -> str:
+    external = project.get("external") if isinstance(project.get("external"), dict) else {}
+    file_value = _external_file_value(external)
+    if not file_value:
+        return ""
+    path = _external_file_path(project_dir, project, file_value)
+    if not path.exists() or not path.is_file():
+        return ""
+    overview = summarize_csv_data_file(path).strip()
+    if not overview:
+        return ""
+    file_name = _display_external_file(project_dir, project, file_value)
+    return f"# External Data Overview for {file_name}\n\n{overview}"
+
+
+def _external_file_value(external: dict[str, Any]) -> object | None:
+    return external.get("file") or external.get("path") or external.get("aux")
+
+
+def _external_file_path(project_dir: Path, project: dict[str, Any], value: object) -> Path:
+    path = Path(str(value))
+    if path.is_absolute():
+        return path
+    project_relative = project_dir / path
+    if project_relative.exists():
+        return project_relative
+    return project_dir / str(project.get("data_dir") or "data") / path
+
+
+def _display_external_file(project_dir: Path, project: dict[str, Any], value: object) -> str:
+    path = Path(str(value))
+    if path.is_absolute():
+        try:
+            return path.relative_to(project_dir).as_posix()
+        except ValueError:
+            return str(path)
+    data_dir = Path(str(project.get("data_dir") or "data"))
+    if path.parts and path.parts[0] == data_dir.as_posix():
+        return path.as_posix()
+    if (project_dir / path).exists():
+        return path.as_posix()
+    return (data_dir / path).as_posix()
 
 
 def _display_path(project_dir: Path, value: object) -> str:

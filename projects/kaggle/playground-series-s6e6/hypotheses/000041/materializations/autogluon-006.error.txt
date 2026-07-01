@@ -1,1 +1,0 @@
-Invalid bugfix for hypothesis 000041 (autogluon); response=hypotheses/000041/materializations/autogluon-006.response.md: Group materialization must not call .predict()

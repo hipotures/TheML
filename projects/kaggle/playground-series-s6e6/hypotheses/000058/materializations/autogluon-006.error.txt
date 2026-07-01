@@ -1,1 +1,0 @@
-Invalid bugfix for hypothesis 000058 (autogluon); response=hypotheses/000058/materializations/autogluon-006.response.md: '(' was never closed (<unknown>, line 106)
