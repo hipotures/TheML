@@ -1,0 +1,46 @@
+schema_version: 1
+branch_id: B000023
+operation: add_existing_groups
+parent_ref: '000016'
+source_ref: '000023'
+parent:
+  ref: '000016'
+  source_type: hypothesis
+  source_id: '000016'
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: b59b1c04c4436e3495d92da83f118f60e6dd2724cd982e7b785f5a07340afdf8
+  path: hypotheses/000016/materializations/autogluon-001.py
+source:
+  ref: '000023'
+  source_type: hypothesis
+  source_id: '000023'
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: a415773386e2e4b19b64cc1568fd5f92c3c94d6aa6cee17891e6ea372bf033e1
+  path: hypotheses/000023/materializations/autogluon-001.py
+parent_edge:
+  kind: hypothesis
+  id: '000016'
+mode: autogluon
+status: materialized
+materialization_file: autogluon-001.py
+code_hash: b2beaf447dcb300bc193273d52282300e86bb8abebc9f621dd2c37b667a1ca94
+composition_hash: 23deeba40d7780dc1aaa61edb74bc99a67695ca81c6bb894f6b66d7a6164656a
+summary: Add 000023 groups to parent 000016.
+created_at: '2026-07-01T21:38:57'
+components:
+- role: parent
+  source_type: hypothesis
+  source_id: '000016'
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: b59b1c04c4436e3495d92da83f118f60e6dd2724cd982e7b785f5a07340afdf8
+  path: hypotheses/000016/materializations/autogluon-001.py
+- role: source
+  source_type: hypothesis
+  source_id: '000023'
+  mode: autogluon
+  file: autogluon-001.py
+  code_hash: a415773386e2e4b19b64cc1568fd5f92c3c94d6aa6cee17891e6ea372bf033e1
+  path: hypotheses/000023/materializations/autogluon-001.py
