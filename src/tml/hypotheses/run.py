@@ -291,7 +291,7 @@ def run_missing(
 def _execution_timeout_seconds(profile_overrides: dict[str, object] | None) -> int:
     overrides = profile_overrides or {}
     raw_time = overrides.get("time_limit", overrides.get("time"))
-    raw_preprocess = overrides.get("preprocess_timeout", 180)
+    raw_preprocess = overrides.get("preprocess_timeout", 900)
     try:
         time_limit = int(raw_time) if raw_time is not None else 900
     except (TypeError, ValueError):
@@ -299,7 +299,7 @@ def _execution_timeout_seconds(profile_overrides: dict[str, object] | None) -> i
     try:
         preprocess_timeout = int(raw_preprocess)
     except (TypeError, ValueError):
-        preprocess_timeout = 180
+        preprocess_timeout = 900
     return max(900, time_limit + preprocess_timeout + 300)
 
 def _write_success_markers(

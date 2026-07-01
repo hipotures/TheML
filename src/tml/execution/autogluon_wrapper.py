@@ -151,7 +151,7 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path, profile_
 
     train_features = train.drop(columns=[target_col])
     combined = pd.concat([train_features, test], ignore_index=True, sort=False)
-    with _preprocess_timeout(int(profile.get("preprocess_timeout", 180))):
+    with _preprocess_timeout(int(profile.get("preprocess_timeout", 900))):
         if has_feature_groups(module):
             transformed = run_feature_groups(
                 combined.copy(),

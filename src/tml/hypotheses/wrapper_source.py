@@ -798,7 +798,7 @@ def main():
 
                 print("AutoGluon materialization: starting feature groups", flush=True)
                 preprocess_started_at = time.time()
-                with _preprocess_timeout(int(profile.get("preprocess_timeout", 180))):
+                with _preprocess_timeout(int(profile.get("preprocess_timeout", 900))):
                     transformed = run_feature_groups(
                         combined.copy(),
                         FEATURE_GROUPS,
