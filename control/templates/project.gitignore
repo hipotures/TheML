@@ -13,6 +13,7 @@ tml.db-shm
 # Heavy ML artifacts
 **/AutoGluonModels/
 *.csv.gz
+*.tgz
 *.parquet
 *.pkl
 *.pickle

@@ -27,6 +27,7 @@ projects/**/workspaces/
 projects/**/runs/**/artifacts/**/work/
 **/AutoGluonModels/
 *.csv.gz
+*.tgz
 *.parquet
 *.pkl
 *.pickle
