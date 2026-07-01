@@ -20,7 +20,7 @@ env:
   TML_WIDE_TERMINAL: 80
 active_project:
   kind: kaggle
-  slug: playground-series-s6e6
+  slug: playground-series-s6e7
 active_run: null
 root:
   active_profiles:
@@ -44,7 +44,6 @@ models:
   materializations:
     provider: codex
     model: gpt-5.5
-    #model: gpt-5.3-codex-spark
     effort: xhigh
     timeout_seconds: 1200
   review: mock
@@ -82,12 +81,12 @@ providers:
     log_raw_jsonl: false
     log_raw_notifications: false
     disable_features:
-      - apps
-      - browser_use
-      - computer_use
-      - multi_agent
-      - plugins
-      - shell_snapshot
-      - skill_mcp_dependency_install
-      - tool_suggest
-      - workspace_dependencies
+    - apps
+    - browser_use
+    - computer_use
+    - multi_agent
+    - plugins
+    - shell_snapshot
+    - skill_mcp_dependency_install
+    - tool_suggest
+    - workspace_dependencies

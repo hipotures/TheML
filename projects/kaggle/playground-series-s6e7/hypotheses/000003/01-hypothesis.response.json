@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Response Completeness Signature\",\n  \"group_name\": \"response_completeness_signature\",\n  \"family\": \"informative_missingness\",\n  \"summary\": \"Represent each student's pattern of unanswered or unavailable health and lifestyle fields as a behavioral and measurement-completeness signal rather than treating missing values only as preprocessing noise.\",\n  \"depends_on\": [],\n  \"strategy\": \"Before any imputation, create binary missing indicators for each original non-id feature using is-null plus blank-string checks for categorical fields; add row-level missing_count and missing_ratio over all 13 features; add missing counts and ratios for numeric measurement fields versus categorical self-report fields; add focused counts for wellness-report fields such as stress, sleep, activity, smoking/alcohol, diet, and gender; add a compact completeness_bin with values complete, low_missing for 1-2 missing fields, moderate_missing for 3-4, and high_missing for 5 or more; if a column is absent in a future split, omit only that column's indicator and compute denominators from the available expected columns.\",\n  \"expected_signal\": \"Missingness can be non-random in health and survey data, and the provided columns have substantial missing rates, so co-missingness across stress, sleep, activity, smoking/alcohol, and sensor-like measurements may identify risk strata that raw observed values alone do not separate, especially for balanced accuracy on smaller classes; background sources consulted include https://feat.engineering/08-Handling_Missing_Data.html, https://arxiv.org/abs/2202.10580, and https://link.springer.com/article/10.1007/s00127-011-0387-3.\",\n  \"risk\": \"The signal may overfit collection or generation artifacts if train and test missingness mechanisms differ, and it may be partly redundant with downstream handling of NaN values; per-feature indicators also add moderate dimensionality without adding physiological content.\"\n}",
+  "usage": {
+    "threadId": "019f1d28-67c4-76b1-8b0f-b6ffb6ad5913",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 50892,
+        "outputTokens": 2353,
+        "reasoningOutputTokens": 1950,
+        "totalTokens": 53245
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 50892,
+        "outputTokens": 2353,
+        "reasoningOutputTokens": 1950,
+        "totalTokens": 53245
+      }
+    },
+    "turnId": "019f1d28-67d0-7833-911b-488603da446d"
+  },
+  "wall_ms": 128292,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}
