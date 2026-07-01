@@ -127,6 +127,7 @@ def run_one_branch(
     next_step = next_node_step(project_dir, run.name)
     return _run_branch_record(
         project_dir,
+        config=config,
         mode=mode,
         profile_id=profile_id,
         run=run,
@@ -164,6 +165,7 @@ def run_missing_branches(
     for pending_index, record in enumerate(pending_records, start=1):
         item = _run_branch_record(
             project_dir,
+            config=config,
             mode=mode,
             profile_id=profile_id,
             run=run,
@@ -182,6 +184,7 @@ def run_missing_branches(
 def _run_branch_record(
     project_dir: Path,
     *,
+    config: dict[str, object],
     mode: str,
     profile_id: str,
     run: Path,
