@@ -1011,6 +1011,8 @@ def root_run_cmd(ctx: typer.Context) -> None:
         "Mark a ROOT run node as disabled without deleting its artifacts.\n\n"
         "Accepted key=value parameters:\n"
         "  node=<node_id>     ROOT node to disable.\n"
+        "  sha=<prefix>       Disable the ROOT node that produced this submission SHA prefix.\n"
+        "  sha256=<prefix>    Alias for sha=<prefix>.\n"
         "  reason=<text>      Optional reason stored in node.disabled.yaml.\n"
         "  yes=true           Skip the confirmation prompt."
     ),
@@ -1020,10 +1022,16 @@ def root_disable_cmd(ctx: typer.Context) -> None:
         ref = active_project_ref()
         _reject_positional(ctx.args, "tml root disable")
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"node", "reason", "yes"}, "tml root disable")
+        _validate_override_keys(overrides, {"node", "sha", "sha256", "reason", "yes"}, "tml root disable")
         node_id = _optional_text(overrides.get("node"))
+        sha_prefix = _optional_text(overrides.get("sha") or overrides.get("sha256"))
+        if node_id and sha_prefix:
+            raise TmlError("Specify only one of node=<node_id> or sha=<submission_sha_prefix>.")
+        if sha_prefix:
+            row = submission_by_sha_prefix(ref.path, sha_prefix)
+            node_id = _optional_text(row.get("node_id"))
         if not node_id:
-            raise TmlError("Missing required parameter: node=<node_id>.")
+            raise TmlError("Missing required parameter: node=<node_id> or sha=<submission_sha_prefix>.")
         reason = _optional_text(overrides.get("reason"))
         node_dir = _resolve_root_node_dir(ref.path, node_id)
         start = read_yaml(node_dir / "node.start.yaml")
@@ -1044,6 +1052,7 @@ def root_disable_cmd(ctx: typer.Context) -> None:
                 "node_id": node_id,
                 "status": "disabled",
                 "reason": reason or "",
+                "submission_sha_prefix": sha_prefix or "",
                 "disabled_at": datetime.now().isoformat(timespec="seconds"),
             },
         )
@@ -1523,12 +1532,24 @@ def reindex_cmd(ctx: typer.Context) -> None:
 @app.command("subm", context_settings=EXTRA, help="Alias for submissions.")
 def submissions_cmd(ctx: typer.Context) -> None:
     try:
-        _reject_positional(ctx.args, "tml sub")
+        allowed_flags = {"--show-disabled", "--show-all", "--all"}
+        flag_args = {arg for arg in ctx.args if arg.startswith("--")}
+        unknown_flags = sorted(flag_args - allowed_flags)
+        if unknown_flags:
+            raise TmlError(f"Unexpected argument for tml sub: {unknown_flags[0]}")
+        _reject_positional([arg for arg in ctx.args if arg not in allowed_flags], "tml sub")
         overrides = _overrides(ctx.args)
-        _validate_override_keys(overrides, {"limit"}, "tml sub")
+        _validate_override_keys(overrides, {"limit", "show_disabled", "show_all", "all"}, "tml sub")
         limit = _submission_table_limit(overrides.get("limit"))
+        show_disabled = "--show-disabled" in flag_args or _bool(overrides.get("show_disabled", False))
+        show_all = (
+            "--show-all" in flag_args
+            or "--all" in flag_args
+            or _bool(overrides.get("show_all", False))
+            or _bool(overrides.get("all", False))
+        )
         ref = active_project_ref()
-        _print_submissions(ref.path, limit=limit)
+        _print_submissions(ref.path, limit=limit, show_disabled=show_disabled, show_all=show_all)
     except Exception as exc:
         _abort(exc)
 
@@ -3242,8 +3263,14 @@ def _print_root_run_request_status(project_dir: Path, *, mode: str, hypothesis_i
         console.print(f"Run skipped: hypothesis {hid} has no {mode} materialization. Run: uv run tml root materialize id={int(hid)}")
 
 
-def _print_submissions(project_dir: Path, *, limit: int | None = None) -> None:
-    rows = submission_rows(project_dir)
+def _print_submissions(
+    project_dir: Path,
+    *,
+    limit: int | None = None,
+    show_disabled: bool = False,
+    show_all: bool = False,
+) -> None:
+    rows = _visible_submission_rows(submission_rows(project_dir), show_disabled=show_disabled, show_all=show_all)
     display_rows = _submission_display_rows(rows)
     shown_rows = display_rows if limit is None else display_rows[:limit]
     title = "Submission candidates"
@@ -3280,7 +3307,7 @@ def _print_submissions(project_dir: Path, *, limit: int | None = None) -> None:
             _rank_text(row.get("public_rank") or row.get("computed_public_rank"), public_score),
             _score_text(local_score, best=best_local, style="bold black on bright_green"),
             _score_text(public_score, best=best_public, style="bold black on bright_cyan"),
-            _submit_status_text(row.get("submit_status")),
+            _submission_status_text(row),
             _kind_profile_text(row),
             _minutes_text(row.get("run_seconds")),
             _metric_short_text(row.get("metric")),
@@ -3311,6 +3338,19 @@ def _adaptive_table_limit(*, default: int) -> int:
     if terminal_rows <= 0:
         return default
     return max(default, int(terminal_rows * 0.65))
+
+
+def _visible_submission_rows(
+    rows: list[dict[str, Any]],
+    *,
+    show_disabled: bool,
+    show_all: bool,
+) -> list[dict[str, Any]]:
+    if show_all:
+        return rows
+    if show_disabled:
+        return [row for row in rows if str(row.get("status") or "") in {"complete", "disabled"}]
+    return [row for row in rows if str(row.get("status") or "") != "disabled"]
 
 
 def _submission_display_rows(rows: list[dict[str, object]]) -> list[tuple[str, dict[str, object], bool, int]]:
@@ -3536,6 +3576,12 @@ def _submit_status_text(value: object) -> Text:
     if text == "failed":
         return Text("✗", style="red")
     return Text((text[:1] or "?").upper())
+
+
+def _submission_status_text(row: dict[str, object]) -> Text:
+    if str(row.get("status") or "") == "disabled":
+        return Text("⊘", style="dim")
+    return _submit_status_text(row.get("submit_status"))
 
 
 def _kind_profile_text(row: dict[str, object]) -> str:

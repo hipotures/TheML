@@ -1405,17 +1405,14 @@ def submission_rows(project_dir: Path) -> list[dict[str, Any]]:
               )
           END AS cv_rank,
           CASE
-            WHEN s.status='complete' AND s.public_score IS NOT NULL THEN
+            WHEN s.public_score IS NOT NULL THEN
               RANK() OVER (
-                ORDER BY
-                  CASE WHEN s.status='complete' AND s.public_score IS NOT NULL THEN 0 ELSE 1 END,
-                  s.public_score DESC
+                ORDER BY CASE WHEN s.public_score IS NULL THEN 1 ELSE 0 END, s.public_score DESC
               )
           END AS computed_public_rank
         FROM submissions s
         LEFT JOIN nodes n ON n.node_id=s.node_id
         ORDER BY
-          CASE WHEN s.status='complete' THEN 0 ELSE 1 END,
           CASE WHEN s.local_score IS NULL THEN 1 ELSE 0 END,
           s.local_score DESC,
           s.created_at DESC
