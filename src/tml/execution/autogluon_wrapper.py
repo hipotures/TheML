@@ -123,6 +123,8 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path, profile_
     import pandas as pd
     from autogluon.tabular import TabularPredictor
 
+    _patch_xgboost_cpu_inference()
+
     config = load_project_config(project_dir)
     target = config.get("target", {}) if isinstance(config.get("target"), dict) else {}
     target_col = str(target.get("target_column") or "target")
@@ -242,6 +244,32 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path, profile_
     if value is not None:
         return value
     return None
+
+
+def _patch_xgboost_cpu_inference() -> None:
+    try:
+        from autogluon.tabular.models.xgboost.xgboost_model import XGBoostModel
+    except Exception:
+        return
+
+    if getattr(XGBoostModel, "_tml_cpu_inference_patch", False):
+        return
+
+    original_predict_proba = XGBoostModel._predict_proba
+
+    def _predict_proba_with_cpu_device(self, X, *args, **kwargs):
+        model = getattr(self, "model", None)
+        if model is not None:
+            try:
+                if model.get_params().get("device") != "cpu":
+                    model.set_params(device="cpu")
+                model.get_booster().set_param({"device": "cpu"})
+            except Exception:
+                pass
+        return original_predict_proba(self, X, *args, **kwargs)
+
+    XGBoostModel._predict_proba = _predict_proba_with_cpu_device
+    XGBoostModel._tml_cpu_inference_patch = True
 
 
 def _predictor_kwargs_from_profile(

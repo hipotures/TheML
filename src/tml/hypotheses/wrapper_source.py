@@ -60,6 +60,33 @@ def main():
 
     class_weight_col = "__tml_sample_weight"
 
+    def _patch_xgboost_cpu_inference():
+        try:
+            from autogluon.tabular.models.xgboost.xgboost_model import XGBoostModel
+        except Exception:
+            return
+
+        if getattr(XGBoostModel, "_tml_cpu_inference_patch", False):
+            return
+
+        original_predict_proba = XGBoostModel._predict_proba
+
+        def _predict_proba_with_cpu_device(self, X, *args, **kwargs):
+            model = getattr(self, "model", None)
+            if model is not None:
+                try:
+                    if model.get_params().get("device") != "cpu":
+                        model.set_params(device="cpu")
+                    model.get_booster().set_param({{"device": "cpu"}})
+                except Exception:
+                    pass
+            return original_predict_proba(self, X, *args, **kwargs)
+
+        XGBoostModel._predict_proba = _predict_proba_with_cpu_device
+        XGBoostModel._tml_cpu_inference_patch = True
+
+    _patch_xgboost_cpu_inference()
+
     def _resolve_project_dir(relative_path):
         for parent in [Path(__file__).resolve().parent, *Path(__file__).resolve().parents]:
             if (parent / "project.yaml").exists():
