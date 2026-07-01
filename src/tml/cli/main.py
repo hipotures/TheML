@@ -40,10 +40,10 @@ from tml.branches.grow import BranchGrowPlan, BranchGrowResult, branch_grow, bra
 from tml.branches.runtime_state import read_branch_runtime_state
 from tml.branches.run import BranchRunPlan, branch_run_plan, run_missing_branches
 from tml.cli.prompt_output import print_prompt_choices, print_prompt_probe_summary, print_prompt_render_summary
-from tml.core.config import active_branch_algorithm_id, active_mode, active_profile_id, load_project_config
+from tml.core.config import active_branch_algorithm_id, active_mode, active_profile_id, load_project_config, repo_root_for_project
 from tml.core.errors import TmlError
 from tml.core.kaggle import download_competition_data, list_competition_submissions, submit_competition_file
-from tml.core.paths import active_project_ref, workspace_root
+from tml.core.paths import active_project_ref, context_path, workspace_root
 from tml.core.profiles import load_profile, profile_hash
 from tml.core.project import default_download_data, default_project_kind, init_project, use_project
 from tml.db.reindex import reindex_project
@@ -430,7 +430,7 @@ def root_generate_cmd(ctx: typer.Context) -> None:
             raise TmlError("tml root generate json=true requires yes=true because confirmation would break JSON output.")
         plan = root_generation_plan(ref.path, count=count)
         if not json_output:
-            _print_root_generation_plan(ref.slug, plan)
+            _print_root_generation_plan(ref.slug, plan, project_dir=ref.path)
             if plan.iteration_count == 0:
                 console.print("No ROOT hypotheses to generate.")
                 _print_generated_hypotheses(ref.path, [])
@@ -1968,7 +1968,7 @@ def _print_init_project_summary(root: Path, project_dir: Path, slug: str, *, dow
     console.print(f"[bold]Next:[/bold] uv run tml project use {slug}")
 
 
-def _print_root_generation_plan(project_slug: str, plan: RootGenerationPlan) -> None:
+def _print_root_generation_plan(project_slug: str, plan: RootGenerationPlan, *, project_dir: Path) -> None:
     ids = plan.hypothesis_ids
     if len(ids) > 8:
         id_text = f"{ids[0]}..{ids[-1]}"
@@ -1987,11 +1987,42 @@ def _print_root_generation_plan(project_slug: str, plan: RootGenerationPlan) -> 
     table.add_row("Timeout seconds", str(plan.timeout_seconds or "n/a"))
     table.add_row("Sandbox", plan.sandbox)
     table.add_row("Web search", "enabled" if plan.web_search_enabled else "disabled")
+    external_enabled, external_file = _root_generation_external_data(project_dir)
+    table.add_row("External data", external_enabled)
+    table.add_row("External file", external_file)
     table.add_row("Target ROOT count", str(plan.target))
     table.add_row("Next hypothesis number", str(plan.next_number))
     table.add_row("Iterations to run", str(plan.iteration_count))
     table.add_row("Hypothesis IDs", id_text)
     console.print(table)
+
+
+def _root_generation_external_data(project_dir: Path) -> tuple[str, str]:
+    try:
+        root_config = read_yaml(context_path(repo_root_for_project(project_dir)))
+    except Exception:
+        root_config = {}
+    root_external = root_config.get("external") if isinstance(root_config.get("external"), dict) else {}
+    if not bool(root_external.get("enabled", False)):
+        return "disabled", "n/a"
+
+    try:
+        project = load_project_config(project_dir)
+    except Exception:
+        project = {}
+    project_external = project.get("external") if isinstance(project.get("external"), dict) else {}
+    external_file = project_external.get("file") or project_external.get("path") or project_external.get("aux")
+    if not external_file:
+        return "enabled", "not configured"
+    return "enabled", _display_external_file(project_dir, external_file)
+
+
+def _display_external_file(project_dir: Path, value: object) -> str:
+    path = Path(str(value))
+    if path.is_absolute():
+        return str(path)
+    data_dir = str(load_project_config(project_dir).get("data_dir") or "data")
+    return (Path(data_dir) / path).as_posix()
 
 
 def _print_root_revise_plan(project_slug: str, plan: RootRevisePlan) -> None:
