@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import importlib.util
 import signal
 import time
@@ -173,6 +174,13 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path, profile_
     train_out = transformed.iloc[: len(train)].reset_index(drop=True)
     test_out = transformed.iloc[len(train) :].reset_index(drop=True)
     ignored_columns = _ignored_columns_from_profile(profile, id_col=id_col, columns=train_out.columns)
+    profile, train_out, test_out, _categorical_fallback_stats = apply_lightgbm_gpu_categorical_fallback(
+        profile,
+        train_out,
+        test_out,
+        ignored_columns=ignored_columns,
+        config=runtime_options["lightgbm_gpu_categorical_fallback"],
+    )
     train_out[target_col] = train[target_col].reset_index(drop=True)
 
     training_plan = _training_plan_from_profile(
@@ -230,7 +238,7 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path, profile_
         predictor,
         audit_data=training_plan.audit_data,
         valid_data=training_plan.valid_data,
-        group_features=[column for column in transformed.columns if str(column).startswith("G")],
+        group_features=[column for column in train_out.columns if str(column).startswith("G")],
         config=runtime_options["feature_importance"],
         artifacts_dir=artifacts,
     )
@@ -352,6 +360,7 @@ def _autogluon_runtime_options(project_dir: Path) -> dict[str, dict[str, object]
         if isinstance(autogluon.get("feature_importance"), dict)
         else {}
     )
+    fallback = lightgbm_gpu_categorical_fallback_options(autogluon)
     return {
         "audit_score": {
             "enabled": _bool_option(audit.get("enabled"), default=False),
@@ -372,12 +381,14 @@ def _autogluon_runtime_options(project_dir: Path) -> dict[str, dict[str, object]
                 default=True,
             ),
         },
+        "lightgbm_gpu_categorical_fallback": fallback,
     }
 
 
 def _print_autogluon_runtime_options(options: dict[str, dict[str, object]]) -> None:
     audit = options["audit_score"]
     feature_importance = options["feature_importance"]
+    fallback = options["lightgbm_gpu_categorical_fallback"]
     print(
         "TML_RUNTIME|autogluon_options"
         f"|audit_score_enabled={bool(audit.get('enabled'))}"
@@ -385,7 +396,9 @@ def _print_autogluon_runtime_options(options: dict[str, dict[str, object]]) -> N
         f"|feature_importance_enabled={bool(feature_importance.get('enabled'))}"
         f"|fi_subsample_size={feature_importance.get('subsample_size')}"
         f"|fi_num_shuffle_sets={feature_importance.get('num_shuffle_sets')}"
-        f"|fi_include_confidence_band={bool(feature_importance.get('include_confidence_band'))}",
+        f"|fi_include_confidence_band={bool(feature_importance.get('include_confidence_band'))}"
+        f"|lgbm_gpu_cat_fallback_action={fallback.get('action')}"
+        f"|lgbm_gpu_cat_max_cardinality={fallback.get('max_categorical_cardinality')}",
         flush=True,
     )
 
@@ -429,6 +442,191 @@ def _positive_int_option(value: object, name: str) -> int:
     if numeric <= 0:
         raise ValueError(f"{name} must be greater than 0")
     return numeric
+
+
+def lightgbm_gpu_categorical_fallback_options(autogluon_config: dict[str, object]) -> dict[str, object]:
+    section = autogluon_config.get("lightgbm_gpu_categorical_fallback")
+    if section is None:
+        section = {}
+        default_action = "none"
+    elif isinstance(section, dict):
+        default_action = "fallback_to_cpu"
+    else:
+        raise ValueError("autogluon.lightgbm_gpu_categorical_fallback must be a mapping")
+    return {
+        "action": _categorical_fallback_action_option(
+            section.get("action"),
+            default=default_action,
+        ),
+        "max_categorical_cardinality": _positive_int_option(
+            section.get("max_categorical_cardinality", 512),
+            "autogluon.lightgbm_gpu_categorical_fallback.max_categorical_cardinality",
+        ),
+    }
+
+
+def _categorical_fallback_action_option(value: object, *, default: str) -> str:
+    if value is None:
+        return default
+    normalized = str(value).strip().lower().replace("-", "_")
+    aliases = {
+        "off": "none",
+        "false": "none",
+        "disabled": "none",
+        "none": "none",
+        "drop": "drop_columns",
+        "drop_column": "drop_columns",
+        "drop_columns": "drop_columns",
+        "fallback2cpu": "fallback_to_cpu",
+        "fallback_to_cpu": "fallback_to_cpu",
+        "cpu": "fallback_to_cpu",
+    }
+    if normalized not in aliases:
+        raise ValueError(
+            "autogluon.lightgbm_gpu_categorical_fallback.action must be one of: "
+            "none, fallback_to_cpu, drop_columns"
+        )
+    return aliases[normalized]
+
+
+def apply_lightgbm_gpu_categorical_fallback(
+    profile: dict[str, object],
+    train_frame: Any,
+    test_frame: Any,
+    *,
+    ignored_columns: list[str] | None,
+    config: dict[str, object],
+) -> tuple[dict[str, object], Any, Any, dict[str, object]]:
+    action = str(config.get("action") or "none")
+    max_cardinality = int(config.get("max_categorical_cardinality") or 512)
+    stats: dict[str, object] = {
+        "action": action,
+        "max_categorical_cardinality": max_cardinality,
+        "triggered": False,
+        "columns": {},
+    }
+    if action == "none":
+        stats["reason"] = "disabled"
+        return profile, train_frame, test_frame, stats
+    if not _lightgbm_profile_uses_gpu(profile):
+        stats["reason"] = "lightgbm_not_gpu"
+        return profile, train_frame, test_frame, stats
+
+    high_cardinality = _high_cardinality_categorical_columns(
+        train_frame,
+        ignored_columns=ignored_columns or [],
+        max_cardinality=max_cardinality,
+    )
+    if not high_cardinality:
+        stats["reason"] = "no_high_cardinality_categorical_columns"
+        return profile, train_frame, test_frame, stats
+
+    stats["triggered"] = True
+    stats["columns"] = {str(column): int(cardinality) for column, cardinality in high_cardinality.items()}
+    column_summary = ",".join(
+        f"{column}:{cardinality}" for column, cardinality in sorted(stats["columns"].items())
+    )
+    print(
+        "TML_RUNTIME|lightgbm_gpu_categorical_fallback"
+        f"|action={action}"
+        f"|threshold={max_cardinality}"
+        f"|columns={column_summary}",
+        flush=True,
+    )
+    if action == "drop_columns":
+        drop_columns = list(high_cardinality)
+        stats["dropped_columns"] = [str(column) for column in drop_columns]
+        return (
+            profile,
+            train_frame.drop(columns=drop_columns),
+            test_frame.drop(columns=drop_columns, errors="ignore"),
+            stats,
+        )
+    if action == "fallback_to_cpu":
+        cpu_profile, changed = _lightgbm_profile_forced_to_cpu(profile)
+        stats["forced_cpu"] = changed
+        return cpu_profile, train_frame, test_frame, stats
+    raise ValueError(f"Unsupported LightGBM categorical fallback action: {action!r}")
+
+
+def _high_cardinality_categorical_columns(
+    frame: Any,
+    *,
+    ignored_columns: list[str],
+    max_cardinality: int,
+) -> dict[object, int]:
+    ignored = {str(column) for column in ignored_columns}
+    high_cardinality: dict[object, int] = {}
+    for column in frame.columns:
+        if str(column) in ignored:
+            continue
+        series = frame[column]
+        if not _is_categorical_series(series):
+            continue
+        cardinality = int(series.nunique(dropna=False))
+        if cardinality > max_cardinality:
+            high_cardinality[column] = cardinality
+    return high_cardinality
+
+
+def _is_categorical_series(series: Any) -> bool:
+    import pandas as pd
+
+    dtype = series.dtype
+    return bool(
+        pd.api.types.is_object_dtype(dtype)
+        or pd.api.types.is_string_dtype(dtype)
+        or pd.api.types.is_categorical_dtype(dtype)
+    )
+
+
+def _lightgbm_profile_uses_gpu(profile: dict[str, object]) -> bool:
+    return any(_lightgbm_config_uses_gpu(config) for config in _lightgbm_configs(profile))
+
+
+def _lightgbm_profile_forced_to_cpu(profile: dict[str, object]) -> tuple[dict[str, object], bool]:
+    profile = copy.deepcopy(profile)
+    changed = False
+    for config in _lightgbm_configs(profile):
+        if not _lightgbm_config_uses_gpu(config):
+            continue
+        if "device" in config:
+            config["device"] = "cpu"
+        if "device_type" in config:
+            config["device_type"] = "cpu"
+        if "device" not in config and "device_type" not in config:
+            config["device"] = "cpu"
+        ag_args_fit = dict(config.get("ag_args_fit") or {}) if isinstance(config.get("ag_args_fit"), dict) else {}
+        ag_args_fit["num_gpus"] = 0
+        config["ag_args_fit"] = ag_args_fit
+        changed = True
+    return profile, changed
+
+
+def _lightgbm_configs(profile: dict[str, object]) -> list[dict[str, object]]:
+    hyperparameters = profile.get("hyperparameters")
+    if not isinstance(hyperparameters, dict):
+        return []
+    raw_configs = hyperparameters.get("GBM")
+    if isinstance(raw_configs, dict):
+        return [raw_configs]
+    if isinstance(raw_configs, list):
+        return [config for config in raw_configs if isinstance(config, dict)]
+    return []
+
+
+def _lightgbm_config_uses_gpu(config: dict[str, object]) -> bool:
+    for key in ("device", "device_type"):
+        value = config.get(key)
+        if isinstance(value, str) and value.strip().lower() in {"cuda", "gpu"}:
+            return True
+    ag_args_fit = config.get("ag_args_fit")
+    if isinstance(ag_args_fit, dict):
+        try:
+            return int(ag_args_fit.get("num_gpus") or 0) > 0
+        except (TypeError, ValueError):
+            return False
+    return False
 
 
 def _training_plan_from_profile(

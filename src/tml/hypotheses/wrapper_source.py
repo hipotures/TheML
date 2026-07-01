@@ -55,6 +55,10 @@ def main():
     from tml.core.config import active_profile_id, load_project_config, project_preprocess_timeout, repo_root_for_project
     from tml.core.paths import context_path
     from tml.core.profiles import load_profile
+    from tml.execution.autogluon_wrapper import (
+        apply_lightgbm_gpu_categorical_fallback,
+        lightgbm_gpu_categorical_fallback_options,
+    )
     from tml.features.groups import run_feature_groups
     from tml.utils.yaml_io import read_yaml
 
@@ -230,6 +234,7 @@ def main():
             if isinstance(autogluon.get("feature_importance"), dict)
             else {{}}
         )
+        fallback = lightgbm_gpu_categorical_fallback_options(autogluon)
         return {{
             "audit_score": {{
                 "enabled": _bool_option(audit.get("enabled"), default=False),
@@ -250,11 +255,13 @@ def main():
                     default=True,
                 ),
             }},
+            "lightgbm_gpu_categorical_fallback": fallback,
         }}
 
     def _print_autogluon_runtime_options(options):
         audit = options["audit_score"]
         feature_importance = options["feature_importance"]
+        fallback = options["lightgbm_gpu_categorical_fallback"]
         print(
             "TML_RUNTIME|autogluon_options"
             f"|audit_score_enabled={{bool(audit.get('enabled'))}}"
@@ -262,7 +269,9 @@ def main():
             f"|feature_importance_enabled={{bool(feature_importance.get('enabled'))}}"
             f"|fi_subsample_size={{feature_importance.get('subsample_size')}}"
             f"|fi_num_shuffle_sets={{feature_importance.get('num_shuffle_sets')}}"
-            f"|fi_include_confidence_band={{bool(feature_importance.get('include_confidence_band'))}}",
+            f"|fi_include_confidence_band={{bool(feature_importance.get('include_confidence_band'))}}"
+            f"|lgbm_gpu_cat_fallback_action={{fallback.get('action')}}"
+            f"|lgbm_gpu_cat_max_cardinality={{fallback.get('max_categorical_cardinality')}}",
             flush=True,
         )
 
@@ -826,8 +835,15 @@ def main():
                 ignored_columns = [column for column in ignored_columns if column in train_out.columns]
                 if ignored_columns:
                     print(f"AutoGluon materialization: ignored_columns={{ignored_columns}}", flush=True)
+                profile, train_out, test_out, categorical_fallback_stats = apply_lightgbm_gpu_categorical_fallback(
+                    profile,
+                    train_out,
+                    test_out,
+                    ignored_columns=ignored_columns,
+                    config=runtime_options["lightgbm_gpu_categorical_fallback"],
+                )
                 train_out[target_col] = train[target_col].reset_index(drop=True)
-                group_features = [column for column in transformed.columns if str(column).startswith("G")]
+                group_features = [column for column in train_out.columns if str(column).startswith("G")]
                 train_data, valid_data, audit_data, fit_args, defer_save_space, split_stats = _training_plan_from_profile(
                     train_out,
                     target_col,
@@ -952,6 +968,7 @@ def main():
                         "score_source": "audit_score_test" if audit_data is not None else "autogluon_validation",
                         "selected_model": selected_model,
                         "split": split_stats,
+                        "lightgbm_gpu_categorical_fallback": categorical_fallback_stats,
                         "models": _leaderboard_records(predictor, leaderboard),
                         "prediction_artifacts": prediction_artifacts,
                         "feature_importance": feature_importance_stats,
