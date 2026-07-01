@@ -488,6 +488,8 @@ def _resolve_node_identity(
 
 
 def classify_node(node_dir: Path) -> str:
+    if (node_dir / "node.disabled.yaml").exists():
+        return "disabled"
     if (node_dir / "node.done.yaml").exists():
         return "complete"
     if (node_dir / "failed.yaml").exists():

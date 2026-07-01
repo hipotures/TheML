@@ -1365,16 +1365,27 @@ def root_counts(project_dir: Path) -> dict[str, int]:
             ),
             "incomplete": int(
                 conn.execute(
-                    "SELECT count(*) FROM nodes WHERE kind='root' AND status NOT IN ('complete','failed') AND hypothesis_id<>'000000'"
+                    "SELECT count(*) FROM nodes WHERE kind='root' AND status NOT IN ('complete','failed','disabled') AND hypothesis_id<>'000000'"
                 ).fetchone()[0]
             ),
         }
 
 
-def best_score(project_dir: Path) -> float | None:
+def best_score(project_dir: Path, *, mode: str | None = None, profile_id: str | None = None) -> float | None:
     db_path = ensure_project_db(project_dir)
+    filters = ["kind='root'", "status='complete'", "metric IS NOT NULL"]
+    params: list[Any] = []
+    if mode:
+        filters.append("mode=?")
+        params.append(mode)
+    if profile_id:
+        filters.append("profile_id=?")
+        params.append(profile_id)
     with connect(db_path) as conn:
-        row = conn.execute("SELECT max(metric) AS best FROM evaluations WHERE kind='root' AND metric IS NOT NULL").fetchone()
+        row = conn.execute(
+            f"SELECT max(metric) AS best FROM evaluations WHERE {' AND '.join(filters)}",
+            params,
+        ).fetchone()
     value = row["best"] if row else None
     return float(value) if value is not None else None
 
@@ -2192,6 +2203,7 @@ def solution_tree_root_rows(project_dir: Path, *, mode: str, profile_id: str) ->
                 FROM evaluations e
                 LEFT JOIN nodes n ON n.node_id=e.node_id
                 WHERE e.kind='root'
+                  AND e.status='complete'
               )
               WHERE rn=1
             )

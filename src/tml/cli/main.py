@@ -85,7 +85,7 @@ from tml.metamodel.cli import meta_app
 from tml.prompts.diff import diff_prompt
 from tml.prompts.probe import probe_prompt, render_prompt
 from tml.rerun import RerunPlan, rerun_plan, rerun_submission
-from tml.utils.yaml_io import read_yaml
+from tml.utils.yaml_io import read_yaml, write_yaml
 
 
 console = Console(highlight=False)
@@ -343,7 +343,7 @@ def root_status_cmd(
         mode = active_mode(config)
         profile_id = active_profile_id(config, mode)
         active_hash = profile_hash(ref.path, mode, profile_id)
-        best = best_score(ref.path)
+        best = best_score(ref.path, mode=mode, profile_id=profile_id)
         if json_output:
             _print_root_status_json(
                 ref.slug,
@@ -1000,6 +1000,55 @@ def root_run_cmd(ctx: typer.Context) -> None:
             hypothesis_id=hypothesis_id_text,
             executed_count=len(executed_ids),
         )
+    except Exception as exc:
+        _abort(exc)
+
+
+@root_app.command(
+    "disable",
+    context_settings=EXTRA,
+    help=(
+        "Mark a ROOT run node as disabled without deleting its artifacts.\n\n"
+        "Accepted key=value parameters:\n"
+        "  node=<node_id>     ROOT node to disable.\n"
+        "  reason=<text>      Optional reason stored in node.disabled.yaml.\n"
+        "  yes=true           Skip the confirmation prompt."
+    ),
+)
+def root_disable_cmd(ctx: typer.Context) -> None:
+    try:
+        ref = active_project_ref()
+        _reject_positional(ctx.args, "tml root disable")
+        overrides = _overrides(ctx.args)
+        _validate_override_keys(overrides, {"node", "reason", "yes"}, "tml root disable")
+        node_id = _optional_text(overrides.get("node"))
+        if not node_id:
+            raise TmlError("Missing required parameter: node=<node_id>.")
+        reason = _optional_text(overrides.get("reason"))
+        node_dir = _resolve_root_node_dir(ref.path, node_id)
+        start = read_yaml(node_dir / "node.start.yaml")
+        if str(start.get("kind") or "root") != "root":
+            raise TmlError(f"Node {node_id} is not a ROOT node.")
+        marker = node_dir / "node.disabled.yaml"
+        if marker.exists():
+            console.print(f"ROOT node {node_id} is already disabled.")
+            return
+        assume_yes = _bool(overrides.get("yes", False))
+        if not assume_yes and not Confirm.ask(f"Disable ROOT node {node_id}?", default=False, console=console):
+            console.print("ROOT node disable cancelled.")
+            return
+        write_yaml(
+            marker,
+            {
+                "schema_version": 1,
+                "node_id": node_id,
+                "status": "disabled",
+                "reason": reason or "",
+                "disabled_at": datetime.now().isoformat(timespec="seconds"),
+            },
+        )
+        console.print(f"Disabled ROOT node {node_id}.")
+        console.print("Run `uv run tml reindex yes=true` to refresh local status tables.")
     except Exception as exc:
         _abort(exc)
 
@@ -1769,6 +1818,15 @@ def _validate_override_keys(overrides: dict[str, object], allowed: set[str], com
 
 def _optional_text(value: object) -> str | None:
     return None if value is None else str(value)
+
+
+def _resolve_root_node_dir(project_dir: Path, node_id: str) -> Path:
+    matches = sorted((project_dir / "runs").glob(f"*/artifacts/{node_id}"))
+    if not matches:
+        raise TmlError(f"ROOT node not found: {node_id}")
+    if len(matches) > 1:
+        raise TmlError(f"Ambiguous ROOT node id: {node_id}")
+    return matches[0]
 
 
 def _parse_int(value: object, name: str) -> int:
@@ -3568,6 +3626,8 @@ def _root_run_row(
 def _run_status_text(status: str) -> Text:
     if status == "complete":
         return Text("▶", style="green")
+    if status == "disabled":
+        return Text("⊘", style="dim")
     if status == "failed":
         return Text("⚠", style="bold red")
     if status == "started":

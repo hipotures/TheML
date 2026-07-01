@@ -1,0 +1,5 @@
+schema_version: 1
+node_id: 20260701T143825-143f83dd-4
+status: disabled
+reason: audit score too optimistic; public/CV alignment favors step 6
+disabled_at: '2026-07-01T15:16:45'
