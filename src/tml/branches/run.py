@@ -86,7 +86,7 @@ def branch_run_plan(
         mode=active_run_mode,
         profile_id=profile_id,
         profile_hash=profile_hash(project_dir, active_run_mode, profile_id),
-        execution_timeout_seconds=_execution_timeout_seconds(profile_overrides),
+        execution_timeout_seconds=_execution_timeout_seconds(config, profile_overrides),
         force=force,
         run_id=run_id_value,
         run_path=f"runs/{run_id_value}" if run_id_value else "new run on start",
@@ -254,7 +254,7 @@ def _run_branch_record(
         result = run_python_script(
             node_dir / "02-code.py",
             node_dir / "work",
-            timeout_seconds=_execution_timeout_seconds(profile_overrides),
+            timeout_seconds=_execution_timeout_seconds(config, profile_overrides),
             cwd=repo_root_for_project(project_dir) if mode == "autogluon" else None,
         )
         write_attempt_result(node_dir, result)

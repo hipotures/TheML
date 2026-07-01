@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from tml.core.config import rerun_profile_id, repo_root_for_project
+from tml.core.config import load_project_config, rerun_profile_id, repo_root_for_project
 from tml.core.ids import node_id
 from tml.core.paths import context_path
 from tml.core.profiles import load_profile, profile_hash
@@ -72,6 +72,7 @@ class RerunPlan:
 
 def rerun_plan(project_dir: Path, *, sha_prefix: str) -> RerunPlan:
     upsert_project(project_dir)
+    config = load_project_config(project_dir)
     source_row = submission_by_sha_prefix(project_dir, sha_prefix)
     _validate_rerun_source_row(source_row, sha_prefix=sha_prefix)
     ranked_source_row = _ranked_source_row(project_dir, source_row)
@@ -105,7 +106,7 @@ def rerun_plan(project_dir: Path, *, sha_prefix: str) -> RerunPlan:
         profile_time_limit_seconds=_optional_int(profile.get("time_limit") or profile.get("time")),
         profile_preset=_optional_str(profile.get("presets") or profile.get("preset")),
         profile_use_gpu=_optional_bool(profile.get("use_gpu")),
-        execution_timeout_seconds=_execution_timeout_seconds(profile),
+        execution_timeout_seconds=_execution_timeout_seconds(config, profile),
         aux_enabled=_aux_enabled(project_dir, profile),
         run_id=run_id_value,
         run_path=f"runs/{run_id_value}" if run_id_value else "new run on start",

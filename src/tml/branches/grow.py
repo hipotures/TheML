@@ -84,7 +84,7 @@ def branch_grow_plan(
         node_ref=node_ref,
         requested_steps=steps,
         pending_branch_runs=len(pending),
-        execution_timeout_seconds=_execution_timeout_seconds(profile_overrides),
+        execution_timeout_seconds=_execution_timeout_seconds(config, profile_overrides),
         config_path=algorithm.path,
     )
 
