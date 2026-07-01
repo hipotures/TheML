@@ -3270,7 +3270,11 @@ def _print_submissions(
     show_disabled: bool = False,
     show_all: bool = False,
 ) -> None:
-    rows = _visible_submission_rows(submission_rows(project_dir), show_disabled=show_disabled, show_all=show_all)
+    all_rows = submission_rows(project_dir)
+    rows = _visible_submission_rows(all_rows, show_disabled=show_disabled, show_all=show_all)
+    active_rows = _visible_submission_rows(all_rows, show_disabled=False, show_all=False)
+    baseline = _submission_baseline_score(active_rows)
+    baseline_epsilon = _root_status_score_epsilon(project_dir, baseline)
     display_rows = _submission_display_rows(rows)
     shown_rows = display_rows if limit is None else display_rows[:limit]
     title = "Submission candidates"
@@ -3295,7 +3299,6 @@ def _print_submissions(
         console.print("No submissions recorded in project database.")
         return
 
-    best_local = _best_numeric(row.get("local_score") for row in rows)
     best_public = _best_numeric(row.get("public_score") for row in rows)
     for marker, row, is_child, group_index in shown_rows:
         local_score = row.get("local_score")
@@ -3305,7 +3308,14 @@ def _print_submissions(
             str(row.get("source_id") or ""),
             _rank_text(row.get("cv_rank"), local_score),
             _rank_text(row.get("public_rank") or row.get("computed_public_rank"), public_score),
-            _score_text(local_score, best=best_local, style="bold black on bright_green"),
+            _score_text(
+                local_score,
+                best=None,
+                style="",
+                baseline=baseline,
+                baseline_epsilon=baseline_epsilon,
+                is_baseline=_is_submission_baseline(row, baseline),
+            ),
             _score_text(public_score, best=best_public, style="bold black on bright_cyan"),
             _submission_status_text(row),
             _kind_profile_text(row),
@@ -3318,7 +3328,7 @@ def _print_submissions(
             style=_submission_row_style(group_index, is_child=is_child),
         )
     console.print(table)
-    _print_submission_actions(rows)
+    _print_submission_actions(rows, sync_rows=all_rows)
 
 
 def _submission_table_limit(value: object) -> int | None:
@@ -3351,6 +3361,28 @@ def _visible_submission_rows(
     if show_disabled:
         return [row for row in rows if str(row.get("status") or "") in {"complete", "disabled"}]
     return [row for row in rows if str(row.get("status") or "") != "disabled"]
+
+
+def _submission_baseline_score(rows: list[dict[str, Any]]) -> float | None:
+    for row in rows:
+        if str(row.get("source_id") or "") != "000000":
+            continue
+        if str(row.get("status") or "") != "complete":
+            continue
+        score = row.get("local_score")
+        return float(score) if isinstance(score, int | float) else None
+    return None
+
+
+def _is_submission_baseline(row: dict[str, Any], baseline: float | None) -> bool:
+    score = row.get("local_score")
+    return (
+        baseline is not None
+        and str(row.get("source_id") or "") == "000000"
+        and str(row.get("status") or "") == "complete"
+        and isinstance(score, int | float)
+        and float(score) == baseline
+    )
 
 
 def _submission_display_rows(rows: list[dict[str, object]]) -> list[tuple[str, dict[str, object], bool, int]]:
@@ -3392,7 +3424,7 @@ def _submission_row_style(group_index: int, *, is_child: bool) -> str:
     return "on grey23" if group_index % 2 else "on grey11"
 
 
-def _print_submission_actions(rows: list[dict[str, object]]) -> None:
+def _print_submission_actions(rows: list[dict[str, object]], *, sync_rows: list[dict[str, object]] | None = None) -> None:
     ready = [
         row
         for row in rows
@@ -3416,7 +3448,7 @@ def _print_submission_actions(rows: list[dict[str, object]]) -> None:
         for row in ready_rerun:
             sha = str(row.get("submission_sha256") or "")[:10]
             console.print(f"uv run tml rerun sha={sha}")
-    synced_rows = sum(1 for row in rows if str(row.get("remote_status") or ""))
+    synced_rows = sum(1 for row in (sync_rows or rows) if str(row.get("remote_status") or ""))
     if synced_rows:
         console.print(f"Remote Kaggle submissions synced local rows: {synced_rows}")
     else:
