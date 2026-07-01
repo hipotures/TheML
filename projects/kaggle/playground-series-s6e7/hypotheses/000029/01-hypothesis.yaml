@@ -1,0 +1,35 @@
+title: Risk-Protection Behavior Gap
+group_name: risk_protection_behavior_gap
+family: behavioral_axis_contrast
+summary: Represent each student by the imbalance between health-protective routines
+  and health-damaging exposures, distinguishing consistently fit-like profiles from
+  mixed, buffered, or depleted risk profiles.
+depends_on: []
+strategy: 'Create two bounded 0-1 axes from original columns only. Protective components:
+  sleep_amount = clip(1 - abs(sleep_duration - 7.5) / 3.5, 0, 1); sleep_quality mapped
+  poor=0, average=0.5, good=1; movement = mean of clip((step_count - 4000) / 6000,
+  0, 1), clip(exercise_duration / 45, 0, 1), and physical_activity_level mapped sedentary=0,
+  moderate=0.5, active=1; self_care = mean of clip((water_intake - 0.5) / 2.0, 0,
+  1) and diet_type mapped non-veg=0.35, veg=0.7, balanced=1. Harm components: stress_level
+  mapped low=0, medium=0.5, high=1; smoking_alcohol mapped no=0, occasional=0.5, yes=1;
+  cardio_body_load = mean of clip((heart_rate - 75) / 28, 0, 1) and clip(max(18.5
+  - bmi, bmi - 25) / 8, 0, 1); sleep_deficit = clip((7 - sleep_duration) / 4, 0, 1).
+  Average observed protective components into protective_score and observed harm components
+  into harm_score, using 0.5 only if an entire axis is missing. Emit protective_score,
+  harm_score, protection_minus_harm, buffered_risk = min(protective_score, harm_score),
+  unsupported_exposure = harm_score * (1 - protective_score), and a four-state ordinal
+  quadrant using protective_score >= 0.6 and harm_score > 0.35 thresholds.'
+expected_signal: The target is described as an overall health profile, and public-health/student-health
+  sources support treating sleep, physical activity, nutrition, tobacco/alcohol, and
+  stress as clustered but partly separable risk domains; this contrast should help
+  balanced accuracy by making fit look like high protection with low harm, unhealthy
+  like low protection with high harm, and at-risk like mixed or conflicting axes.
+risk: May be partially redundant with prior burden, polarity, and substance-context
+  groups; hand-set thresholds can mis-rank diet style, high activity, or borderline
+  BMI/heart-rate cases, and axis scores built from few observed fields may be noisy
+  when missingness is heavy.
+schema_version: 1
+hypothesis_id: 000029
+revision: 1
+enabled: true
+created_at: '2026-07-01T13:35:16'

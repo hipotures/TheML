@@ -1,0 +1,37 @@
+title: Diet-Metabolic Alignment
+group_name: diet_metabolic_alignment
+family: contextual_nutrition_residual
+summary: Represent how consistent a student's measured metabolic and self-care profile
+  is with the diet style they report, treating nutrition category as context rather
+  than as an isolated label.
+depends_on: []
+strategy: 'Use diet_type as a four-level context: balanced, veg, non-veg, and missing.
+  On training feature rows only and without health_condition, compute per-context
+  median and IQR for bmi, heart_rate, calorie_expenditure, water_intake, step_count,
+  exercise_duration, and sleep_duration; fall back to the global statistic when a
+  context has too few observed values or IQR is near zero. For each row and numeric
+  feature, create clipped robust residual z = clip((value - median_context) / max(IQR_context,
+  1e-6), -4, 4); missing numeric values produce residual 0 and are excluded from aggregate
+  denominators. Emit the diet-conditioned residuals, diet_context_rms = sqrt(mean(z^2
+  over observed residuals)), diet_energy_activity_gap = z_calorie_expenditure - mean(z_step_count,
+  z_exercise_duration), diet_adverse_tail = mean(max(0, z_bmi - 0.5), max(0, -z_bmi
+  - 1.0), max(0, z_heart_rate - 0.5), max(0, -z_water_intake - 0.5), max(0, -z_step_count
+  - 0.5), max(0, -z_exercise_duration - 0.5), max(0, -z_sleep_duration - 0.5)) over
+  available components, and diet_mismatch_bin from diet_context_rms using thresholds
+  [0.5, 1.0, 2.0].'
+expected_signal: CDC highlights diet, water, physical activity, and sleep as student
+  health behavior domains (https://www.cdc.gov/yrbs/dstr/dietary-physical-sleep-behaviors.html),
+  and a university-student study reports that diet and fitness are associated with
+  stress, burnout, and engagement (https://www.mdpi.com/2075-4698/15/6/153); this
+  group can expose rows whose body, energy, hydration, and activity pattern is unusually
+  strained or protective for the claimed diet, clarifying fit versus unhealthy edge
+  cases that share the same raw diet label.
+risk: The signal relies on coarse self-reported diet categories and train-distribution
+  reference values, so it may encode synthetic distribution quirks, duplicate information
+  already present in raw numeric features or peer-normalization features, and penalize
+  genuinely healthy but uncommon diet-specific patterns.
+schema_version: 1
+hypothesis_id: '000022'
+revision: 1
+enabled: true
+created_at: '2026-07-01T13:11:50'

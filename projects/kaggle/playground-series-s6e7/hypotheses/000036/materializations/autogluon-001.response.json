@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nACTIVITY_MET_MAP = {\n    \"sedentary\": 2.0,\n    \"moderate\": 4.0,\n    \"active\": 8.0,\n}\n\nACTIVITY_DOSE_BINS = (-np.inf, 300.0, 600.0, 1200.0, 2400.0, np.inf)\nACTIVITY_DOSE_LABELS = (\n    \"minimal\",\n    \"below_guideline\",\n    \"meets_guideline\",\n    \"high_benefit\",\n    \"extreme\",\n)\n\n\ndef _numeric_series(raw, column_name):\n    if column_name in raw.columns:\n        return pd.to_numeric(raw[column_name], errors=\"coerce\")\n    return pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n\n\ndef _text_series(raw, column_name):\n    if column_name in raw.columns:\n        return raw[column_name].astype(\"string\").str.strip().str.lower()\n    return pd.Series(pd.NA, index=raw.index, dtype=\"string\")\n\n\ndef add_met_equivalent_activity_dose(raw, deps, aux):\n    step_count = _numeric_series(raw, \"step_count\")\n    exercise_duration = _numeric_series(raw, \"exercise_duration\")\n    activity_level = _text_series(raw, \"physical_activity_level\")\n\n    step_missing = step_count.isna()\n    exercise_missing = exercise_duration.isna()\n    intensity_unknown = ~activity_level.isin(ACTIVITY_MET_MAP.keys())\n\n    clipped_steps = step_count.clip(lower=1000.0, upper=14999.0)\n    clipped_exercise = exercise_duration.clip(lower=0.0, upper=120.0)\n\n    intensity_met = activity_level.map(ACTIVITY_MET_MAP).astype(\"float64\").fillna(4.0)\n\n    exercise_daily_met_minutes = clipped_exercise.fillna(0.0) * intensity_met\n    walking_minutes_daily = clipped_steps.fillna(0.0) / 100.0\n    walking_daily_met_minutes = walking_minutes_daily * 3.3\n\n    daily_met_minutes = exercise_daily_met_minutes + walking_daily_met_minutes\n    weekly_met_minutes = daily_met_minutes * 7.0\n\n    ratio_600 = weekly_met_minutes / 600.0\n    ratio_1200 = weekly_met_minutes / 1200.0\n\n    component_count = (~step_missing).astype(\"int8\") + (~exercise_missing).astype(\"int8\")\n    both_components_missing = step_missing & exercise_missing\n\n    dose_bin = pd.cut(\n        weekly_met_minutes,\n        bins=list(ACTIVITY_DOSE_BINS),\n        labels=list(ACTIVITY_DOSE_LABELS),\n        right=False,\n    ).astype(\"string\")\n    dose_bin = dose_bin.mask(both_components_missing, \"missing_activity_components\")\n\n    new_features = pd.DataFrame(index=raw.index)\n    new_features[\"activity_intensity_met\"] = intensity_met.astype(\"float32\")\n    new_features[\"activity_intensity_unknown\"] = intensity_unknown.astype(\"int8\")\n    new_features[\"activity_step_component_missing\"] = step_missing.astype(\"int8\")\n    new_features[\"activity_exercise_component_missing\"] = exercise_missing.astype(\"int8\")\n    new_features[\"activity_component_completeness_count\"] = component_count.astype(\"int8\")\n    new_features[\"activity_clipped_step_count\"] = clipped_steps.astype(\"float32\")\n    new_features[\"activity_clipped_exercise_minutes\"] = clipped_exercise.astype(\"float32\")\n    new_features[\"walking_daily_met_minutes\"] = walking_daily_met_minutes.astype(\"float32\")\n    new_features[\"exercise_daily_met_minutes\"] = exercise_daily_met_minutes.astype(\"float32\")\n    new_features[\"total_daily_met_minutes\"] = daily_met_minutes.astype(\"float32\")\n    new_features[\"weekly_met_minutes\"] = weekly_met_minutes.astype(\"float32\")\n    new_features[\"weekly_met_ratio_600\"] = ratio_600.astype(\"float32\")\n    new_features[\"weekly_met_ratio_1200\"] = ratio_1200.astype(\"float32\")\n    new_features[\"weekly_met_ratio_600_clipped\"] = ratio_600.clip(lower=0.0, upper=6.0).astype(\"float32\")\n    new_features[\"weekly_met_ratio_1200_clipped\"] = ratio_1200.clip(lower=0.0, upper=4.0).astype(\"float32\")\n    new_features[\"log1p_weekly_met_ratio_600\"] = np.log1p(ratio_600.clip(lower=0.0)).astype(\"float32\")\n    new_features[\"meets_600_met_guideline\"] = (weekly_met_minutes >= 600.0).astype(\"int8\")\n    new_features[\"meets_1200_met_guideline\"] = (weekly_met_minutes >= 1200.0).astype(\"int8\")\n    new_features[\"activity_dose_bin\"] = dose_bin\n\n    return new_features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"met_equivalent_activity_dose\",\n        \"fn\": add_met_equivalent_activity_dose,\n        \"depends_on\": [],\n        \"description\": \"Standardizes steps, exercise duration, and reported activity level into guideline-relative weekly MET-minute activity dose features.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1da6-a0f8-7c32-9c48-d1f8cdda0e47",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13395,
+        "outputTokens": 1602,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14997
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13395,
+        "outputTokens": 1602,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14997
+      }
+    },
+    "turnId": "019f1da6-a105-7043-ba1c-1f396f7b8978"
+  },
+  "wall_ms": 31449,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

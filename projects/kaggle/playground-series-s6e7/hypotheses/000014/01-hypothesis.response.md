@@ -1,0 +1,10 @@
+{
+  "title": "Fitness-contextualized cardiometabolic stage",
+  "group_name": "fitness_contextualized_cardiometabolic_stage",
+  "family": "clinical_threshold_interaction",
+  "summary": "Create a compact cardiometabolic staging signal that distinguishes benign athletic-like pulse patterns from potentially adverse combinations of body-mass status and elevated resting pulse.",
+  "depends_on": [],
+  "strategy": "Bin BMI into underweight <18.5, healthy 18.5-<25, overweight 25-<30, and obesity >=30 using CDC adult categories (https://www.cdc.gov/bmi/adult-calculator/bmi-categories.html); bin heart_rate into low <60, normal 60-<80, high-normal 80-<100, and tachycardia-like >=100 using AHA resting-pulse guidance (https://www.heart.org/en/health-topics/high-blood-pressure/the-facts-about-high-blood-pressure/all-about-heart-rate-pulse). Reclassify low heart_rate as athletic-low when physical_activity_level is active, step_count >=10000, or exercise_duration >=45, otherwise as unexplained-low. Emit a joint BMI-by-contextual-heart-rate category, an ordinal stage score equal to BMI deviation points plus heart-rate concern points, and interaction flags for healthy/athletic-low, overweight-or-obese/high-normal-or-tachycardia, underweight/high-pulse, and unexplained-low-pulse. Missing BMI or heart_rate receives a missing category; missing activity evidence does not qualify a low pulse as athletic unless another observed activity signal does.",
+  "expected_signal": "The target classes may differ most in clinically interpretable joint states rather than raw marginal values, so separating active low-pulse fit-like rows from high-pulse heavier rows can sharpen minority-class boundaries and improve balanced accuracy.",
+  "risk": "The thresholds are general adult screening rules rather than dataset-specific labels, so the group may be redundant with raw BMI and heart_rate or with previous broad deviation features, and low heart_rate can be misinterpreted when activity evidence is missing or noisy."
+}

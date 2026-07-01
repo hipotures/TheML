@@ -1,0 +1,38 @@
+title: External Health Archetype Affinity
+group_name: external_health_archetype_affinity
+family: external_prototype_similarity
+summary: Represent each row by how closely its complete lifestyle and physiology profile
+  resembles labeled health-condition archetypes learned only from the auxiliary student-health
+  source.
+depends_on: []
+strategy: Use the auxiliary student_health_dataset_50k.csv.gz as the only labeled
+  reference source, aligning the shared project feature columns and ignoring student_id
+  and timestamp; this follows the retrieved student lifestyle clustering motivation
+  from https://www.mdpi.com/2072-6643/16/24/4339 and the source dataset context at
+  https://www.kaggle.com/datasets/ziya07/college-student-health-behavior-dataset.
+  For each target class in the auxiliary data, compute numeric feature medians; compute
+  one global numeric scale per feature as max(IQR, 1e-6), winsorizing row values to
+  the auxiliary 1st and 99th percentiles before scoring. For every project row and
+  class, create a numeric archetype distance as the mean over observed numeric features
+  of min(6, abs(value - class_median) / global_IQR). For categorical features, compute
+  smoothed per-class category log-lift using (class_count_for_value + 1) / (class_total
+  + number_of_levels) divided by the corresponding smoothed overall category rate;
+  for a row and class, average these log-lifts over observed categorical fields. Missing
+  numeric or categorical values are excluded from that component denominator; if no
+  fields are observed for a component, set that component to 0. Emit classwise combined
+  affinity scores defined as categorical_log_lift minus numeric_distance for unhealthy,
+  at-risk, and fit, plus the best-minus-second-best affinity margin and the fit-minus-unhealthy
+  affinity contrast.
+expected_signal: The external labels can encode source-style class archetypes for
+  minority classes without using project target labels, so these balanced class-affinity
+  features may help separate fit and unhealthy cases that raw one-feature thresholds
+  or cumulative burden summaries blur into the dominant at-risk pattern.
+risk: The auxiliary file is missing-free and heavily at-risk, so prototype affinities
+  may be source-shifted or too coarse for project rows with substantial missingness;
+  the implementation must not use project health_condition labels when building the
+  reference statistics.
+schema_version: 1
+hypothesis_id: '000006'
+revision: 1
+enabled: true
+created_at: '2026-07-01T12:28:59'

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nMOVEMENT_COLUMNS = (\n    \"step_count\",\n    \"exercise_duration\",\n    \"calorie_expenditure\",\n)\n\nRECOVERY_COLUMNS = (\n    \"sleep_duration\",\n    \"sleep_quality\",\n    \"stress_level\",\n    \"water_intake\",\n    \"smoking_alcohol\",\n    \"diet_type\",\n)\n\nPHYSIOLOGY_COLUMNS = (\n    \"heart_rate\",\n    \"bmi\",\n)\n\nALL_CONTEXT_COLUMNS = MOVEMENT_COLUMNS + RECOVERY_COLUMNS + PHYSIOLOGY_COLUMNS\n\nSLEEP_QUALITY_SUPPORT = {\n    \"good\": 1.0,\n    \"average\": 0.5,\n    \"poor\": 0.0,\n}\n\nSTRESS_SUPPORT = {\n    \"low\": 1.0,\n    \"medium\": 0.5,\n    \"high\": 0.0,\n}\n\nSMOKING_ALCOHOL_SUPPORT = {\n    \"no\": 1.0,\n    \"occasional\": 0.5,\n    \"yes\": 0.0,\n}\n\nDIET_SUPPORT = {\n    \"balanced\": 1.0,\n    \"veg\": 0.7,\n    \"non-veg\": 0.4,\n}\n\n\ndef _numeric(raw, column):\n    if column not in raw.columns:\n        return pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    return pd.to_numeric(raw[column], errors=\"coerce\")\n\n\ndef _category_support(raw, column, mapping):\n    if column not in raw.columns:\n        return pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    normalized = raw[column].astype(\"string\").str.strip().str.lower()\n    return normalized.map(mapping).astype(\"float64\")\n\n\ndef _row_mean_with_neutral(series_list, index):\n    block = pd.concat(series_list, axis=1)\n    observed_count = block.notna().sum(axis=1)\n    values = block.mean(axis=1)\n    return values.where(observed_count > 0, 0.5).astype(\"float64\")\n\n\ndef add_low_movement_recovery_context(raw, deps, aux):\n    new_features = pd.DataFrame(index=raw.index)\n\n    for column in ALL_CONTEXT_COLUMNS:\n        if column in raw.columns:\n            new_features[column + \"_missing\"] = raw[column].isna().astype(\"int8\")\n        else:\n            new_features[column + \"_missing\"] = pd.Series(1, index=raw.index, dtype=\"int8\")\n\n    step_count = _numeric(raw, \"step_count\")\n    exercise_duration = _numeric(raw, \"exercise_duration\")\n    calorie_expenditure = _numeric(raw, \"calorie_expenditure\")\n\n    step_shortfall = ((7000.0 - step_count) / 6000.0).clip(lower=0.0, upper=1.0)\n    exercise_shortfall = ((30.0 - exercise_duration) / 30.0).clip(lower=0.0, upper=1.0)\n    calorie_shortfall = ((1800.0 - calorie_expenditure) / 600.0).clip(lower=0.0, upper=1.0)\n\n    movement_shortfall = _row_mean_with_neutral(\n        [step_shortfall, exercise_shortfall, calorie_shortfall],\n        raw.index,\n    )\n\n    sleep_duration = _numeric(raw, \"sleep_duration\")\n    sleep_support = pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    sleep_support = sleep_support.mask(\n        sleep_duration.notna(),\n        np.where(\n            sleep_duration < 6.0,\n            ((sleep_duration - 3.0) / 3.0).clip(0.0, 1.0),\n            np.where(\n                sleep_duration <= 7.0,\n                0.7 + ((sleep_duration - 6.0) / 1.0) * 0.3,\n                np.where(\n                    sleep_duration <= 9.0,\n                    1.0,\n                    np.where(\n                        sleep_duration <= 10.0,\n                        1.0 - ((sleep_duration - 9.0) / 1.0) * 0.3,\n                        ((12.0 - sleep_duration) / 2.0).clip(0.0, 0.7),\n                    ),\n                ),\n            ),\n        ),\n    )\n\n    water_intake = _numeric(raw, \"water_intake\")\n    water_support = ((water_intake - 1.5) / 1.5).clip(lower=0.0, upper=1.0)\n\n    recovery_support = _row_mean_with_neutral(\n        [\n            sleep_support,\n            _category_support(raw, \"sleep_quality\", SLEEP_QUALITY_SUPPORT),\n            _category_support(raw, \"stress_level\", STRESS_SUPPORT),\n            water_support,\n            _category_support(raw, \"smoking_alcohol\", SMOKING_ALCOHOL_SUPPORT),\n            _category_support(raw, \"diet_type\", DIET_SUPPORT),\n        ],\n        raw.index,\n    )\n\n    heart_rate = _numeric(raw, \"heart_rate\")\n    heart_rate_burden = ((heart_rate - 75.0) / 25.0).clip(lower=0.0, upper=1.0)\n\n    bmi = _numeric(raw, \"bmi\")\n    low_bmi_burden = ((18.5 - bmi) / 2.5).clip(lower=0.0, upper=1.0)\n    high_bmi_burden = ((bmi - 24.9) / 10.0).clip(lower=0.0, upper=1.0)\n    bmi_burden = pd.concat([low_bmi_burden, high_bmi_burden], axis=1).max(axis=1)\n    bmi_burden = bmi_burden.where(bmi.notna(), np.nan)\n\n    physiology_strain = _row_mean_with_neutral(\n        [heart_rate_burden, bmi_burden],\n        raw.index,\n    )\n\n    observed_parts = []\n    for column in ALL_CONTEXT_COLUMNS:\n        if column in raw.columns:\n            observed_parts.append(raw[column].notna().astype(\"float64\"))\n        else:\n            observed_parts.append(pd.Series(0.0, index=raw.index, dtype=\"float64\"))\n    movement_context_observed_fraction = pd.concat(observed_parts, axis=1).mean(axis=1)\n\n    new_features[\"movement_shortfall\"] = movement_shortfall\n    new_features[\"recovery_support\"] = recovery_support\n    new_features[\"physiology_strain\"] = physiology_strain\n    new_features[\"rest_day_plausibility\"] = movement_shortfall * recovery_support * (1.0 - physiology_strain)\n    new_features[\"sedentary_strain\"] = movement_shortfall * physiology_strain * (1.0 - recovery_support)\n    new_features[\"low_movement_ambiguity\"] = movement_shortfall * (\n        1.0 - (recovery_support - physiology_strain).abs()\n    )\n    new_features[\"movement_context_observed_fraction\"] = movement_context_observed_fraction\n\n    return new_features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"low_movement_recovery_context\",\n        \"fn\": add_low_movement_recovery_context,\n        \"depends_on\": [],\n        \"description\": \"Separates low observed movement that looks like recovery from low movement paired with physiological strain.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1da8-44ff-7aa3-8fb3-b2451a1ec1a6",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13530,
+        "outputTokens": 2069,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 15599
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13530,
+        "outputTokens": 2069,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 15599
+      }
+    },
+    "turnId": "019f1da8-4516-7593-bda0-f107210a0afb"
+  },
+  "wall_ms": 41251,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import pandas as pd\n\n\nPOLARITY_MAPPINGS = {\n    \"stress_level\": {\"low\": 1, \"medium\": 0, \"high\": -1},\n    \"sleep_quality\": {\"good\": 1, \"average\": 0, \"poor\": -1},\n    \"physical_activity_level\": {\"active\": 1, \"moderate\": 0, \"sedentary\": -1},\n    \"smoking_alcohol\": {\"no\": 1, \"occasional\": 0, \"yes\": -1},\n    \"diet_type\": {\"balanced\": 1, \"veg\": 0, \"non-veg\": -1},\n}\n\n\ndef add_self_report_health_polarity(raw, deps, aux):\n    mapped_parts = []\n\n    for col, mapping in POLARITY_MAPPINGS.items():\n        if col in raw.columns:\n            values = raw[col].map(mapping)\n        else:\n            values = pd.Series(pd.NA, index=raw.index)\n        mapped_parts.append(values.rename(col))\n\n    mapped = pd.concat(mapped_parts, axis=1)\n\n    observed_count = mapped.notna().sum(axis=1).astype(\"int16\")\n    signed_sum = mapped.sum(axis=1, skipna=True).fillna(0).astype(\"int16\")\n\n    protective_count = mapped.eq(1).sum(axis=1).astype(\"int16\")\n    adverse_count = mapped.eq(-1).sum(axis=1).astype(\"int16\")\n    neutral_count = mapped.eq(0).sum(axis=1).astype(\"int16\")\n\n    observed_safe = observed_count.where(observed_count > 0, 1)\n    signed_mean = (signed_sum / observed_safe).where(observed_count > 0, 0.0)\n    consensus_margin = (\n        (protective_count - adverse_count).abs() / observed_safe\n    ).where(observed_count > 0, 0.0)\n\n    mixed_polarity_count = pd.concat(\n        [protective_count, adverse_count], axis=1\n    ).min(axis=1).astype(\"int16\")\n\n    all_protective = (\n        (observed_count >= 3) & (protective_count > 0) & (adverse_count == 0)\n    ).astype(\"int8\")\n    all_adverse = (\n        (observed_count >= 3) & (adverse_count > 0) & (protective_count == 0)\n    ).astype(\"int8\")\n\n    return pd.DataFrame(\n        {\n            \"signed_sum\": signed_sum,\n            \"signed_mean\": signed_mean.astype(\"float32\"),\n            \"protective_count\": protective_count,\n            \"adverse_count\": adverse_count,\n            \"neutral_count\": neutral_count,\n            \"observed_count\": observed_count,\n            \"consensus_margin\": consensus_margin.astype(\"float32\"),\n            \"mixed_polarity_count\": mixed_polarity_count,\n            \"all_protective\": all_protective,\n            \"all_adverse\": all_adverse,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"self_report_health_polarity\",\n        \"fn\": add_self_report_health_polarity,\n        \"depends_on\": [],\n        \"description\": \"Compact ordinal polarity features from self-reported lifestyle categories.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1d8c-c38b-7143-b6a3-c30ba620edae",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13373,
+        "outputTokens": 1216,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14589
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13373,
+        "outputTokens": 1216,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14589
+      }
+    },
+    "turnId": "019f1d8c-c399-7c11-9c4a-aea928d83a4a"
+  },
+  "wall_ms": 23829,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

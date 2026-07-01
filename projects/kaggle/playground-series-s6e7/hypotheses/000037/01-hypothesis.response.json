@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\"title\":\"Inferred Non-Exercise Energy Residual\",\"group_name\":\"nonexercise_energy_residual\",\"family\":\"energy_partition_residual\",\"summary\":\"Represent each student by the unstructured daily energy expenditure implied after accounting for body context and explicit movement signals, separating steady incidental movers from low-throughput or exercise-concentrated profiles.\",\"depends_on\":[],\"strategy\":\"Use only raw columns and train-only, target-free distribution statistics. For calculation-only inputs, leave original columns unchanged but replace missing sleep_duration, bmi, step_count, exercise_duration, and calorie_expenditure with train medians; set missing gender to unknown. Estimate waking_hours = clip(24 - sleep_duration, 14, 21). Create coarse body, step, and exercise bands using BMI cutpoints 18.5, 25, and 30; step_count cutpoints 5000, 8000, and 12000; and exercise_duration bands 0, 0-30, 30-60, and 60+. Among train rows with observed calorie_expenditure, compute the median expected calorie_expenditure for cells of body_band x step_band x exercise_band x gender, backing off to body_band x step_band x exercise_band, then step_band x exercise_band, then the global median whenever a cell has fewer than 500 rows. For each train/test row derive residual = observed calorie_expenditure - expected_calorie_expenditure, residual_z = residual divided by the train IQR of residuals, residual_per_waking_hour = residual / waking_hours, residual_to_exercise = residual / (exercise_duration + 10), and a five-level residual bin at <= -1 IQR, -1 to -0.25 IQR, -0.25 to 0.25 IQR, 0.25 to 1 IQR, and > 1 IQR; if calorie_expenditure is missing, set continuous residual features to 0 and the bin to unknown_energy.\",\"expected_signal\":\"Non-exercise activity thermogenesis is described as a major variable part of daily energy use beyond formal exercise, and total energy expenditure is commonly decomposed into resting, diet, and physical-activity components including NEAT; this residual may distinguish fit-like students with high incidental movement or metabolic throughput from unhealthy-like low-throughput profiles even when their steps and exercise minutes look similar (https://www.ncbi.nlm.nih.gov/books/NBK279077/, https://www.nationalacademies.org/read/26818/chapter/6).\",\"risk\":\"The residual can be redundant with calorie_expenditure, step_count, and exercise_duration if the source generator already ties these tightly together; sparse backoff cells and missing calorie_expenditure can make the signal noisy, though using target-free train statistics avoids label leakage.\"}",
+  "usage": {
+    "threadId": "019f1d8b-1f53-7933-b18a-77b6d6b17575",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 33125,
+        "outputTokens": 3430,
+        "reasoningOutputTokens": 3179,
+        "totalTokens": 36555
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 33125,
+        "outputTokens": 3430,
+        "reasoningOutputTokens": 3179,
+        "totalTokens": 36555
+      }
+    },
+    "turnId": "019f1d8b-1f66-7552-9ebb-6aeb8dae59c6"
+  },
+  "wall_ms": 235925,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

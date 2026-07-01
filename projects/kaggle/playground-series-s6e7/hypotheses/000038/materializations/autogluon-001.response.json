@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\ndef _numeric_column(frame, column_name):\n    if column_name in frame.columns:\n        return pd.to_numeric(frame[column_name], errors=\"coerce\")\n    return pd.Series(np.nan, index=frame.index, dtype=\"float64\")\n\n\ndef add_hydration_linked_pulse_load(raw, deps, aux):\n    step_count = _numeric_column(raw, \"step_count\")\n    exercise_duration = _numeric_column(raw, \"exercise_duration\")\n    calorie_expenditure = _numeric_column(raw, \"calorie_expenditure\")\n    water_intake = _numeric_column(raw, \"water_intake\")\n    heart_rate = _numeric_column(raw, \"heart_rate\")\n    bmi = _numeric_column(raw, \"bmi\")\n\n    steps_scale = ((step_count - 5000.0) / 5000.0).clip(0.0, 1.0)\n    exercise_scale = (exercise_duration / 30.0).clip(0.0, 1.0)\n    calories_scale = ((calorie_expenditure - 1800.0) / 1000.0).clip(0.0, 1.0)\n\n    activity_components = pd.concat(\n        [steps_scale, exercise_scale, calories_scale],\n        axis=1,\n        copy=False,\n    )\n    activity_demand = activity_components.mean(axis=1, skipna=True)\n    all_activity_missing = activity_components.isna().all(axis=1)\n\n    bmi_increment = (0.15 * ((bmi - 25.0) / 5.0).clip(0.0, 2.0)).where(bmi.notna(), 0.0)\n    fluid_demand_liters = 1.8 + (0.7 * activity_demand) + bmi_increment\n\n    hydration_gap = (water_intake - fluid_demand_liters).clip(-2.0, 2.0)\n    pulse_load = ((heart_rate - 80.0) / 20.0).clip(0.0, 2.0)\n\n    hydration_deficit = (-hydration_gap).clip(0.0, 2.0)\n    dehydration_pulse_strain = pulse_load * hydration_deficit\n    exertional_dehydration_strain = dehydration_pulse_strain * activity_demand\n    resting_dehydration_strain = dehydration_pulse_strain * (1.0 - activity_demand)\n\n    supported_active_pulse = (\n        (activity_demand >= 0.6)\n        & (hydration_gap >= 0.0)\n        & heart_rate.between(50.0, 80.0, inclusive=\"both\")\n    )\n\n    stage = pd.Series(0, index=raw.index, dtype=\"int8\")\n    unknown = water_intake.isna() | heart_rate.isna() | all_activity_missing\n\n    stage.loc[\n        (activity_demand >= 0.6)\n        & (hydration_gap < -0.3)\n        & (heart_rate >= 80.0)\n    ] = 2\n    stage.loc[\n        (activity_demand < 0.4)\n        & (hydration_gap < -0.3)\n        & (heart_rate >= 80.0)\n    ] = 3\n    stage.loc[\n        (hydration_gap >= 0.0)\n        & (heart_rate >= 90.0)\n    ] = 4\n    stage.loc[supported_active_pulse] = 1\n    stage.loc[unknown] = -1\n\n    return pd.DataFrame(\n        {\n            \"activity_demand\": activity_demand,\n            \"fluid_demand_liters\": fluid_demand_liters,\n            \"hydration_gap\": hydration_gap,\n            \"pulse_load\": pulse_load,\n            \"dehydration_pulse_strain\": dehydration_pulse_strain,\n            \"exertional_dehydration_strain\": exertional_dehydration_strain,\n            \"resting_dehydration_strain\": resting_dehydration_strain,\n            \"supported_active_pulse\": supported_active_pulse.astype(\"int8\"),\n            \"hydropulse_stage\": stage,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"hydration_linked_pulse_load\",\n        \"fn\": add_hydration_linked_pulse_load,\n        \"depends_on\": [],\n        \"description\": \"NaN-aware hydration, exertion, and pulse-load interactions that separate supported active profiles from dehydration-linked cardiovascular strain.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1da7-cc02-7323-bd95-768278241797",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13455,
+        "outputTokens": 1472,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14927
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13455,
+        "outputTokens": 1472,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14927
+      }
+    },
+    "turnId": "019f1da7-cc0c-7a33-9034-cbc3c94df526"
+  },
+  "wall_ms": 29441,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nGUIDELINE_COMPONENT_COLUMNS = (\n    \"bmi_points\",\n    \"sleep_duration_points\",\n    \"heart_rate_points\",\n    \"step_count_points\",\n    \"exercise_duration_points\",\n    \"water_intake_points\",\n    \"diet_type_points\",\n    \"stress_level_points\",\n    \"sleep_quality_points\",\n    \"physical_activity_level_points\",\n    \"smoking_alcohol_points\",\n)\n\n\ndef _numeric(raw, column):\n    if column not in raw.columns:\n        return pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    return pd.to_numeric(raw[column], errors=\"coerce\")\n\n\ndef _lower_text(raw, column):\n    if column not in raw.columns:\n        return pd.Series(pd.NA, index=raw.index, dtype=\"object\")\n    return raw[column].astype(\"string\").str.strip().str.lower()\n\n\ndef add_guideline_deviation_burden(raw, deps, aux):\n    out = pd.DataFrame(index=raw.index)\n\n    bmi = _numeric(raw, \"bmi\")\n    bmi_points = pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    bmi_points = bmi_points.mask(bmi < 18.5, 1.0)\n    bmi_points = bmi_points.mask((bmi >= 18.5) & (bmi < 25.0), 0.0)\n    bmi_points = bmi_points.mask((bmi >= 25.0) & (bmi < 30.0), 1.0)\n    bmi_points = bmi_points.mask(bmi >= 30.0, 2.0)\n    out[\"bmi_points\"] = bmi_points\n\n    sleep_duration = _numeric(raw, \"sleep_duration\")\n    sleep_points = pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    sleep_points = sleep_points.mask(sleep_duration < 6.0, 2.0)\n    sleep_points = sleep_points.mask((sleep_duration >= 6.0) & (sleep_duration < 7.0), 1.0)\n    sleep_points = sleep_points.mask((sleep_duration >= 7.0) & (sleep_duration <= 9.0), 0.0)\n    sleep_points = sleep_points.mask(sleep_duration > 9.0, 1.0)\n    out[\"sleep_duration_points\"] = sleep_points\n\n    heart_rate = _numeric(raw, \"heart_rate\")\n    heart_points = pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    heart_points = heart_points.mask((heart_rate >= 60.0) & (heart_rate <= 100.0), 0.0)\n    heart_points = heart_points.mask((heart_rate >= 50.0) & (heart_rate < 60.0), 1.0)\n    heart_points = heart_points.mask(heart_rate > 100.0, 2.0)\n    out[\"heart_rate_points\"] = heart_points\n\n    step_count = _numeric(raw, \"step_count\")\n    step_points = pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    step_points = step_points.mask(step_count < 4000.0, 2.0)\n    step_points = step_points.mask((step_count >= 4000.0) & (step_count < 7000.0), 1.0)\n    step_points = step_points.mask(step_count >= 7000.0, 0.0)\n    out[\"step_count_points\"] = step_points\n\n    exercise_duration = _numeric(raw, \"exercise_duration\")\n    exercise_points = pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    exercise_points = exercise_points.mask(exercise_duration == 0.0, 2.0)\n    exercise_points = exercise_points.mask((exercise_duration > 0.0) & (exercise_duration < 30.0), 1.0)\n    exercise_points = exercise_points.mask(exercise_duration >= 30.0, 0.0)\n    out[\"exercise_duration_points\"] = exercise_points\n\n    water_intake = _numeric(raw, \"water_intake\")\n    gender = _lower_text(raw, \"gender\")\n    water_target = pd.Series(3.2, index=raw.index, dtype=\"float64\")\n    water_target = water_target.mask(gender == \"male\", 3.7)\n    water_target = water_target.mask(gender == \"female\", 2.7)\n    water_ratio = water_intake / water_target\n    water_points = pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    water_points = water_points.mask(water_ratio >= 1.0, 0.0)\n    water_points = water_points.mask((water_ratio >= 0.7) & (water_ratio < 1.0), 1.0)\n    water_points = water_points.mask(water_ratio < 0.7, 2.0)\n    out[\"water_intake_points\"] = water_points\n    out[\"water_intake_target_liters\"] = water_target.where(water_intake.notna())\n    out[\"water_intake_target_ratio\"] = water_ratio\n\n    diet_type = _lower_text(raw, \"diet_type\")\n    out[\"diet_type_points\"] = diet_type.map({\"balanced\": 0.0, \"veg\": 1.0, \"non-veg\": 1.0}).astype(\"float64\")\n\n    stress_level = _lower_text(raw, \"stress_level\")\n    out[\"stress_level_points\"] = stress_level.map({\"low\": 0.0, \"medium\": 1.0, \"high\": 2.0}).astype(\"float64\")\n\n    sleep_quality = _lower_text(raw, \"sleep_quality\")\n    out[\"sleep_quality_points\"] = sleep_quality.map({\"good\": 0.0, \"average\": 1.0, \"poor\": 2.0}).astype(\"float64\")\n\n    activity_level = _lower_text(raw, \"physical_activity_level\")\n    out[\"physical_activity_level_points\"] = activity_level.map(\n        {\"active\": 0.0, \"moderate\": 1.0, \"sedentary\": 2.0}\n    ).astype(\"float64\")\n\n    smoking_alcohol = _lower_text(raw, \"smoking_alcohol\")\n    out[\"smoking_alcohol_points\"] = smoking_alcohol.map(\n        {\"no\": 0.0, \"occasional\": 1.0, \"yes\": 2.0}\n    ).astype(\"float64\")\n\n    components = out.loc[:, list(GUIDELINE_COMPONENT_COLUMNS)]\n    available_count = components.notna().sum(axis=1)\n\n    out[\"burden_sum\"] = components.sum(axis=1, min_count=1)\n    out[\"burden_mean\"] = components.mean(axis=1)\n    out[\"severe_deviation_count\"] = components.eq(2.0).sum(axis=1).where(available_count > 0)\n    out[\"healthy_alignment_count\"] = components.eq(0.0).sum(axis=1).where(available_count > 0)\n    out[\"burden_available_count\"] = available_count.astype(\"float64\")\n\n    return out\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"guideline_deviation_burden\",\n        \"fn\": add_guideline_deviation_burden,\n        \"depends_on\": [],\n        \"description\": \"Deterministic public-guideline deviation scores and aggregate lifestyle-health burden features.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1d7e-5f54-74b0-8aac-427da6a2366e",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13646,
+        "outputTokens": 2094,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 15740
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13646,
+        "outputTokens": 2094,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 15740
+      }
+    },
+    "turnId": "019f1d7e-5f61-75a3-9379-77c7040b98b1"
+  },
+  "wall_ms": 40577,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

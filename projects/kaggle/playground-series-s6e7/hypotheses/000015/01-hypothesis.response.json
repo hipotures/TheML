@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\"title\":\"Contextual Heart-Rate Strain\",\"group_name\":\"contextual_heart_rate_strain\",\"family\":\"contextual_physiology_residual\",\"summary\":\"Represent whether a student's pulse is unusually elevated or suppressed relative to peers with similar observable recovery, activity, and body-context patterns, isolating physiological strain that raw heart rate alone may obscure.\",\"depends_on\":[],\"strategy\":\"Using only non-target training rows, convert categorical context fields to explicit levels with missing as 'unknown' and bin sleep_duration, bmi, step_count, exercise_duration, and calorie_expenditure into training-derived quantile bands with a separate missing band; build hierarchical non-target reference tables for heart_rate median, IQR, and count using progressively coarser keys such as recovery context, activity context, body context, and then global fallback; for each row choose the most specific table cell with count >= 200, compute expected_hr as the chosen cell median, hr_context_residual = heart_rate - expected_hr, hr_context_robust_z = residual / max(IQR / 1.349, 1.0), abs_hr_context_robust_z, elevated_hr_context_flag for robust_z >= 1.5, suppressed_hr_context_flag for robust_z <= -1.5, and log_context_count; if heart_rate is missing, keep residual and z fields missing while still returning expected_hr and log_context_count when context is available. This is source-informed by AHA heart-rate context guidance (https://www.heart.org/en/health-topics/high-blood-pressure/the-facts-about-high-blood-pressure/all-about-heart-rate-pulse), WHO physical-activity health context (https://www.who.int/news-room/fact-sheets/detail/physical-activity), and sleep-quality/heart-rate evidence (https://www.dovepress.com/associations-of-subjective-sleep-quality-with-wearable-device-derived--peer-reviewed-fulltext-article-NSS).\",\"expected_signal\":\"Health labels may differ most when the same absolute heart_rate is normal for one lifestyle context but abnormal for another, so peer-context residuals can expose autonomic strain or athletic-like efficiency that improves separation of fit, at-risk, and unhealthy classes without using target labels.\",\"risk\":\"The learned reference tables may be redundant with raw heart_rate and activity features, sparse context cells can create unstable residuals despite fallbacks, and the statistics must be fitted only from the training portion available to the feature generator to avoid distribution peeking in out-of-sample scoring.\"}",
+  "usage": {
+    "threadId": "019f1d4a-2391-7d20-a333-881f0f633f3e",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 25018,
+        "outputTokens": 2780,
+        "reasoningOutputTokens": 2229,
+        "totalTokens": 27798
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 25018,
+        "outputTokens": 2780,
+        "reasoningOutputTokens": 2229,
+        "totalTokens": 27798
+      }
+    },
+    "turnId": "019f1d4a-239e-7a61-8bf8-df54503ec1f2"
+  },
+  "wall_ms": 55898,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

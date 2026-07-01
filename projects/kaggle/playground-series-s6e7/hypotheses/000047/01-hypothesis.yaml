@@ -1,0 +1,37 @@
+title: Ordinal Response Process
+group_name: ordinal_response_tree_decomposition
+family: survey_response_process
+summary: Decompose ordered self-reported lifestyle categories into midpoint selection
+  and endpoint direction signals, treating at-risk status as potentially tied to neutral
+  or moderate response behavior rather than only to clearly protective or adverse
+  answers.
+depends_on: []
+strategy: 'Use only stress_level, sleep_quality, physical_activity_level, and smoking_alcohol.
+  Define ordered triads as protective/midpoint/adverse: stress_level low/medium/high,
+  sleep_quality good/average/poor, physical_activity_level active/moderate/sedentary,
+  and smoking_alcohol no/occasional/yes. For each column create midpoint_flag = 1
+  for the midpoint label, 0 for either endpoint, and NaN if missing; create endpoint_risk_direction
+  = 1 for the adverse endpoint, -1 for the protective endpoint, 0 for the midpoint,
+  and NaN if missing. Aggregate across nonmissing ordered items into observed_ordered_count,
+  midpoint_fraction, endpoint_fraction, adverse_endpoint_fraction, protective_endpoint_fraction,
+  and net_endpoint_risk = (adverse_endpoint_count - protective_endpoint_count) / max(endpoint_count,
+  1). If endpoint_count is 0 set net_endpoint_risk to 0; if observed_ordered_count
+  is 0 set fractions to NaN and counts to 0. Leave diet_type and gender unused because
+  they lack a consistent health-intensity order.'
+expected_signal: The at-risk class may be concentrated in middle-category and mixed
+  endpoint patterns, while fit and unhealthy cases may more often show consistent
+  protective or adverse endpoints, so explicitly separating midpoint response behavior
+  from health-direction response behavior may improve balanced accuracy; this is motivated
+  by response-style literature on midpoint and extreme responses in ordinal survey
+  items (https://journals.sagepub.com/doi/10.1177/00131644211020103) and student health-behavior
+  research finding healthier, moderate, and unhealthy lifestyle classes (https://www.mdpi.com/2072-6643/13/2/425).
+risk: This may be partly redundant with raw categorical values and prior self-report
+  polarity ideas, and the ordinal assumptions for occasional substance use and moderate
+  activity are coarse; if the data generator treats these labels as nominal rather
+  than ordered, or if missingness already captures most of the signal, the added contrasts
+  may contribute little.
+schema_version: 1
+hypothesis_id: '000047'
+revision: 1
+enabled: true
+created_at: '2026-07-01T14:34:52'

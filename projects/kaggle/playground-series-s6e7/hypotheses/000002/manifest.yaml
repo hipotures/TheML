@@ -5,4 +5,11 @@ revisions:
   1:
     file: 01-hypothesis.yaml
     prefix: 01-hypothesis
-materializations: {}
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 3f849d6f917f9943eb9a1b6d0db017a4871b2d3be8fb969201ef9579fb65d72d
+      created_at: '2026-07-01T13:45:21'

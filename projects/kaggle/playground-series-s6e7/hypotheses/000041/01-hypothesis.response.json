@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Source Value Popularity Signature\",\n  \"group_name\": \"source_value_popularity_signature\",\n  \"family\": \"unsupervised_frequency_encoding\",\n  \"summary\": \"Represent whether each student profile is assembled from common or rare source-distribution values and coarse states, treating value popularity as a compact source-generation context signal rather than a direct health-behavior score.\",\n  \"depends_on\": [],\n  \"strategy\": \"Fit all statistics on training features only, excluding id and health_condition. For each raw feature, create an explicit missing token; for categorical columns use exact category tokens, and for numeric columns use both exact recorded values and fixed coarse bins: sleep_duration in 0.5-hour bins, heart_rate in 5-bpm bins, bmi in 1-unit bins, calorie_expenditure in 100-kcal bins, step_count in 1000-step bins, exercise_duration in 10-minute bins, and water_intake in 0.25-liter bins. Compute per-column token counts and frequencies with additive smoothing alpha=1 over N plus the number of observed tokens. For each row, map exact and coarse tokens to log frequency and within-column frequency percentile, then output row-level summaries separately for exact and coarse representations: mean, minimum, maximum, standard deviation, sum of negative log frequency, count of rare tokens where frequency is below 0.001 or count is below 50, and count of unseen tokens encoded with the smoothed floor.\",\n  \"expected_signal\": \"Count and frequency encodings are documented tabular representations that can expose popularity or rarity structure without labels, and tabular competition feature engineering references highlight count features and binning as useful source-pattern signals (https://feature-engine.trainindata.com/en/1.8.x/user_guide/encoding/CountFrequencyEncoder.html; https://developer.nvidia.com/blog/grandmaster-pro-tip-winning-first-place-in-kaggle-competition-with-feature-engineering-using-nvidia-cudf-pandas/), so minority health classes may become easier to separate if they occupy less common exact or coarse value strata.\",\n  \"risk\": \"May capture source-generation artifacts rather than stable health mechanisms, can be redundant with existing measurement-quality or profile-rarity groups, and rare or unseen frequencies are sensitive to train-test distribution shift despite smoothing.\"\n}",
+  "usage": {
+    "threadId": "019f1d9a-6485-78c1-9b6d-312844ebfb5d",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 35208,
+        "outputTokens": 3696,
+        "reasoningOutputTokens": 3609,
+        "totalTokens": 38904
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 35208,
+        "outputTokens": 3696,
+        "reasoningOutputTokens": 3609,
+        "totalTokens": 38904
+      }
+    },
+    "turnId": "019f1d9a-6492-73d3-a399-d52ead38f329"
+  },
+  "wall_ms": 237927,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

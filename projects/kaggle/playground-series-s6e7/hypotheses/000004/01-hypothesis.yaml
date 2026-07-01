@@ -1,0 +1,36 @@
+title: Perceived-Observed Alignment
+group_name: perceived_observed_alignment
+family: self_report_objective_discordance
+summary: Represent whether each student's subjective categorical health reports agree
+  or conflict with adjacent measured behavior and physiology signals, treating perception-observation
+  misalignment as a distinct health-risk pattern.
+depends_on: []
+strategy: 'Map ordered self-report fields to 0/1/2: sleep_quality as poor/average/good,
+  physical_activity_level as sedentary/moderate/active, and stress_level as low/medium/high.
+  Fit unsupervised tertile cut points on training features only for sleep_duration,
+  heart_rate, and an objective activity output score defined as the row mean of percentile
+  ranks for step_count, exercise_duration, and calorie_expenditure; convert each objective
+  signal to 0/1/2, with heart_rate ordered low-to-high for stress alignment. For sleep,
+  activity, and stress, create a signed perception-minus-observation gap, an absolute
+  gap, and a 9-level pair code equal to self_report_ord * 3 + objective_bin. Also
+  create row-level mean absolute gap and counts of domains where the report is above,
+  equal to, or below the objective bin, computed over available domains only. If either
+  side of a domain is missing, set that domain''s gap and pair code to -1 and exclude
+  it from row-level averages and counts; do not use health_condition or external target
+  values.'
+expected_signal: This may improve balanced accuracy because minority classes can be
+  marked by inconsistent profiles such as good reported sleep despite short sleep,
+  active reported lifestyle with low movement output, or low stress with elevated
+  heart rate; the idea is motivated by multidomain lifestyle interaction evidence
+  (https://humanfactors.jmir.org/2026/1/e78648), joint sleep duration-quality health
+  effects in students (https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2022.957409/full),
+  and self-report versus pedometer discrepancies among university students (https://www.mdpi.com/1660-4601/22/12/1798).
+risk: The group assumes categorical levels are ordinal and train-feature tertiles
+  remain stable in test; rare pair-code combinations may be noisy, and the signal
+  may be redundant if raw categorical-numeric interactions already capture the same
+  disagreement patterns.
+schema_version: 1
+hypothesis_id: '000004'
+revision: 1
+enabled: true
+created_at: '2026-07-01T12:17:08'

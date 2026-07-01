@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nBMI_UNDERWEIGHT_MAX = 18.5\nBMI_HEALTHY_MAX = 25.0\nBMI_OVERWEIGHT_MAX = 30.0\nHR_LOW_MAX = 60.0\nHR_NORMAL_MAX = 80.0\nHR_HIGH_NORMAL_MAX = 100.0\nATHLETIC_STEPS_MIN = 10000.0\nATHLETIC_EXERCISE_MIN = 45.0\n\n\ndef _numeric_column(raw, name):\n    if name in raw.columns:\n        return pd.to_numeric(raw[name], errors=\"coerce\")\n    return pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n\n\ndef _string_column(raw, name):\n    if name in raw.columns:\n        return raw[name].astype(\"string\").str.strip().str.lower()\n    return pd.Series(pd.NA, index=raw.index, dtype=\"string\")\n\n\ndef add_fitness_contextualized_cardiometabolic_stage(raw, deps, aux):\n    bmi = _numeric_column(raw, \"bmi\")\n    heart_rate = _numeric_column(raw, \"heart_rate\")\n    step_count = _numeric_column(raw, \"step_count\")\n    exercise_duration = _numeric_column(raw, \"exercise_duration\")\n    activity_level = _string_column(raw, \"physical_activity_level\")\n\n    bmi_category = pd.Series(\"bmi_missing\", index=raw.index, dtype=\"object\")\n    bmi_category = bmi_category.mask(bmi < BMI_UNDERWEIGHT_MAX, \"underweight\")\n    bmi_category = bmi_category.mask((bmi >= BMI_UNDERWEIGHT_MAX) & (bmi < BMI_HEALTHY_MAX), \"healthy\")\n    bmi_category = bmi_category.mask((bmi >= BMI_HEALTHY_MAX) & (bmi < BMI_OVERWEIGHT_MAX), \"overweight\")\n    bmi_category = bmi_category.mask(bmi >= BMI_OVERWEIGHT_MAX, \"obesity\")\n\n    heart_category = pd.Series(\"heart_rate_missing\", index=raw.index, dtype=\"object\")\n    heart_category = heart_category.mask(heart_rate < HR_LOW_MAX, \"low\")\n    heart_category = heart_category.mask((heart_rate >= HR_LOW_MAX) & (heart_rate < HR_NORMAL_MAX), \"normal\")\n    heart_category = heart_category.mask((heart_rate >= HR_NORMAL_MAX) & (heart_rate < HR_HIGH_NORMAL_MAX), \"high_normal\")\n    heart_category = heart_category.mask(heart_rate >= HR_HIGH_NORMAL_MAX, \"tachycardia_like\")\n\n    athletic_evidence = (\n        activity_level.eq(\"active\").fillna(False)\n        | step_count.ge(ATHLETIC_STEPS_MIN).fillna(False)\n        | exercise_duration.ge(ATHLETIC_EXERCISE_MIN).fillna(False)\n    )\n\n    contextual_heart_category = heart_category.copy()\n    low_heart_rate = heart_category.eq(\"low\")\n    contextual_heart_category = contextual_heart_category.mask(low_heart_rate & athletic_evidence, \"athletic_low\")\n    contextual_heart_category = contextual_heart_category.mask(low_heart_rate & ~athletic_evidence, \"unexplained_low\")\n\n    bmi_points = pd.Series(0, index=raw.index, dtype=\"int16\")\n    bmi_points = bmi_points.mask(bmi_category.eq(\"underweight\"), 1)\n    bmi_points = bmi_points.mask(bmi_category.eq(\"overweight\"), 1)\n    bmi_points = bmi_points.mask(bmi_category.eq(\"obesity\"), 2)\n\n    heart_points = pd.Series(0, index=raw.index, dtype=\"int16\")\n    heart_points = heart_points.mask(contextual_heart_category.eq(\"unexplained_low\"), 1)\n    heart_points = heart_points.mask(contextual_heart_category.eq(\"high_normal\"), 1)\n    heart_points = heart_points.mask(contextual_heart_category.eq(\"tachycardia_like\"), 2)\n\n    stage_score = (bmi_points + heart_points).astype(\"int16\")\n\n    high_pulse = contextual_heart_category.isin([\"high_normal\", \"tachycardia_like\"])\n\n    new_features = pd.DataFrame(index=raw.index)\n    new_features[\"bmi_category\"] = bmi_category.astype(\"category\")\n    new_features[\"contextual_heart_rate_category\"] = contextual_heart_category.astype(\"category\")\n    new_features[\"bmi_x_contextual_heart_rate\"] = (\n        bmi_category.astype(\"string\") + \"__\" + contextual_heart_category.astype(\"string\")\n    ).astype(\"category\")\n    new_features[\"cardiometabolic_stage_score\"] = stage_score\n    new_features[\"healthy_athletic_low_pulse\"] = (\n        bmi_category.eq(\"healthy\") & contextual_heart_category.eq(\"athletic_low\")\n    ).astype(\"int8\")\n    new_features[\"heavy_high_pulse\"] = (\n        bmi_category.isin([\"overweight\", \"obesity\"]) & high_pulse\n    ).astype(\"int8\")\n    new_features[\"underweight_high_pulse\"] = (\n        bmi_category.eq(\"underweight\") & high_pulse\n    ).astype(\"int8\")\n    new_features[\"unexplained_low_pulse\"] = contextual_heart_category.eq(\"unexplained_low\").astype(\"int8\")\n\n    return new_features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"fitness_contextualized_cardiometabolic_stage\",\n        \"fn\": add_fitness_contextualized_cardiometabolic_stage,\n        \"depends_on\": [],\n        \"description\": \"Clinical-threshold BMI and resting-pulse staging with activity-contextualized low heart rate interactions.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1d8a-18c5-7a93-b0dd-ca7c11def6a4",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13327,
+        "outputTokens": 1677,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 15004
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13327,
+        "outputTokens": 1677,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 15004
+      }
+    },
+    "turnId": "019f1d8a-18d1-7ce0-baf4-2376ce1a8886"
+  },
+  "wall_ms": 32191,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nGROUP_NAME = \"gender_lifestyle_category_typicality\"\nGENDER_COL = \"gender\"\nID_COL = \"id\"\nTRAIN_ID_UPPER_EXCLUSIVE = 690088\nMISSING_TOKEN = \"__missing__\"\nUNKNOWN_TOKEN = \"__unknown__\"\nALPHA = 1.0\nLOW_PROB_THRESHOLD = 0.20\n\nLIFESTYLE_COLS = (\n    \"diet_type\",\n    \"stress_level\",\n    \"sleep_quality\",\n    \"physical_activity_level\",\n    \"smoking_alcohol\",\n)\n\n\ndef _as_token_series(df, col):\n    if col not in df.columns:\n        return pd.Series(MISSING_TOKEN, index=df.index, dtype=\"object\")\n    values = df[col].astype(\"object\").where(df[col].notna(), MISSING_TOKEN)\n    return values.astype(str)\n\n\ndef _fit_mask(raw):\n    if ID_COL not in raw.columns:\n        return pd.Series(True, index=raw.index)\n\n    ids = pd.to_numeric(raw[ID_COL], errors=\"coerce\")\n    mask = ids.lt(TRAIN_ID_UPPER_EXCLUSIVE)\n    if bool(mask.any()):\n        return mask.fillna(False)\n    return pd.Series(True, index=raw.index)\n\n\ndef add_gender_lifestyle_category_typicality(raw, deps, aux):\n    fit_mask = _fit_mask(raw)\n\n    gender_all = _as_token_series(raw, GENDER_COL)\n    gender_fit = gender_all.loc[fit_mask]\n\n    out = pd.DataFrame(index=raw.index)\n\n    cond_surprises = []\n    overall_surprises = []\n    log_lifts = []\n    cond_log_probs = []\n    low_prob_flags = []\n\n    n_fit = int(fit_mask.sum())\n\n    for col in LIFESTYLE_COLS:\n        value_all = _as_token_series(raw, col)\n        value_fit = value_all.loc[fit_mask]\n\n        levels = pd.Index(value_fit.unique()).union(pd.Index([MISSING_TOKEN]))\n        genders = pd.Index(gender_fit.unique()).union(pd.Index([MISSING_TOKEN]))\n\n        n_levels = int(len(levels))\n        n_genders = int(len(genders))\n\n        overall_counts = value_fit.value_counts(dropna=False)\n        overall_denom = float(n_fit + ALPHA * n_levels)\n        overall_probs = (overall_counts.reindex(levels, fill_value=0).astype(float) + ALPHA) / overall_denom\n        default_overall_prob = float(ALPHA / overall_denom)\n\n        pair_counts = pd.crosstab(gender_fit, value_fit, dropna=False)\n        pair_counts = pair_counts.reindex(index=genders, columns=levels, fill_value=0).astype(float)\n        gender_counts = gender_fit.value_counts(dropna=False).reindex(genders, fill_value=0).astype(float)\n        cond_probs = pair_counts.add(ALPHA).div(gender_counts.add(ALPHA * n_levels), axis=0)\n\n        row_index = pd.MultiIndex.from_arrays([gender_all, value_all])\n        cond_lookup = cond_probs.stack(dropna=False)\n        cond_prob = pd.Series(row_index.map(cond_lookup), index=raw.index, dtype=\"float64\")\n\n        overall_prob = value_all.map(overall_probs).astype(\"float64\").fillna(default_overall_prob)\n        cond_prob = cond_prob.fillna(overall_prob)\n\n        cond_prob = cond_prob.clip(lower=np.finfo(float).tiny)\n        overall_prob = overall_prob.clip(lower=np.finfo(float).tiny)\n\n        cond_surprise = -np.log(cond_prob)\n        overall_surprise = -np.log(overall_prob)\n        log_lift = np.log(cond_prob) - np.log(overall_prob)\n\n        cond_surprises.append(cond_surprise)\n        overall_surprises.append(overall_surprise)\n        log_lifts.append(log_lift)\n        cond_log_probs.append(np.log(cond_prob))\n        low_prob_flags.append(cond_prob.lt(LOW_PROB_THRESHOLD).astype(\"int8\"))\n\n    cond_surprise_df = pd.concat(cond_surprises, axis=1)\n    overall_surprise_df = pd.concat(overall_surprises, axis=1)\n    log_lift_df = pd.concat(log_lifts, axis=1)\n    cond_log_prob_df = pd.concat(cond_log_probs, axis=1)\n    low_prob_df = pd.concat(low_prob_flags, axis=1)\n\n    out[\"mean_conditional_surprise\"] = cond_surprise_df.mean(axis=1)\n    out[\"max_conditional_surprise\"] = cond_surprise_df.max(axis=1)\n    out[\"sum_conditional_surprise\"] = cond_surprise_df.sum(axis=1)\n    out[\"sum_overall_surprise\"] = overall_surprise_df.sum(axis=1)\n    out[\"low_gender_probability_count\"] = low_prob_df.sum(axis=1).astype(\"int8\")\n    out[\"mean_gender_log_lift\"] = log_lift_df.mean(axis=1)\n    out[\"sum_abs_gender_log_lift\"] = log_lift_df.abs().sum(axis=1)\n    out[\"summed_conditional_log_probability\"] = cond_log_prob_df.sum(axis=1)\n\n    return out\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"gender_lifestyle_category_typicality\",\n        \"fn\": add_gender_lifestyle_category_typicality,\n        \"depends_on\": [],\n        \"description\": \"Smoothed same-gender typicality aggregates for lifestyle category values.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1d9f-0138-7650-b6c3-07ac5dfc4689",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13309,
+        "outputTokens": 1640,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14949
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13309,
+        "outputTokens": 1640,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14949
+      }
+    },
+    "turnId": "019f1d9f-0146-7433-95b6-a9562ab87257"
+  },
+  "wall_ms": 31674,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

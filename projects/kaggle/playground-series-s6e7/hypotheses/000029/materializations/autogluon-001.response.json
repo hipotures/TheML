@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nSLEEP_QUALITY_MAP = {\n    \"poor\": 0.0,\n    \"average\": 0.5,\n    \"good\": 1.0,\n}\n\nPHYSICAL_ACTIVITY_MAP = {\n    \"sedentary\": 0.0,\n    \"moderate\": 0.5,\n    \"active\": 1.0,\n}\n\nDIET_TYPE_MAP = {\n    \"non-veg\": 0.35,\n    \"veg\": 0.7,\n    \"balanced\": 1.0,\n}\n\nSTRESS_LEVEL_MAP = {\n    \"low\": 0.0,\n    \"medium\": 0.5,\n    \"high\": 1.0,\n}\n\nSMOKING_ALCOHOL_MAP = {\n    \"no\": 0.0,\n    \"occasional\": 0.5,\n    \"yes\": 1.0,\n}\n\n\ndef _numeric_column(raw, name):\n    if name not in raw.columns:\n        return pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    return pd.to_numeric(raw[name], errors=\"coerce\")\n\n\ndef _mapped_column(raw, name, mapping):\n    if name not in raw.columns:\n        return pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    values = raw[name].astype(\"string\").str.strip().str.lower()\n    return values.map(mapping).astype(\"float64\")\n\n\ndef _row_mean_with_nan(columns, index):\n    frame = pd.concat(columns, axis=1)\n    result = frame.mean(axis=1, skipna=True)\n    return result.reindex(index)\n\n\ndef add_risk_protection_behavior_gap(raw, deps, aux):\n    sleep_duration = _numeric_column(raw, \"sleep_duration\")\n    heart_rate = _numeric_column(raw, \"heart_rate\")\n    bmi = _numeric_column(raw, \"bmi\")\n    step_count = _numeric_column(raw, \"step_count\")\n    exercise_duration = _numeric_column(raw, \"exercise_duration\")\n    water_intake = _numeric_column(raw, \"water_intake\")\n\n    sleep_amount = (1.0 - (sleep_duration - 7.5).abs() / 3.5).clip(0.0, 1.0)\n    sleep_quality = _mapped_column(raw, \"sleep_quality\", SLEEP_QUALITY_MAP)\n\n    movement_steps = ((step_count - 4000.0) / 6000.0).clip(0.0, 1.0)\n    movement_exercise = (exercise_duration / 45.0).clip(0.0, 1.0)\n    movement_activity = _mapped_column(raw, \"physical_activity_level\", PHYSICAL_ACTIVITY_MAP)\n    movement = _row_mean_with_nan(\n        [movement_steps, movement_exercise, movement_activity],\n        raw.index,\n    )\n\n    self_care_water = ((water_intake - 0.5) / 2.0).clip(0.0, 1.0)\n    self_care_diet = _mapped_column(raw, \"diet_type\", DIET_TYPE_MAP)\n    self_care = _row_mean_with_nan([self_care_water, self_care_diet], raw.index)\n\n    stress = _mapped_column(raw, \"stress_level\", STRESS_LEVEL_MAP)\n    smoking_alcohol = _mapped_column(raw, \"smoking_alcohol\", SMOKING_ALCOHOL_MAP)\n\n    heart_load = ((heart_rate - 75.0) / 28.0).clip(0.0, 1.0)\n    bmi_distance = pd.concat([18.5 - bmi, bmi - 25.0], axis=1).max(axis=1)\n    bmi_load = (bmi_distance / 8.0).clip(0.0, 1.0)\n    cardio_body_load = _row_mean_with_nan([heart_load, bmi_load], raw.index)\n\n    sleep_deficit = ((7.0 - sleep_duration) / 4.0).clip(0.0, 1.0)\n\n    protective_score = _row_mean_with_nan(\n        [sleep_amount, sleep_quality, movement, self_care],\n        raw.index,\n    ).fillna(0.5)\n\n    harm_score = _row_mean_with_nan(\n        [stress, smoking_alcohol, cardio_body_load, sleep_deficit],\n        raw.index,\n    ).fillna(0.5)\n\n    protection_minus_harm = protective_score - harm_score\n    buffered_risk = pd.concat([protective_score, harm_score], axis=1).min(axis=1)\n    unsupported_exposure = harm_score * (1.0 - protective_score)\n\n    high_protection = protective_score >= 0.6\n    high_harm = harm_score > 0.35\n    quadrant = pd.Series(0, index=raw.index, dtype=\"int8\")\n    quadrant.loc[high_protection & ~high_harm] = 3\n    quadrant.loc[high_protection & high_harm] = 2\n    quadrant.loc[~high_protection & ~high_harm] = 1\n    quadrant.loc[~high_protection & high_harm] = 0\n\n    return pd.DataFrame(\n        {\n            \"protective_score\": protective_score.astype(\"float32\"),\n            \"harm_score\": harm_score.astype(\"float32\"),\n            \"protection_minus_harm\": protection_minus_harm.astype(\"float32\"),\n            \"buffered_risk\": buffered_risk.astype(\"float32\"),\n            \"unsupported_exposure\": unsupported_exposure.astype(\"float32\"),\n            \"risk_protection_quadrant\": quadrant,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"risk_protection_behavior_gap\",\n        \"fn\": add_risk_protection_behavior_gap,\n        \"depends_on\": [],\n        \"description\": \"Contrasts protective routines against damaging exposures to summarize buffered and unsupported health risk profiles.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1d99-b5a1-77c2-ac77-389845eee3c2",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13483,
+        "outputTokens": 1768,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 15251
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13483,
+        "outputTokens": 1768,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 15251
+      }
+    },
+    "turnId": "019f1d99-b5ad-7040-926b-e44badc690a5"
+  },
+  "wall_ms": 34520,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

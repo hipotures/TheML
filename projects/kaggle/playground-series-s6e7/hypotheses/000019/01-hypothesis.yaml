@@ -1,0 +1,34 @@
+title: Weakest lifestyle pillar bottleneck
+group_name: lifestyle_pillar_bottleneck
+family: domain_balance_score
+summary: Represent each student by the weakest and most uneven lifestyle-health pillar
+  rather than by overall wellness alone, capturing whether risk is driven by a single
+  severe bottleneck or broad multi-domain deterioration.
+depends_on: []
+strategy: 'Source-informed by lifestyle-medicine and cardiovascular-health domain
+  frameworks (https://lifestylemedicine.org/about-lifestyle-medicine/ and https://www.heart.org/en/healthy-living/healthy-lifestyle/lifes-essential-8),
+  create six row-level pillar scores on a 0 to 1 scale: sleep recovery from sleep
+  duration bands and sleep quality; movement from step count, exercise duration, and
+  physical activity level; nutrition-support from diet type and water intake; stress-load
+  from stress level; substance-avoidance from smoking_alcohol; cardiometabolic steadiness
+  from BMI and heart-rate bands. Use deterministic ordinal mappings where protective
+  states score 1, intermediate states score 0.5, adverse states score 0, and numeric
+  bands use broadly accepted healthy ranges with adjacent borderline bands scored
+  0.5. For each pillar, average available component scores; if all components for
+  a pillar are missing, assign neutral 0.5 so this group does not become a pure missingness
+  signal. Emit a coherent set of bottleneck features: minimum pillar score, weakest
+  pillar id, second-weakest pillar score, count of pillars below 0.34, count above
+  0.66, spread between best and worst pillar, mean of the two weakest pillars, mean
+  of the two strongest pillars, and strongest-minus-weakest compensation gap.'
+expected_signal: Balanced accuracy may improve because fit students should tend to
+  have no severe weak pillar, unhealthy students may show multiple low pillars or
+  a very low cardiometabolic/stress/substance bottleneck, and at-risk students may
+  occupy mixed profiles where one domain fails despite otherwise moderate habits.
+risk: This may overlap with prior guideline-deviation and categorical-polarity groups,
+  and the fixed health bands may be unstable if the synthetic target encodes different
+  thresholds or treats categories such as diet type in a non-domain-realistic way.
+schema_version: 1
+hypothesis_id: 000019
+revision: 1
+enabled: true
+created_at: '2026-07-01T12:59:20'

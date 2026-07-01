@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import pandas as pd\n\n\nNUMERIC_RESPONSE_FEATURES = (\n    \"sleep_duration\",\n    \"heart_rate\",\n    \"bmi\",\n    \"calorie_expenditure\",\n    \"step_count\",\n    \"exercise_duration\",\n    \"water_intake\",\n)\n\nCATEGORICAL_RESPONSE_FEATURES = (\n    \"diet_type\",\n    \"stress_level\",\n    \"sleep_quality\",\n    \"physical_activity_level\",\n    \"smoking_alcohol\",\n    \"gender\",\n)\n\nALL_RESPONSE_FEATURES = (\n    \"sleep_duration\",\n    \"heart_rate\",\n    \"bmi\",\n    \"calorie_expenditure\",\n    \"step_count\",\n    \"exercise_duration\",\n    \"water_intake\",\n    \"diet_type\",\n    \"stress_level\",\n    \"sleep_quality\",\n    \"physical_activity_level\",\n    \"smoking_alcohol\",\n    \"gender\",\n)\n\nWELLNESS_REPORT_FEATURES = (\n    \"stress_level\",\n    \"sleep_quality\",\n    \"physical_activity_level\",\n    \"smoking_alcohol\",\n    \"diet_type\",\n    \"gender\",\n)\n\n\ndef _missing_mask(raw, column_name, check_blank):\n    values = raw[column_name]\n    mask = values.isna()\n    if check_blank:\n        blank_mask = values.astype(\"string\").str.strip().eq(\"\").fillna(False)\n        mask = mask | blank_mask\n    return mask\n\n\ndef _safe_ratio(counts, denominator):\n    if denominator:\n        return counts.astype(\"float32\") / float(denominator)\n    return pd.Series(0.0, index=counts.index, dtype=\"float32\")\n\n\ndef add_response_completeness_signature(raw, deps, aux):\n    features = pd.DataFrame(index=raw.index)\n\n    all_available = []\n    numeric_available = []\n    categorical_available = []\n    wellness_available = []\n\n    for column_name in ALL_RESPONSE_FEATURES:\n        if column_name not in raw.columns:\n            continue\n\n        check_blank = column_name in CATEGORICAL_RESPONSE_FEATURES\n        missing = _missing_mask(raw, column_name, check_blank)\n\n        features[column_name + \"_is_missing\"] = missing.astype(\"int8\")\n        all_available.append(column_name)\n\n        if column_name in NUMERIC_RESPONSE_FEATURES:\n            numeric_available.append(column_name)\n        if column_name in CATEGORICAL_RESPONSE_FEATURES:\n            categorical_available.append(column_name)\n        if column_name in WELLNESS_REPORT_FEATURES:\n            wellness_available.append(column_name)\n\n    if all_available:\n        all_indicator_columns = [column_name + \"_is_missing\" for column_name in all_available]\n        missing_count = features[all_indicator_columns].sum(axis=1).astype(\"int16\")\n    else:\n        missing_count = pd.Series(0, index=raw.index, dtype=\"int16\")\n\n    if numeric_available:\n        numeric_indicator_columns = [column_name + \"_is_missing\" for column_name in numeric_available]\n        numeric_missing_count = features[numeric_indicator_columns].sum(axis=1).astype(\"int16\")\n    else:\n        numeric_missing_count = pd.Series(0, index=raw.index, dtype=\"int16\")\n\n    if categorical_available:\n        categorical_indicator_columns = [column_name + \"_is_missing\" for column_name in categorical_available]\n        categorical_missing_count = features[categorical_indicator_columns].sum(axis=1).astype(\"int16\")\n    else:\n        categorical_missing_count = pd.Series(0, index=raw.index, dtype=\"int16\")\n\n    if wellness_available:\n        wellness_indicator_columns = [column_name + \"_is_missing\" for column_name in wellness_available]\n        wellness_missing_count = features[wellness_indicator_columns].sum(axis=1).astype(\"int16\")\n    else:\n        wellness_missing_count = pd.Series(0, index=raw.index, dtype=\"int16\")\n\n    features[\"missing_count\"] = missing_count\n    features[\"missing_ratio\"] = _safe_ratio(missing_count, len(all_available))\n\n    features[\"numeric_missing_count\"] = numeric_missing_count\n    features[\"numeric_missing_ratio\"] = _safe_ratio(numeric_missing_count, len(numeric_available))\n\n    features[\"categorical_missing_count\"] = categorical_missing_count\n    features[\"categorical_missing_ratio\"] = _safe_ratio(categorical_missing_count, len(categorical_available))\n\n    features[\"wellness_report_missing_count\"] = wellness_missing_count\n    features[\"wellness_report_missing_ratio\"] = _safe_ratio(wellness_missing_count, len(wellness_available))\n\n    completeness_bin = pd.Series(\"complete\", index=raw.index, dtype=\"object\")\n    completeness_bin = completeness_bin.mask((missing_count >= 1) & (missing_count <= 2), \"low_missing\")\n    completeness_bin = completeness_bin.mask((missing_count >= 3) & (missing_count <= 4), \"moderate_missing\")\n    completeness_bin = completeness_bin.mask(missing_count >= 5, \"high_missing\")\n    features[\"completeness_bin\"] = completeness_bin\n\n    return features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"response_completeness_signature\",\n        \"fn\": add_response_completeness_signature,\n        \"depends_on\": [],\n        \"description\": \"Encodes per-field and row-level missingness patterns across health and lifestyle responses.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1d7f-7eec-78f0-89c1-799c95dbe552",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13287,
+        "outputTokens": 1588,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14875
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13287,
+        "outputTokens": 1588,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14875
+      }
+    },
+    "turnId": "019f1d7f-7efa-73e0-ae13-47bc4539017e"
+  },
+  "wall_ms": 30860,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

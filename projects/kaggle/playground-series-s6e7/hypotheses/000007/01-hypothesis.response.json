@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\"title\":\"Waking-Day Behavior Density\",\"group_name\":\"waking_day_behavior_density\",\"family\":\"24h_time_budget\",\"summary\":\"Represent each student's lifestyle intensity relative to estimated waking time, capturing whether movement, exercise, energy use, and hydration are sparse or concentrated within the non-sleep portion of the day.\",\"depends_on\":[],\"strategy\":\"Compute estimated_waking_hours = 24 - sleep_duration after clipping valid sleep_duration to [1, 23]; if sleep_duration is missing or invalid, all waking-time-normalized features are missing. Derive exercise_wake_share = exercise_duration / (60 * estimated_waking_hours), steps_per_wake_hour = step_count / estimated_waking_hours, calories_per_wake_hour = calorie_expenditure / estimated_waking_hours, water_per_wake_hour = water_intake / estimated_waking_hours, hydration_per_1000_kcal = water_intake / max(calorie_expenditure / 1000, 0.001), and sleep_to_exercise_hours = sleep_duration / (1 + exercise_duration / 60). Add compact deterministic bands for movement density (<250, 250-500, 500-750, >=750 steps per waking hour) and exercise density (0, >0-1, 1-3, >=3 exercise minutes per waking hour). Preserve missing values rather than imputing; protect all denominators with small positive floors only for impossible zero denominators.\",\"expected_signal\":\"Raw daily totals can hide whether behavior is genuinely active or merely spread across long waking periods; this group may separate fit students with dense active days from at-risk or unhealthy students whose sleep, movement, hydration, and energy patterns are inefficiently allocated. It is motivated by public health sources treating sleep, activity, nutrition, and substance behaviors as linked lifestyle risk domains, and by 24-hour movement research noting that these behaviors cluster within a finite day: https://www.cdc.gov/environmental-health-tracking/php/data-research/lifestyle-risk-factors.html and https://link.springer.com/article/10.1186/s44167-023-00025-5.\",\"risk\":\"Ratios can amplify measurement noise in sleep_duration and may be redundant with raw activity and sleep features or with prior recovery/strain-style groups; the assumption that all numeric quantities describe the same daily window may be unstable if rows mix survey recall periods.\"}",
+  "usage": {
+    "threadId": "019f1d39-9168-76d0-bcf8-5aa0f206c0d3",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 30872,
+        "outputTokens": 1644,
+        "reasoningOutputTokens": 1293,
+        "totalTokens": 32516
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 30872,
+        "outputTokens": 1644,
+        "reasoningOutputTokens": 1293,
+        "totalTokens": 32516
+      }
+    },
+    "turnId": "019f1d39-9175-7e50-a7d0-2ef083d5d328"
+  },
+  "wall_ms": 183232,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

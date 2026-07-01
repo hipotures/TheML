@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\"title\":\"Coarse health-state class affinity\",\"group_name\":\"coarse_health_state_class_affinity\",\"family\":\"supervised_state_likelihood\",\"summary\":\"Represent each student by the smoothed empirical health-condition tendencies of coarse lifestyle and physiology states, turning recurring multi-feature wellness patterns into compact class-affinity evidence.\",\"depends_on\":[],\"strategy\":\"Create deterministic missing-aware bins for numeric fields using interpretable cut points: sleep duration as short/adequate/long, heart rate as low/normal/elevated/high, BMI as under/normal/over/obese, step count as very_low/low/moderate/high/very_high, exercise duration as none/light/moderate/high/extreme, water intake as low/moderate/high/very_high, and calorie expenditure as training-quantile bands; keep categorical values with an explicit missing token. Form a small set of composite health-state keys such as recovery state, activity state, cardiometabolic state, and self-care state, each combining only adjacent concepts to avoid excessive cardinality. For each key, compute additive-smoothed class probabilities for unhealthy, at-risk, and fit from training labels, using leave-one-out counts for training rows and full training counts for test rows; back off rare keys below a minimum support threshold to their simpler component key and then to global class priors. Emit per-key class probabilities, class-probability margins, entropy, and support weight. Method safeguards follow target/leave-one-out encoding principles from https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.TargetEncoder.html and https://feaz-book.com/categorical-leaveoneout.\",\"expected_signal\":\"The target is likely driven by repeated combinations of lifestyle, recovery, and physiology states rather than isolated raw values, so smoothed class-affinity features can sharpen minority-class separation for fit and unhealthy while retaining stable at-risk priors for ambiguous profiles.\",\"risk\":\"The main risk is leakage or overfitting if row targets are allowed into their own encodings, if rare composite states are not smoothed/backed off strongly enough, or if train-test state frequencies shift; the group may also be partly redundant with raw categorical interactions.\"}",
+  "usage": {
+    "threadId": "019f1d68-5309-75c3-bdcc-7c1803891f75",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 13696,
+        "inputTokens": 33591,
+        "outputTokens": 105,
+        "reasoningOutputTokens": 20,
+        "totalTokens": 33696
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 16128,
+        "inputTokens": 66111,
+        "outputTokens": 2703,
+        "reasoningOutputTokens": 2404,
+        "totalTokens": 68814
+      }
+    },
+    "turnId": "019f1d68-5317-7742-81f3-659d9b0ba64d"
+  },
+  "wall_ms": 191216,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

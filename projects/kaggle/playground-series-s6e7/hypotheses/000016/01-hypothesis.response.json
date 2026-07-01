@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Report Granularity and Clipping\",\n  \"group_name\": \"report_granularity_clipping_signature\",\n  \"family\": \"measurement_quality\",\n  \"summary\": \"Represent whether each student's recorded health measurements look self-reported, sensor-like, or clipped at source limits, treating measurement granularity and conformance as risk-adjacent context rather than preprocessing noise.\",\n  \"depends_on\": [],\n  \"strategy\": \"Use only raw numeric feature values, with the target ignored. For sleep_duration, heart_rate, bmi, calorie_expenditure, step_count, exercise_duration, and water_intake, create feature-specific heaping flags using abs(x - nearest anchor) <= 1e-6: sleep at whole or half hours; heart_rate at multiples of 5 and 10; bmi at whole, half, and one-decimal values; calorie_expenditure at multiples of 50 and 100; step_count at multiples of 500 and 1000; exercise_duration at multiples of 5, 10, and 30; water_intake at 0.25 and 0.5 liter increments. Add exclusive decimal precision tier flags per numeric field: integer, one decimal, two decimals, or finer, then aggregate row-level fractions for coarse-heaped, integer-like, tenth-like, hundredth-like, and fine-grained reports. Fit per-column min, max, and IQR on the training feature table only; for each numeric field add lower-bound hit, upper-bound hit, outside-train-envelope, and boundary_pressure = clip(1 - distance_to_nearest_training_bound / max(0.02 * training_range, 0.05 * IQR, 1e-6), 0, 1), with outside-envelope values assigned pressure 1, then aggregate boundary hit count, outside-envelope count, max pressure, and mean pressure across observed numeric fields. Missing numeric values are skipped in all aggregates; if every numeric field is missing, set aggregate fractions and pressures to 0 and do not add standalone missingness features. Rationale sources: https://mhealth.jmir.org/2021/12/e31618 and https://www.nature.com/articles/s41598-024-67767-3.\",\n  \"expected_signal\": \"Health tables that mix survey-style and wearable-style signals can contain class-dependent conformance, plausibility, clipping, and rounding artifacts; making granularity and source-boundary pressure explicit may help separate extreme fit or unhealthy profiles from ordinary at-risk rows even when raw values are already present.\",\n  \"risk\": \"The signal may be an artifact of this generated dataset rather than a stable health mechanism, can be redundant with raw numeric extremes and response-completeness features, and boundary features are unstable if the training min/max are outliers or if implementation accidentally uses target-stratified bounds.\"\n}",
+  "usage": {
+    "threadId": "019f1d4b-0008-7443-a510-00b0206dc630",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 13184,
+        "inputTokens": 57613,
+        "outputTokens": 74,
+        "reasoningOutputTokens": 25,
+        "totalTokens": 57687
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 15616,
+        "inputTokens": 113842,
+        "outputTokens": 3174,
+        "reasoningOutputTokens": 3049,
+        "totalTokens": 117016
+      }
+    },
+    "turnId": "019f1d4b-0014-7d03-bf62-9b73c0661464"
+  },
+  "wall_ms": 320343,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

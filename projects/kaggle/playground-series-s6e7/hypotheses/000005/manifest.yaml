@@ -1,0 +1,15 @@
+hypothesis:
+  id: '000005'
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+materializations:
+  autogluon:
+    active: autogluon-001.py
+    files:
+    - file: autogluon-001.py
+      revision: 1
+      sha256: 386d1eb220021c5dc8bfeebd4f85ccaf6f93932bd4c3fc405e5e025e84b9d777
+      created_at: '2026-07-01T13:47:03'

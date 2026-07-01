@@ -1,0 +1,37 @@
+title: Contextual Sleep Need Gap
+group_name: contextual_sleep_need_gap
+family: contextual_recovery_residual
+summary: Represent whether a student's sleep amount is unusually deficient, typical,
+  or excessive for their stress, activity, and perceived sleep-quality context, treating
+  recovery mismatch as a distinct risk signal.
+depends_on: []
+strategy: 'Use only feature values, never health_condition. Build training-distribution
+  context tables for sleep_duration among rows with observed sleep, after mapping
+  missing categorical context values to a sentinel. Define activity_demand as the
+  mean of train-percentile ranks of step_count and exercise_duration using available
+  values, bin it into low, middle, and high train-quantile bands, with an unknown
+  band when both are missing. Estimate expected contextual sleep by median sleep_duration
+  for the hierarchy (stress_level, sleep_quality, physical_activity_level, activity_demand_bin,
+  smoking_alcohol), then fallback to (stress_level, sleep_quality, physical_activity_level),
+  then (stress_level, sleep_quality), then global median when a cell has fewer than
+  50 training rows. For each row create expected_context_sleep, signed sleep gap clipped
+  to [-4, 4], absolute gap, deficit-only gap, surplus-only gap, robust z gap using
+  the matched-cell IQR with global fallback, and a compact state code: missing sleep,
+  context-short by more than 1 hour, context-typical within 1 hour, or context-long
+  by more than 1 hour. Also include CDC adult sleep shortfall max(0, 7 - sleep_duration),
+  based on https://www.cdc.gov/sleep/about/index.html; the context choice is motivated
+  by evidence that exercise, stress, and sleep quality interact in college students,
+  e.g. https://www.dovepress.com/the-impact-of-physical-exercise-on-sleep-quality-among-college-student-peer-reviewed-fulltext-article-PRBM.'
+expected_signal: Raw sleep duration can miss whether a value is normal for the surrounding
+  lifestyle pattern; this group may separate resilient students whose sleep is adequate
+  despite high stress from students whose recovery is unexpectedly poor for otherwise
+  favorable habits, improving balanced accuracy on minority fit and unhealthy classes.
+risk: The signal may be redundant with existing sleep, stress, and activity features,
+  and context medians can encode dataset-specific synthetic structure that shifts
+  between train and test; sparse or missing-heavy contexts need fallback handling
+  to avoid unstable residuals.
+schema_version: 1
+hypothesis_id: '000027'
+revision: 1
+enabled: true
+created_at: '2026-07-01T13:27:30'

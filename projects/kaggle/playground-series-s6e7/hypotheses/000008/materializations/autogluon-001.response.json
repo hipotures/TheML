@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nNUMERIC_FEATURES = (\n    \"sleep_duration\",\n    \"heart_rate\",\n    \"bmi\",\n    \"calorie_expenditure\",\n    \"step_count\",\n    \"exercise_duration\",\n    \"water_intake\",\n)\n\nGENDER_COLUMN = \"gender\"\nMISSING_GROUP = \"__missing__\"\nMIN_GROUP_SIZE = 1000\nTRAIN_ID_MAX = 690087\n\n\ndef _as_train_mask(raw):\n    if \"id\" not in raw.columns:\n        return pd.Series(True, index=raw.index)\n\n    ids = pd.to_numeric(raw[\"id\"], errors=\"coerce\")\n    mask = ids.le(TRAIN_ID_MAX)\n    if mask.any():\n        return mask.fillna(False)\n\n    return pd.Series(True, index=raw.index)\n\n\ndef _normalise_group(values):\n    return values.astype(\"object\").where(values.notna(), MISSING_GROUP).astype(str)\n\n\ndef _midrank_percentile(fit_values, transform_values):\n    observed = pd.to_numeric(fit_values, errors=\"coerce\").dropna().to_numpy(dtype=float)\n    result = np.full(len(transform_values), np.nan, dtype=float)\n\n    if observed.size == 0:\n        return result\n\n    observed.sort()\n    x = pd.to_numeric(transform_values, errors=\"coerce\").to_numpy(dtype=float)\n    valid = ~np.isnan(x)\n\n    if not valid.any():\n        return result\n\n    valid_x = x[valid]\n    left = np.searchsorted(observed, valid_x, side=\"left\")\n    right = np.searchsorted(observed, valid_x, side=\"right\")\n    pct = (left + 0.5 * (right - left)) / float(observed.size)\n    pct = np.where(valid_x < observed[0], 0.001, pct)\n    pct = np.where(valid_x > observed[-1], 0.999, pct)\n    result[valid] = np.clip(pct, 0.001, 0.999)\n    return result\n\n\ndef add_gender_relative_numeric_percentiles(raw, deps, aux):\n    train_mask = _as_train_mask(raw)\n    train = raw.loc[train_mask]\n    raw_gender = _normalise_group(raw[GENDER_COLUMN]) if GENDER_COLUMN in raw.columns else pd.Series(MISSING_GROUP, index=raw.index)\n    train_gender = raw_gender.loc[train.index]\n\n    features = pd.DataFrame(index=raw.index)\n    tail_columns = []\n\n    for col in NUMERIC_FEATURES:\n        if col not in raw.columns:\n            continue\n\n        global_pct = _midrank_percentile(train[col], raw[col])\n        gender_pct = global_pct.copy()\n\n        for gender_value in train_gender.unique():\n            fit_mask = train_gender.eq(gender_value)\n            fit_values = train.loc[fit_mask, col].dropna()\n\n            if len(fit_values) < MIN_GROUP_SIZE:\n                continue\n\n            row_mask = raw_gender.eq(gender_value).to_numpy()\n            gender_pct[row_mask] = _midrank_percentile(fit_values, raw.loc[row_mask, col])\n\n        source_missing = pd.to_numeric(raw[col], errors=\"coerce\").isna().to_numpy()\n        gender_pct[source_missing] = np.nan\n        global_pct[source_missing] = np.nan\n\n        diff = gender_pct - global_pct\n        tail = 2.0 * np.abs(gender_pct - 0.5)\n\n        features[col + \"_gender_percentile\"] = gender_pct\n        features[col + \"_gender_minus_global_percentile\"] = diff\n        features[col + \"_gender_tail_extremeness\"] = tail\n        tail_columns.append(col + \"_gender_tail_extremeness\")\n\n    if tail_columns:\n        tail_frame = features[tail_columns]\n        features[\"gender_tail_extremeness_mean\"] = tail_frame.mean(axis=1)\n        features[\"gender_tail_extremeness_max\"] = tail_frame.max(axis=1)\n        features[\"gender_tail_extremeness_ge_0_8_count\"] = tail_frame.ge(0.8).sum(axis=1).astype(\"float64\")\n    else:\n        features[\"gender_tail_extremeness_mean\"] = np.nan\n        features[\"gender_tail_extremeness_max\"] = np.nan\n        features[\"gender_tail_extremeness_ge_0_8_count\"] = 0.0\n\n    return features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"gender_relative_numeric_percentiles\",\n        \"fn\": add_gender_relative_numeric_percentiles,\n        \"depends_on\": [],\n        \"description\": \"Empirical global and gender-relative percentile features for numeric health measurements.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1d83-493a-7f83-a64d-f95c316f0e82",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13354,
+        "outputTokens": 1479,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14833
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13354,
+        "outputTokens": 1479,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14833
+      }
+    },
+    "turnId": "019f1d83-494b-7642-817d-d3980eeb42b9"
+  },
+  "wall_ms": 29404,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

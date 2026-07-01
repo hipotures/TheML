@@ -1,0 +1,34 @@
+title: Activity-Adjusted Hydration Reserve
+group_name: activity_adjusted_hydration_reserve
+family: contextual_hydration_balance
+summary: Estimate whether each student's fluid intake is sufficient for the water
+  demand implied by their body context and exertion pattern, separating well-supported
+  active lifestyles from exertion-with-deficit and low-demand excess-intake profiles.
+depends_on: []
+strategy: 'Create a deterministic hydration-demand estimate in liters: baseline_need
+  = 3.0 for gender=''male'', 2.2 for gender=''female'', and 2.6 for gender=''other''
+  or missing; activity_addon = 0.6 * max(exercise_duration,0) / 60 + 0.15 * max(step_count
+  - 8000,0) / 5000 + 0.00015 * max(calorie_expenditure - train_median_calorie_expenditure,0);
+  smoking_alcohol_addon = 0.25 for ''yes'', 0.10 for ''occasional'', and 0 for ''no''
+  or missing; estimated_need = baseline_need + activity_addon + smoking_alcohol_addon.
+  Derive hydration_gap = water_intake - estimated_need, hydration_ratio = water_intake
+  / estimated_need clipped to [0,2], activity_water_pressure = activity_addon / max(water_intake,0.25),
+  and hydration_tier using ratio bins: missing water_intake -> ''unknown'', <0.55
+  -> ''severe_deficit'', <0.80 -> ''deficit'', <1.25 -> ''adequate'', <1.60 -> ''high'',
+  otherwise ''excess''. Numeric missing activity drivers contribute zero addon rather
+  than imputed exertion; negative or impossible values are clipped at zero. Guideline
+  context: https://www.mayoclinic.org/healthy-lifestyle/nutrition-and-healthy-eating/in-depth/water/art-20044256
+  and https://www.nata.org/sites/default/files/2025-08/FluidReplacementsForAthletes.pdf.'
+expected_signal: Water intake alone may be ambiguous, while intake relative to activity
+  and exertion can distinguish fit students who sustain high output with adequate
+  hydration from at-risk or unhealthy students whose fluid intake is low for their
+  activity load or unusually high despite low demand.
+risk: The constants are approximate because the data lacks body weight, climate, sweat
+  rate, and whether water_intake includes food-derived fluids, so this group may be
+  partly redundant with existing activity and water features or unstable if the synthetic
+  target did not encode hydration-demand relationships.
+schema_version: 1
+hypothesis_id: '000010'
+revision: 1
+enabled: true
+created_at: '2026-07-01T12:38:11'

@@ -9,7 +9,7 @@ external:
   enabled: true
 autogluon:
   audit_score:
-    enabled: true
+    enabled: false
     fraction: 0.1
   feature_importance:
     enabled: false
@@ -24,12 +24,12 @@ active_project:
 active_run: null
 root:
   active_profiles:
-    autogluon: ag-s6e6-boost-gpu-xgb-cat-cv3-10m-v2
+    autogluon: ag-full-boost-gpu-ens-stack-v1
     legacy: legacy-root-start-v1
 branch:
   active_algorithm: default
 rerun:
-  autogluon: ag-s6e6-boost-gpu-best-ens-stack-ds0-30m-v1
+  autogluon: ag-best-boost-gpu-1h-v1
 models:
   metadata:
     provider: codex

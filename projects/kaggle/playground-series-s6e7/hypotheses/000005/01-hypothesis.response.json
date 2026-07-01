@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Stress-Recovery Triad Profiles\",\n  \"group_name\": \"stress_recovery_triad_profiles\",\n  \"family\": \"behavioral_interaction\",\n  \"summary\": \"Represent each student's rest, pressure, and movement pattern as a recovery-balance state that separates buffered high-demand lifestyles from depleted low-recovery lifestyles.\",\n  \"depends_on\": [],\n  \"strategy\": \"Map stress_level as low=0, medium=1, high=2; sleep_quality as poor=0, average=1, good=2; and physical_activity_level as sedentary=0, moderate=1, active=2. Bin sleep_duration into 0 for <6 hours, 2 for 6 to 8.5 hours, and 1 for >8.5 hours; bin step_count into 0 for <5000, 1 for 5000 to <10000, and 2 for >=10000; bin exercise_duration into 0 for <20 minutes, 1 for 20 to <60 minutes, and 2 for >=60 minutes. Clip numeric inputs to the train-observed valid ranges before binning; map missing numeric values, missing categories, and unknown categories to the neutral middle score 1. Define movement_score as the rounded mean of step, exercise, and reported activity scores; define rest_score as the rounded mean of sleep-duration and sleep-quality scores. Emit a 27-level integer triad code as 9 * stress_score + 3 * rest_score + movement_score, a recovery_margin as rest_score + movement_score - stress_score, stressed_buffered as 1 when stress_score is 2 and both rest_score and movement_score are at least 1, and exhausted_inactive as 1 when stress_score is at least 1 and both rest_score and movement_score are 0.\",\n  \"expected_signal\": \"Student-health literature reports coupled associations among sleep quality, stress, and physical activity, including stress mediating the sleep-exercise relationship, so this group may expose non-linear class patterns where the same stress level implies different risk depending on recovery and movement context; references used include https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2025.1640974/full and https://www.mdpi.com/2227-9032/10/10/1930.\",\n  \"risk\": \"The hand-built ordinal bins may be redundant with raw fields and the prior deviation-burden group, and neutral missing-value handling can blur informative missingness or impose a false middle state when nonresponse itself is class-specific.\"\n}",
+  "usage": {
+    "threadId": "019f1d35-ccce-7621-ac8a-eea0807f5199",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 30148,
+        "outputTokens": 2585,
+        "reasoningOutputTokens": 2334,
+        "totalTokens": 32733
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 30148,
+        "outputTokens": 2585,
+        "reasoningOutputTokens": 2334,
+        "totalTokens": 32733
+      }
+    },
+    "turnId": "019f1d35-ccdc-76c3-acbb-0b2a6ed76d64"
+  },
+  "wall_ms": 95790,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

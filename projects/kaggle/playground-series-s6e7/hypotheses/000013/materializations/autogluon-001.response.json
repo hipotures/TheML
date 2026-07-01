@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nACTIVITY_NUMERIC_COLUMNS = (\"step_count\", \"exercise_duration\", \"calorie_expenditure\")\nACTIVITY_LEVEL_MAP = {\n    \"sedentary\": 0.0,\n    \"moderate\": 0.5,\n    \"active\": 1.0,\n}\n\n\ndef _reference_mask(raw):\n    if \"id\" not in raw.columns:\n        return pd.Series(True, index=raw.index)\n\n    ids = pd.to_numeric(raw[\"id\"], errors=\"coerce\")\n    if ids.notna().any() and ids.min(skipna=True) <= 0 and ids.max(skipna=True) > 690087:\n        mask = ids <= 690087\n        if mask.any():\n            return mask\n\n    return pd.Series(True, index=raw.index)\n\n\ndef _safe_median(values, fallback):\n    clean = pd.to_numeric(values, errors=\"coerce\").dropna()\n    if clean.empty:\n        return fallback\n    return float(clean.median())\n\n\ndef _safe_quantile(values, q, fallback):\n    clean = pd.to_numeric(values, errors=\"coerce\").dropna()\n    if clean.empty:\n        return fallback\n    return float(clean.quantile(q))\n\n\ndef _robust_quantile_score(values, median, q1, q3):\n    numeric = pd.to_numeric(values, errors=\"coerce\").astype(float)\n    iqr = max(float(q3 - q1), 1e-6)\n    filled = numeric.fillna(median)\n    return (0.5 + (filled - median) / (2.0 * iqr)).clip(0.0, 1.0)\n\n\ndef _tertile_level(values, low_cut, high_cut):\n    numeric = pd.to_numeric(values, errors=\"coerce\").astype(float)\n    level = pd.Series(1, index=values.index, dtype=\"int8\")\n    level[numeric <= low_cut] = 0\n    level[numeric >= high_cut] = 2\n    return level\n\n\ndef add_activity_modality_balance(raw, deps, aux):\n    ref_mask = _reference_mask(raw)\n    ref = raw.loc[ref_mask]\n\n    step_median = _safe_median(ref.get(\"step_count\"), 7000.0)\n    exercise_median = _safe_median(ref.get(\"exercise_duration\"), 30.0)\n    calorie_median = _safe_median(ref.get(\"calorie_expenditure\"), 2200.0)\n\n    step_q1 = _safe_quantile(ref.get(\"step_count\"), 0.25, step_median)\n    step_q3 = _safe_quantile(ref.get(\"step_count\"), 0.75, step_median + 1.0)\n    exercise_q1 = _safe_quantile(ref.get(\"exercise_duration\"), 0.25, exercise_median)\n    exercise_q3 = _safe_quantile(ref.get(\"exercise_duration\"), 0.75, exercise_median + 1.0)\n    calorie_q1 = _safe_quantile(ref.get(\"calorie_expenditure\"), 0.25, calorie_median)\n    calorie_q3 = _safe_quantile(ref.get(\"calorie_expenditure\"), 0.75, calorie_median + 1.0)\n\n    step_t1 = _safe_quantile(ref.get(\"step_count\"), 1.0 / 3.0, step_median)\n    step_t2 = _safe_quantile(ref.get(\"step_count\"), 2.0 / 3.0, step_median)\n    exercise_t1 = _safe_quantile(ref.get(\"exercise_duration\"), 1.0 / 3.0, exercise_median)\n    exercise_t2 = _safe_quantile(ref.get(\"exercise_duration\"), 2.0 / 3.0, exercise_median)\n\n    steps = pd.to_numeric(raw.get(\"step_count\"), errors=\"coerce\").astype(float).fillna(step_median)\n    exercise = pd.to_numeric(raw.get(\"exercise_duration\"), errors=\"coerce\").astype(float).fillna(exercise_median)\n\n    step_score = _robust_quantile_score(raw.get(\"step_count\"), step_median, step_q1, step_q3)\n    exercise_score = _robust_quantile_score(raw.get(\"exercise_duration\"), exercise_median, exercise_q1, exercise_q3)\n    calorie_score = _robust_quantile_score(raw.get(\"calorie_expenditure\"), calorie_median, calorie_q1, calorie_q3)\n\n    activity_volume = ((step_score + exercise_score) / 2.0).clip(0.0, 1.0)\n    modality_delta = step_score - exercise_score\n\n    step_units = steps / 1000.0\n    denominator = exercise + step_units + 1.0\n    structured_share = exercise / denominator\n    ambulatory_share = step_units / denominator\n\n    calorie_intensity_residual = calorie_score - activity_volume\n\n    if \"physical_activity_level\" in raw.columns:\n        activity_level = (\n            raw[\"physical_activity_level\"]\n            .astype(\"string\")\n            .str.lower()\n            .map(ACTIVITY_LEVEL_MAP)\n            .astype(float)\n            .fillna(0.5)\n        )\n    else:\n        activity_level = pd.Series(0.5, index=raw.index, dtype=float)\n\n    self_report_gap = activity_level - activity_volume\n\n    step_level = _tertile_level(steps, step_t1, step_t2)\n    exercise_level = _tertile_level(exercise, exercise_t1, exercise_t2)\n\n    modality_bucket = pd.Series(\"mixed_mid\", index=raw.index, dtype=object)\n    modality_bucket[(step_level == 0) & (exercise_level == 0)] = \"low_both\"\n    modality_bucket[(step_level == 2) & (exercise_level == 2)] = \"high_both\"\n    modality_bucket[(step_level >= 1) & (exercise_level == 0)] = \"walk_dominant\"\n    modality_bucket[(step_level == 0) & (exercise_level >= 1)] = \"exercise_dominant\"\n    modality_bucket[(step_level == 2) & (exercise_level == 1)] = \"walk_dominant\"\n    modality_bucket[(step_level == 1) & (exercise_level == 2)] = \"exercise_dominant\"\n\n    return pd.DataFrame(\n        {\n            \"step_quantile_score\": step_score.astype(float),\n            \"exercise_quantile_score\": exercise_score.astype(float),\n            \"calorie_quantile_score\": calorie_score.astype(float),\n            \"activity_volume\": activity_volume.astype(float),\n            \"modality_delta\": modality_delta.astype(float),\n            \"structured_share\": structured_share.astype(float),\n            \"ambulatory_share\": ambulatory_share.astype(float),\n            \"calorie_intensity_residual\": calorie_intensity_residual.astype(float),\n            \"self_report_gap\": self_report_gap.astype(float),\n            \"modality_bucket\": modality_bucket,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"activity_modality_balance\",\n        \"fn\": add_activity_modality_balance,\n        \"depends_on\": [],\n        \"description\": \"Captures the balance between structured exercise, daily ambulation, calorie intensity, and stated activity level.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1d89-7da0-76e0-bd6a-4095ef90bbad",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13380,
+        "outputTokens": 2042,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 15422
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13380,
+        "outputTokens": 2042,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 15422
+      }
+    },
+    "turnId": "019f1d89-7dae-7161-a297-75345ed167f7"
+  },
+  "wall_ms": 38872,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

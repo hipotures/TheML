@@ -1,0 +1,8 @@
+hypothesis:
+  id: 000049
+  latest_revision: 1
+revisions:
+  1:
+    file: 01-hypothesis.yaml
+    prefix: 01-hypothesis
+materializations: {}

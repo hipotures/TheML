@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Peer-Relative Numeric Percentiles\",\n  \"group_name\": \"gender_relative_numeric_percentiles\",\n  \"family\": \"peer_context_normalization\",\n  \"summary\": \"Represent each student's measured health and lifestyle quantities by how unusual they are compared with demographically similar peers, exposing relative physiological and behavioral extremeness that raw absolute values can hide.\",\n  \"depends_on\": [],\n  \"strategy\": \"Using only training feature columns and never health_condition, fit empirical cumulative distribution tables for sleep_duration, heart_rate, bmi, calorie_expenditure, step_count, exercise_duration, and water_intake both globally and within each gender value, treating missing or unseen gender as a __missing__ group. For each row and numeric feature, compute global_percentile = (count_less + 0.5 * count_equal) / n and gender_percentile the same way within the row's gender group; if a gender-feature group has fewer than 1000 observed values, back off to the global percentile. Clip values below or above the fitted training range to 0.001 and 0.999, and leave derived values null when the source numeric value is null. Emit per-feature gender_percentile, gender_minus_global_percentile, and gender_tail_extremeness = 2 * abs(gender_percentile - 0.5), plus row-level mean, max, and count of gender_tail_extremeness >= 0.8 across available numeric features. Background used: https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.QuantileTransformer.html, https://scikit-learn.org/stable/modules/preprocessing.html, and https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2025.1664822/full.\",\n  \"expected_signal\": \"The target classes may be separated not only by absolute levels but by whether a student's measurements are unusually high or low for comparable peers; percentile ranks make differently scaled measurements comparable, while tail summaries can highlight minority unhealthy or fit profiles that balanced accuracy rewards.\",\n  \"risk\": \"This may be partly redundant with raw numeric columns and can encode gender-specific sample artifacts; if train and test peer distributions differ or missing gender is unstable, the contextual percentiles may become noisy.\"\n}",
+  "usage": {
+    "threadId": "019f1d3c-5ede-7223-8045-bdc2eaecf38b",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 40833,
+        "outputTokens": 7438,
+        "reasoningOutputTokens": 6969,
+        "totalTokens": 48271
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 40833,
+        "outputTokens": 7438,
+        "reasoningOutputTokens": 6969,
+        "totalTokens": 48271
+      }
+    },
+    "turnId": "019f1d3c-5ee9-7ad1-a697-2aac7df39796"
+  },
+  "wall_ms": 148111,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

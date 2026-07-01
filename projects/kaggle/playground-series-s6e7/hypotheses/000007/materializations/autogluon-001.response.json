@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\nMOVEMENT_DENSITY_LABELS = (\"missing\", \"lt_250\", \"250_500\", \"500_750\", \"gte_750\")\nEXERCISE_DENSITY_LABELS = (\"missing\", \"zero\", \"gt0_1\", \"1_3\", \"gte_3\")\n\n\ndef add_waking_day_behavior_density(raw, deps, aux):\n    sleep = pd.to_numeric(raw.get(\"sleep_duration\"), errors=\"coerce\")\n    steps = pd.to_numeric(raw.get(\"step_count\"), errors=\"coerce\")\n    exercise = pd.to_numeric(raw.get(\"exercise_duration\"), errors=\"coerce\")\n    calories = pd.to_numeric(raw.get(\"calorie_expenditure\"), errors=\"coerce\")\n    water = pd.to_numeric(raw.get(\"water_intake\"), errors=\"coerce\")\n\n    valid_sleep = sleep.notna() & np.isfinite(sleep) & (sleep > 0) & (sleep < 24)\n    clipped_sleep = sleep.where(valid_sleep).clip(lower=1.0, upper=23.0)\n    waking_hours = 24.0 - clipped_sleep\n\n    valid_waking = valid_sleep & waking_hours.notna() & np.isfinite(waking_hours) & (waking_hours > 0)\n    waking_hours = waking_hours.where(valid_waking)\n\n    exercise_minutes_per_wake_hour = exercise / waking_hours\n    steps_per_wake_hour = steps / waking_hours\n    calories_per_wake_hour = calories / waking_hours\n    water_per_wake_hour = water / waking_hours\n    exercise_wake_share = exercise / (60.0 * waking_hours)\n\n    kcal_thousands = (calories / 1000.0).clip(lower=0.001)\n    hydration_per_1000_kcal = water / kcal_thousands\n\n    sleep_to_exercise_hours = clipped_sleep / (1.0 + exercise / 60.0)\n    sleep_to_exercise_hours = sleep_to_exercise_hours.where(valid_waking)\n\n    movement_density_band = pd.Series(MOVEMENT_DENSITY_LABELS[0], index=raw.index, dtype=\"object\")\n    movement_density_band = movement_density_band.mask(\n        steps_per_wake_hour < 250.0, MOVEMENT_DENSITY_LABELS[1]\n    )\n    movement_density_band = movement_density_band.mask(\n        (steps_per_wake_hour >= 250.0) & (steps_per_wake_hour < 500.0),\n        MOVEMENT_DENSITY_LABELS[2],\n    )\n    movement_density_band = movement_density_band.mask(\n        (steps_per_wake_hour >= 500.0) & (steps_per_wake_hour < 750.0),\n        MOVEMENT_DENSITY_LABELS[3],\n    )\n    movement_density_band = movement_density_band.mask(\n        steps_per_wake_hour >= 750.0, MOVEMENT_DENSITY_LABELS[4]\n    )\n    movement_density_band = movement_density_band.where(\n        steps_per_wake_hour.notna(), pd.NA\n    )\n\n    exercise_density_band = pd.Series(EXERCISE_DENSITY_LABELS[0], index=raw.index, dtype=\"object\")\n    exercise_density_band = exercise_density_band.mask(\n        exercise_minutes_per_wake_hour == 0.0, EXERCISE_DENSITY_LABELS[1]\n    )\n    exercise_density_band = exercise_density_band.mask(\n        (exercise_minutes_per_wake_hour > 0.0) & (exercise_minutes_per_wake_hour < 1.0),\n        EXERCISE_DENSITY_LABELS[2],\n    )\n    exercise_density_band = exercise_density_band.mask(\n        (exercise_minutes_per_wake_hour >= 1.0) & (exercise_minutes_per_wake_hour < 3.0),\n        EXERCISE_DENSITY_LABELS[3],\n    )\n    exercise_density_band = exercise_density_band.mask(\n        exercise_minutes_per_wake_hour >= 3.0, EXERCISE_DENSITY_LABELS[4]\n    )\n    exercise_density_band = exercise_density_band.where(\n        exercise_minutes_per_wake_hour.notna(), pd.NA\n    )\n\n    return pd.DataFrame(\n        {\n            \"estimated_waking_hours\": waking_hours,\n            \"exercise_wake_share\": exercise_wake_share,\n            \"steps_per_wake_hour\": steps_per_wake_hour,\n            \"calories_per_wake_hour\": calories_per_wake_hour,\n            \"water_per_wake_hour\": water_per_wake_hour,\n            \"hydration_per_1000_kcal\": hydration_per_1000_kcal,\n            \"sleep_to_exercise_hours\": sleep_to_exercise_hours,\n            \"movement_density_band\": movement_density_band,\n            \"exercise_density_band\": exercise_density_band,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"waking_day_behavior_density\",\n        \"fn\": add_waking_day_behavior_density,\n        \"depends_on\": [],\n        \"description\": \"Waking-time-normalized behavior density features for activity, exercise, hydration, calories, and sleep allocation.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1d82-ccab-7ed0-9043-542e0bc76ba7",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13394,
+        "outputTokens": 1593,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14987
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13394,
+        "outputTokens": 1593,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14987
+      }
+    },
+    "turnId": "019f1d82-ccb9-7c51-8466-8950309cade3"
+  },
+  "wall_ms": 31072,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

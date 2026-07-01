@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\nNUMERIC_INPUTS = (\n    \"sleep_duration\",\n    \"exercise_duration\",\n    \"step_count\",\n)\n\nTRAIN_ID_MAX = 690087\nEPSILON = 1.0e-6\n\n\ndef add_movement_sleep_compositional_logratios(raw, deps, aux):\n    index = raw.index\n    n_rows = len(raw)\n\n    train_mask = None\n    if \"id\" in raw.columns:\n        train_mask = pd.to_numeric(raw[\"id\"], errors=\"coerce\") <= TRAIN_ID_MAX\n\n    filled = {}\n    for col in NUMERIC_INPUTS:\n        values = pd.to_numeric(raw[col], errors=\"coerce\") if col in raw.columns else pd.Series(np.nan, index=index)\n\n        if train_mask is not None and bool(train_mask.any()):\n            median_value = values.loc[train_mask].median()\n        else:\n            median_value = values.median()\n\n        if pd.isna(median_value):\n            if col == \"sleep_duration\":\n                median_value = 7.0\n            elif col == \"exercise_duration\":\n                median_value = 30.0\n            else:\n                median_value = 7000.0\n\n        filled[col] = values.fillna(median_value).astype(float)\n\n    sleep_hours = filled[\"sleep_duration\"].clip(lower=3.0, upper=10.0)\n    structured_activity_hours = filled[\"exercise_duration\"].clip(lower=0.0, upper=120.0) / 60.0\n    steps = filled[\"step_count\"].clip(lower=1000.0, upper=15000.0)\n\n    cadence_activity_hours = steps / 100.0 / 60.0\n    ambulatory_hours = (cadence_activity_hours - structured_activity_hours).clip(lower=0.0)\n\n    inactive_waking_hours = (\n        24.0 - sleep_hours - structured_activity_hours - ambulatory_hours\n    ).clip(lower=0.25)\n\n    parts = pd.DataFrame(\n        {\n            \"sleep\": sleep_hours.clip(lower=EPSILON),\n            \"structured\": structured_activity_hours.clip(lower=EPSILON),\n            \"ambulatory\": ambulatory_hours.clip(lower=EPSILON),\n            \"inactive\": inactive_waking_hours.clip(lower=EPSILON),\n        },\n        index=index,\n    )\n\n    part_sum = parts.sum(axis=1).replace(0.0, np.nan)\n    composition = parts.div(part_sum, axis=0) * 24.0\n    shares = composition / 24.0\n\n    total_active_hours = composition[\"structured\"] + composition[\"ambulatory\"]\n    entropy_terms = shares * np.log(shares.clip(lower=EPSILON))\n    composition_entropy = -entropy_terms.sum(axis=1) / np.log(4.0)\n\n    new_features = pd.DataFrame(index=index)\n    new_features[\"log_sleep_to_inactive\"] = np.log(\n        composition[\"sleep\"].clip(lower=EPSILON) / composition[\"inactive\"].clip(lower=EPSILON)\n    )\n    new_features[\"log_structured_to_inactive\"] = np.log(\n        composition[\"structured\"].clip(lower=EPSILON) / composition[\"inactive\"].clip(lower=EPSILON)\n    )\n    new_features[\"log_ambulatory_to_inactive\"] = np.log(\n        composition[\"ambulatory\"].clip(lower=EPSILON) / composition[\"inactive\"].clip(lower=EPSILON)\n    )\n    new_features[\"log_total_active_to_sleep\"] = np.log(\n        total_active_hours.clip(lower=EPSILON) / composition[\"sleep\"].clip(lower=EPSILON)\n    )\n    new_features[\"active_day_share\"] = total_active_hours / 24.0\n    new_features[\"inactive_day_share\"] = composition[\"inactive\"] / 24.0\n    new_features[\"composition_entropy\"] = composition_entropy\n\n    if len(new_features) != n_rows:\n        raise ValueError(\"Feature group changed row count.\")\n\n    return new_features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"movement_sleep_compositional_logratios\",\n        \"fn\": add_movement_sleep_compositional_logratios,\n        \"depends_on\": [],\n        \"description\": \"Daily movement-sleep compositional log-ratio features from sleep, exercise, step count, and inactive waking time.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1d95-febd-76b2-a0be-8ca74f200474",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13394,
+        "outputTokens": 1413,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14807
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13394,
+        "outputTokens": 1413,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14807
+      }
+    },
+    "turnId": "019f1d95-fecc-7190-8745-09c3b92e8e53"
+  },
+  "wall_ms": 30873,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

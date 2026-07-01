@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nSTRESS_RISK_MAP = {\"low\": 0.0, \"medium\": 0.5, \"high\": 1.0}\nSMOKING_ALCOHOL_RISK_MAP = {\"no\": 0.0, \"occasional\": 0.5, \"yes\": 1.0}\nDIET_RISK_MAP = {\"balanced\": 0.0, \"veg\": 0.25, \"non-veg\": 0.5}\nSLEEP_QUALITY_RISK_MAP = {\"good\": 0.0, \"average\": 0.5, \"poor\": 1.0}\nACTIVITY_LEVEL_RISK_MAP = {\"active\": 0.0, \"moderate\": 0.5, \"sedentary\": 1.0}\n\n\ndef _numeric(raw, column):\n    if column not in raw.columns:\n        return pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    return pd.to_numeric(raw[column], errors=\"coerce\").astype(\"float64\")\n\n\ndef _mapped_category(raw, column, mapping):\n    if column not in raw.columns:\n        return pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    values = raw[column].astype(\"string\").str.strip().str.lower()\n    return values.map(mapping).astype(\"float64\")\n\n\ndef _clip01(series):\n    return series.clip(lower=0.0, upper=1.0)\n\n\ndef _observed_mean(components, index):\n    block = pd.concat(components, axis=1)\n    return block.mean(axis=1, skipna=True).fillna(0.5).astype(\"float64\")\n\n\ndef add_lifestyle_risk_cascade_alignment(raw, deps, aux):\n    stress_risk = _mapped_category(raw, \"stress_level\", STRESS_RISK_MAP)\n    smoking_alcohol_risk = _mapped_category(raw, \"smoking_alcohol\", SMOKING_ALCOHOL_RISK_MAP)\n    diet_risk = _mapped_category(raw, \"diet_type\", DIET_RISK_MAP)\n    water = _numeric(raw, \"water_intake\")\n    water_deficit = _clip01((2.0 - water) / 1.5)\n\n    exposure_load = _observed_mean(\n        [stress_risk, smoking_alcohol_risk, diet_risk, water_deficit],\n        raw.index,\n    )\n\n    sleep_quality_risk = _mapped_category(raw, \"sleep_quality\", SLEEP_QUALITY_RISK_MAP)\n    sleep_duration = _numeric(raw, \"sleep_duration\")\n    short_sleep_risk = (7.0 - sleep_duration) / 4.0\n    long_sleep_risk = (sleep_duration - 9.0) / 1.0\n    sleep_duration_risk = _clip01(pd.concat([short_sleep_risk, long_sleep_risk], axis=1).max(axis=1))\n\n    recovery_impairment = _observed_mean(\n        [sleep_quality_risk, sleep_duration_risk],\n        raw.index,\n    )\n\n    activity_level_risk = _mapped_category(raw, \"physical_activity_level\", ACTIVITY_LEVEL_RISK_MAP)\n    step_count = _numeric(raw, \"step_count\")\n    exercise_duration = _numeric(raw, \"exercise_duration\")\n    calorie_expenditure = _numeric(raw, \"calorie_expenditure\")\n\n    step_deficit = _clip01((10000.0 - step_count) / 9000.0)\n    exercise_deficit = _clip01((30.0 - exercise_duration) / 30.0)\n    calorie_output_deficit = _clip01((1800.0 - calorie_expenditure) / 600.0)\n\n    activity_shortfall = _observed_mean(\n        [activity_level_risk, step_deficit, exercise_deficit, calorie_output_deficit],\n        raw.index,\n    )\n\n    bmi = _numeric(raw, \"bmi\")\n    heart_rate = _numeric(raw, \"heart_rate\")\n\n    bmi_low_distance = (18.5 - bmi) / 2.5\n    bmi_high_distance = (bmi - 25.0) / 10.0\n    bmi_strain = _clip01(pd.concat([bmi_low_distance, bmi_high_distance], axis=1).max(axis=1))\n\n    high_hr_strain = (heart_rate - 70.0) / 30.0\n    low_hr_strain = 0.5 * (55.0 - heart_rate) / 10.0\n    heart_rate_strain = _clip01(pd.concat([high_hr_strain, low_hr_strain], axis=1).max(axis=1))\n\n    physiology_strain = _observed_mean(\n        [bmi_strain, heart_rate_strain],\n        raw.index,\n    )\n\n    gap_recovery_minus_exposure = recovery_impairment - exposure_load\n    gap_activity_minus_recovery = activity_shortfall - recovery_impairment\n    gap_physiology_minus_activity = physiology_strain - activity_shortfall\n\n    cascade_slope = (\n        -0.3 * exposure_load\n        - 0.1 * recovery_impairment\n        + 0.1 * activity_shortfall\n        + 0.3 * physiology_strain\n    )\n\n    monotone_propagation_fraction = (\n        (recovery_impairment >= exposure_load - 0.1).astype(\"float64\")\n        + (activity_shortfall >= recovery_impairment - 0.1).astype(\"float64\")\n        + (physiology_strain >= activity_shortfall - 0.1).astype(\"float64\")\n    ) / 3.0\n\n    propagated_risk = (\n        (\n            (exposure_load + 0.05)\n            * (recovery_impairment + 0.05)\n            * (activity_shortfall + 0.05)\n            * (physiology_strain + 0.05)\n        )\n        ** 0.25\n        - 0.05\n    ).clip(lower=0.0, upper=1.0)\n\n    downstream_max = pd.concat(\n        [recovery_impairment, activity_shortfall, physiology_strain],\n        axis=1,\n    ).max(axis=1)\n    contained_exposure = (exposure_load - downstream_max).clip(lower=0.0)\n\n    upstream_mean = pd.concat(\n        [exposure_load, recovery_impairment, activity_shortfall],\n        axis=1,\n    ).mean(axis=1)\n    unexplained_physiology = (physiology_strain - upstream_mean).clip(lower=0.0)\n\n    return pd.DataFrame(\n        {\n            \"exposure_load\": exposure_load,\n            \"recovery_impairment\": recovery_impairment,\n            \"activity_shortfall\": activity_shortfall,\n            \"physiology_strain\": physiology_strain,\n            \"cascade_slope\": cascade_slope,\n            \"gap_recovery_minus_exposure\": gap_recovery_minus_exposure,\n            \"gap_activity_minus_recovery\": gap_activity_minus_recovery,\n            \"gap_physiology_minus_activity\": gap_physiology_minus_activity,\n            \"monotone_propagation_fraction\": monotone_propagation_fraction,\n            \"propagated_risk\": propagated_risk,\n            \"contained_exposure\": contained_exposure,\n            \"unexplained_physiology\": unexplained_physiology,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"lifestyle_risk_cascade_alignment\",\n        \"fn\": add_lifestyle_risk_cascade_alignment,\n        \"depends_on\": [],\n        \"description\": \"Encodes ordered lifestyle, recovery, activity, and physiological risks as a coherent cascade alignment feature group.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1da5-fb46-7310-8070-e54dfb61bc1f",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13667,
+        "outputTokens": 2147,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 15814
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13667,
+        "outputTokens": 2147,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 15814
+      }
+    },
+    "turnId": "019f1da5-fb53-7800-9248-f313f67b7633"
+  },
+  "wall_ms": 41316,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

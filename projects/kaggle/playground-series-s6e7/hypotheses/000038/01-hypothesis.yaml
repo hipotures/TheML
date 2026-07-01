@@ -1,0 +1,35 @@
+title: Hydration Linked Pulse Load
+group_name: hydration_linked_pulse_load
+family: hydration_physiology_interaction
+summary: Represent whether cardiovascular load appears compatible with fluid support
+  under daily exertion, separating supported active profiles from hydration-linked
+  pulse strain.
+depends_on: []
+strategy: 'Create a NaN-aware activity_demand score as the observed-component mean
+  of clipped step_count, exercise_duration, and calorie_expenditure scales: steps
+  clip((step_count - 5000) / 5000, 0, 1), exercise clip(exercise_duration / 30, 0,
+  1), and calories clip((calorie_expenditure - 1800) / 1000, 0, 1). Estimate fluid_demand_liters
+  as 1.8 + 0.7 * activity_demand + 0.15 * clip((bmi - 25) / 5, 0, 2), omitting the
+  BMI increment when bmi is missing. Compute hydration_gap as water_intake - fluid_demand_liters,
+  clipped to [-2, 2], pulse_load as clip((heart_rate - 80) / 20, 0, 2), dehydration_pulse_strain
+  as pulse_load * clip(-hydration_gap, 0, 2), exertional_dehydration_strain as dehydration_pulse_strain
+  * activity_demand, resting_dehydration_strain as dehydration_pulse_strain * (1 -
+  activity_demand), and a supported_active_pulse flag for activity_demand >= 0.6,
+  hydration_gap >= 0, and heart_rate between 50 and 80. Add a compact hydropulse_stage
+  ordinal/bin code: unknown if water_intake or heart_rate is missing or all activity
+  components are missing; supported_active_pulse; exertional_dehydration_high_pulse
+  when activity_demand >= 0.6, hydration_gap < -0.3, and heart_rate >= 80; resting_dehydration_high_pulse
+  when activity_demand < 0.4, hydration_gap < -0.3, and heart_rate >= 80; hydrated_high_pulse
+  when hydration_gap >= 0 and heart_rate >= 90; otherwise neutral.'
+expected_signal: Hydration needs rise with exertion and body context, while inadequate
+  fluid support can elevate cardiovascular strain; this group may help distinguish
+  fit-like active students with supported low pulse from unhealthy or at-risk students
+  whose elevated pulse occurs alongside low fluid reserve.
+risk: The thresholds are approximate, water intake is likely noisy self-report, and
+  the group may be partly redundant with existing hydration, activity, and heart-rate
+  interaction features.
+schema_version: 1
+hypothesis_id: 000038
+revision: 1
+enabled: true
+created_at: '2026-07-01T14:05:45'

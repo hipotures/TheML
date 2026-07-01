@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nORDERED_RESPONSE_SPECS = {\n    \"stress_level\": {\n        \"protective\": \"low\",\n        \"midpoint\": \"medium\",\n        \"adverse\": \"high\",\n    },\n    \"sleep_quality\": {\n        \"protective\": \"good\",\n        \"midpoint\": \"average\",\n        \"adverse\": \"poor\",\n    },\n    \"physical_activity_level\": {\n        \"protective\": \"active\",\n        \"midpoint\": \"moderate\",\n        \"adverse\": \"sedentary\",\n    },\n    \"smoking_alcohol\": {\n        \"protective\": \"no\",\n        \"midpoint\": \"occasional\",\n        \"adverse\": \"yes\",\n    },\n}\n\n\ndef add_ordinal_response_tree_decomposition(raw, deps, aux):\n    new_features = pd.DataFrame(index=raw.index)\n\n    midpoint_columns = []\n    direction_columns = []\n\n    for column_name, spec in ORDERED_RESPONSE_SPECS.items():\n        midpoint_col = column_name + \"_midpoint_flag\"\n        direction_col = column_name + \"_endpoint_risk_direction\"\n\n        if column_name in raw.columns:\n            values = raw[column_name].astype(\"string\").str.strip().str.lower()\n\n            midpoint_map = {\n                spec[\"protective\"]: 0.0,\n                spec[\"midpoint\"]: 1.0,\n                spec[\"adverse\"]: 0.0,\n            }\n            direction_map = {\n                spec[\"protective\"]: -1.0,\n                spec[\"midpoint\"]: 0.0,\n                spec[\"adverse\"]: 1.0,\n            }\n\n            new_features[midpoint_col] = values.map(midpoint_map).astype(\"float64\")\n            new_features[direction_col] = values.map(direction_map).astype(\"float64\")\n        else:\n            new_features[midpoint_col] = np.nan\n            new_features[direction_col] = np.nan\n\n        midpoint_columns.append(midpoint_col)\n        direction_columns.append(direction_col)\n\n    midpoint_matrix = new_features[midpoint_columns]\n    direction_matrix = new_features[direction_columns]\n\n    observed_count = direction_matrix.notna().sum(axis=1).astype(\"float64\")\n    midpoint_count = midpoint_matrix.sum(axis=1, min_count=1).fillna(0.0)\n    endpoint_count = ((direction_matrix == -1.0) | (direction_matrix == 1.0)).sum(axis=1).astype(\"float64\")\n    adverse_endpoint_count = (direction_matrix == 1.0).sum(axis=1).astype(\"float64\")\n    protective_endpoint_count = (direction_matrix == -1.0).sum(axis=1).astype(\"float64\")\n\n    has_observed = observed_count > 0.0\n    has_endpoint = endpoint_count > 0.0\n\n    new_features[\"observed_ordered_count\"] = observed_count\n    new_features[\"midpoint_count\"] = midpoint_count\n    new_features[\"endpoint_count\"] = endpoint_count\n    new_features[\"adverse_endpoint_count\"] = adverse_endpoint_count\n    new_features[\"protective_endpoint_count\"] = protective_endpoint_count\n\n    new_features[\"midpoint_fraction\"] = np.where(has_observed, midpoint_count / observed_count, np.nan)\n    new_features[\"endpoint_fraction\"] = np.where(has_observed, endpoint_count / observed_count, np.nan)\n    new_features[\"adverse_endpoint_fraction\"] = np.where(\n        has_observed,\n        adverse_endpoint_count / observed_count,\n        np.nan,\n    )\n    new_features[\"protective_endpoint_fraction\"] = np.where(\n        has_observed,\n        protective_endpoint_count / observed_count,\n        np.nan,\n    )\n    new_features[\"net_endpoint_risk\"] = np.where(\n        has_endpoint,\n        (adverse_endpoint_count - protective_endpoint_count) / endpoint_count,\n        0.0,\n    )\n\n    return new_features\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"ordinal_response_tree_decomposition\",\n        \"fn\": add_ordinal_response_tree_decomposition,\n        \"depends_on\": [],\n        \"description\": \"Decomposes ordered self-reported lifestyle categories into midpoint response behavior and endpoint health-risk direction features.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1db4-6749-7fa0-8757-c72e6a2c5074",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13398,
+        "outputTokens": 1388,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14786
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 13398,
+        "outputTokens": 1388,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14786
+      }
+    },
+    "turnId": "019f1db4-6757-7090-9e1d-7c22ecdb793f"
+  },
+  "wall_ms": 27235,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

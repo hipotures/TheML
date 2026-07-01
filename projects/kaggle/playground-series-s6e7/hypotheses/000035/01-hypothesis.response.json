@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Lifestyle Risk Cascade\",\n  \"group_name\": \"lifestyle_risk_cascade_alignment\",\n  \"family\": \"ordered_domain_interaction\",\n  \"summary\": \"Represent whether upstream lifestyle stressors, recovery impairment, activity shortfall, and physiological strain form a coherent risk cascade rather than isolated or contained warning signs.\",\n  \"depends_on\": [],\n  \"strategy\": \"Build four [0,1] domain risk scores from raw columns only: exposure_load as the observed-component mean of stress_level mapped low/medium/high to 0/0.5/1, smoking_alcohol mapped no/occasional/yes to 0/0.5/1, diet_type mapped balanced/veg/non-veg to 0/0.25/0.5, and water deficit clipped as (2.0 - water_intake) / 1.5; recovery_impairment as the mean of sleep_quality mapped good/average/poor to 0/0.5/1 and a U-shaped sleep_duration risk max((7 - sleep_duration) / 4, (sleep_duration - 9) / 1, 0) clipped to [0,1]; activity_shortfall as the mean of physical_activity_level mapped active/moderate/sedentary to 0/0.5/1, step deficit clipped as (10000 - step_count) / 9000, exercise deficit clipped as (30 - exercise_duration) / 30, and calorie-output deficit clipped as (1800 - calorie_expenditure) / 600; physiology_strain as the mean of BMI distance from 18.5-25 scaled to the observed 16-35 range and heart-rate strain clipped as max((heart_rate - 70) / 30, 0.5 * (55 - heart_rate) / 10, 0). For each domain, average observed components only; if all components in a domain are missing, set that domain to 0.5. Emit cascade_slope from a least-squares line over ordered scores [exposure_load, recovery_impairment, activity_shortfall, physiology_strain], the three adjacent signed gaps, monotone_propagation_fraction as the share of adjacent pairs where downstream risk is at least upstream risk minus 0.1, propagated_risk as the geometric mean of the four scores with a small 0.05 offset then clipped to [0,1], contained_exposure as max(0, exposure_load - max(recovery_impairment, activity_shortfall, physiology_strain)), and unexplained_physiology as max(0, physiology_strain - mean(exposure_load, recovery_impairment, activity_shortfall)).\",\n  \"expected_signal\": \"Public-health sources treat sleep, activity, nutrition, tobacco/alcohol, and body status as linked lifestyle risk domains, while student-focused evidence suggests poor lifestyle can weaken activity-related fitness and sleep quality is central to health outcomes; this cascade encoding may separate fit students with isolated manageable issues from at-risk students whose risks propagate across domains and unhealthy students with broad downstream strain. Sources consulted: https://www.cdc.gov/environmental-health-tracking/php/data-research/lifestyle-risk-factors.html, https://www.heart.org/en/healthy-living/healthy-lifestyle/lifes-essential-8, https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2025.1664822/full\",\n  \"risk\": \"The hand-ordered cascade may be too assumption-driven for a synthetic target, and some component mappings overlap with prior burden, bottleneck, and interaction groups; diet, hydration, calorie, and heart-rate thresholds may be source-specific, and neutral handling of fully missing domains can dilute informative missingness already captured elsewhere.\"\n}",
+  "usage": {
+    "threadId": "019f1d84-0211-7ac2-98eb-04a3b8c773f3",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 25697,
+        "outputTokens": 1736,
+        "reasoningOutputTokens": 1533,
+        "totalTokens": 27433
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 8064,
+        "inputTokens": 25697,
+        "outputTokens": 1736,
+        "reasoningOutputTokens": 1533,
+        "totalTokens": 27433
+      }
+    },
+    "turnId": "019f1d84-0220-7942-9b92-469a777ef576"
+  },
+  "wall_ms": 196856,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

@@ -1,0 +1,40 @@
+title: Auxiliary Student Persona Affinity
+group_name: external_student_persona_affinity
+family: external_persona_similarity
+summary: Represent each row by its resemblance to recurring auxiliary-source student
+  personas whose repeated health and lifestyle observations show persistent or mixed
+  health-condition tendencies.
+depends_on: []
+strategy: 'Build source-only personas from student_health_dataset_50k by grouping
+  external rows by student_id, using robust numeric medians, numeric IQR-based variability,
+  categorical modes, categorical mode purity, and health_condition class proportions
+  per student; never join student_id to project id. For each train/test row, compare
+  observed project features to each external persona with a weighted distance: numeric
+  distance is absolute difference from the persona median divided by the global external
+  IQR for that feature and capped at 4 before scaling to [0,1], categorical distance
+  is 0 for mode match, 1 for mismatch, and skipped when the project value is missing;
+  renormalize by observed feature weight and emit an observed-feature fraction. Use
+  the k nearest personas, for example k=25, with inverse-distance or exponential weights
+  to derive weighted auxiliary affinities for unhealthy, at-risk, and fit, the top-vs-second
+  class margin, unhealthy-vs-fit log ratio with epsilon smoothing, weighted persona
+  label entropy, weighted persona categorical purity, weighted numeric variability,
+  nearest-persona distance, and effective support count. If a row has no usable observed
+  features, return global external persona class proportions, maximum entropy, zero
+  observed-feature fraction, and maximum distance. Domain selection is grounded in
+  public health frameworks linking sleep, activity, diet, weight, substance exposure,
+  and physiology to health risk, including AHA Life''s Essential 8, CDC sleep-CVH
+  findings, and WHO physical activity guidance: https://www.heart.org/en/healthy-living/healthy-lifestyle/lifes-essential-8
+  ; https://www.cdc.gov/pcd/issues/2020/19_0424.htm ; https://www.who.int/news-room/fact-sheets/detail/physical-activity'
+expected_signal: The auxiliary file contains repeated observations for the same students,
+  so aggregating to stable personas may expose persistent latent health phenotypes
+  and class tendencies that are less noisy than single-row external matching, especially
+  for separating fit and unhealthy from the dominant at-risk middle class.
+risk: The source class distribution is heavily at-risk, so affinity features may collapse
+  toward the majority unless margins and entropy are retained; the signal can also
+  be unstable if the competition data generation did not preserve external student-level
+  persona structure, and it may partially duplicate broader external similarity groups.
+schema_version: 1
+hypothesis_id: '000040'
+revision: 1
+enabled: true
+created_at: '2026-07-01T14:14:44'

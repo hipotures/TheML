@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\n\nTRAIN_ID_MAX = 690087\n\nSLEEP_QUALITY_MAP = {\n    \"poor\": 0,\n    \"average\": 1,\n    \"good\": 2,\n}\n\nPHYSICAL_ACTIVITY_MAP = {\n    \"sedentary\": 0,\n    \"moderate\": 1,\n    \"active\": 2,\n}\n\nSTRESS_LEVEL_MAP = {\n    \"low\": 0,\n    \"medium\": 1,\n    \"high\": 2,\n}\n\n\ndef _training_mask(raw):\n    if \"id\" not in raw.columns:\n        return pd.Series(True, index=raw.index)\n\n    ids = pd.to_numeric(raw[\"id\"], errors=\"coerce\")\n    mask = ids.le(TRAIN_ID_MAX)\n    if bool(mask.any()):\n        return mask.fillna(False)\n    return pd.Series(True, index=raw.index)\n\n\ndef _ordered_category(series, mapping):\n    normalized = series.astype(\"string\").str.strip().str.lower()\n    return normalized.map(mapping).astype(\"float64\")\n\n\ndef _tertile_bins(values, fit_mask, higher_is_higher=True):\n    numeric = pd.to_numeric(values, errors=\"coerce\").astype(\"float64\")\n    fit_values = numeric.loc[fit_mask & numeric.notna()]\n\n    out = pd.Series(np.nan, index=values.index, dtype=\"float64\")\n    if fit_values.empty:\n        return out\n\n    q1 = float(fit_values.quantile(1.0 / 3.0))\n    q2 = float(fit_values.quantile(2.0 / 3.0))\n\n    if not np.isfinite(q1) or not np.isfinite(q2):\n        return out\n\n    if q2 < q1:\n        q1, q2 = q2, q1\n\n    ranked = pd.Series(1.0, index=values.index, dtype=\"float64\")\n    ranked.loc[numeric.le(q1)] = 0.0\n    ranked.loc[numeric.gt(q2)] = 2.0\n    ranked.loc[numeric.isna()] = np.nan\n\n    if not higher_is_higher:\n        ranked = 2.0 - ranked\n        ranked.loc[numeric.isna()] = np.nan\n\n    return ranked\n\n\ndef _percentile_rank(series, fit_mask):\n    numeric = pd.to_numeric(series, errors=\"coerce\").astype(\"float64\")\n    fit_values = numeric.loc[fit_mask & numeric.notna()]\n\n    out = pd.Series(np.nan, index=series.index, dtype=\"float64\")\n    if fit_values.empty:\n        return out\n\n    ranks = fit_values.rank(method=\"average\", pct=True)\n    reference = pd.DataFrame({\"value\": fit_values.to_numpy(), \"rank\": ranks.to_numpy()})\n    reference = reference.groupby(\"value\", sort=True, as_index=False)[\"rank\"].mean()\n\n    x = numeric.to_numpy(dtype=\"float64\")\n    xp = reference[\"value\"].to_numpy(dtype=\"float64\")\n    fp = reference[\"rank\"].to_numpy(dtype=\"float64\")\n\n    valid = np.isfinite(x)\n    if len(xp) == 1:\n        out.loc[valid] = fp[0]\n    else:\n        out.loc[valid] = np.interp(x[valid], xp, fp, left=fp[0], right=fp[-1])\n\n    return out\n\n\ndef _domain_features(name, reported, observed):\n    valid = reported.notna() & observed.notna()\n\n    gap = pd.Series(-1.0, index=reported.index, dtype=\"float64\")\n    abs_gap = pd.Series(-1.0, index=reported.index, dtype=\"float64\")\n    pair_code = pd.Series(-1, index=reported.index, dtype=\"int16\")\n\n    signed = reported - observed\n    gap.loc[valid] = signed.loc[valid]\n    abs_gap.loc[valid] = signed.loc[valid].abs()\n    pair_code.loc[valid] = (reported.loc[valid] * 3.0 + observed.loc[valid]).astype(\"int16\")\n\n    return {\n        f\"{name}_reported_ord\": reported.fillna(-1).astype(\"int8\"),\n        f\"{name}_objective_bin\": observed.fillna(-1).astype(\"int8\"),\n        f\"{name}_gap\": gap,\n        f\"{name}_abs_gap\": abs_gap,\n        f\"{name}_pair_code\": pair_code,\n    }\n\n\ndef add_perceived_observed_alignment(raw, deps, aux):\n    fit_mask = _training_mask(raw)\n\n    sleep_reported = _ordered_category(raw[\"sleep_quality\"], SLEEP_QUALITY_MAP)\n    activity_reported = _ordered_category(raw[\"physical_activity_level\"], PHYSICAL_ACTIVITY_MAP)\n    stress_reported = _ordered_category(raw[\"stress_level\"], STRESS_LEVEL_MAP)\n\n    sleep_observed = _tertile_bins(raw[\"sleep_duration\"], fit_mask, higher_is_higher=True)\n    stress_observed = _tertile_bins(raw[\"heart_rate\"], fit_mask, higher_is_higher=True)\n\n    step_pct = _percentile_rank(raw[\"step_count\"], fit_mask)\n    exercise_pct = _percentile_rank(raw[\"exercise_duration\"], fit_mask)\n    calorie_pct = _percentile_rank(raw[\"calorie_expenditure\"], fit_mask)\n    activity_score = pd.concat([step_pct, exercise_pct, calorie_pct], axis=1).mean(axis=1, skipna=True)\n    activity_observed = _tertile_bins(activity_score, fit_mask, higher_is_higher=True)\n\n    feature_parts = {}\n    feature_parts.update(_domain_features(\"sleep\", sleep_reported, sleep_observed))\n    feature_parts.update(_domain_features(\"activity\", activity_reported, activity_observed))\n    feature_parts.update(_domain_features(\"stress\", stress_reported, stress_observed))\n\n    gaps = pd.DataFrame(\n        {\n            \"sleep\": sleep_reported - sleep_observed,\n            \"activity\": activity_reported - activity_observed,\n            \"stress\": stress_reported - stress_observed,\n        },\n        index=raw.index,\n    )\n    available = gaps.notna()\n    available_count = available.sum(axis=1).astype(\"int8\")\n\n    above_count = gaps.gt(0).sum(axis=1).astype(\"int8\")\n    equal_count = gaps.eq(0).sum(axis=1).astype(\"int8\")\n    below_count = gaps.lt(0).sum(axis=1).astype(\"int8\")\n\n    mean_abs_gap = gaps.abs().mean(axis=1, skipna=True).fillna(-1.0)\n    mean_signed_gap = gaps.mean(axis=1, skipna=True).fillna(0.0)\n\n    feature_parts[\"alignment_available_domain_count\"] = available_count\n    feature_parts[\"alignment_report_above_count\"] = above_count\n    feature_parts[\"alignment_report_equal_count\"] = equal_count\n    feature_parts[\"alignment_report_below_count\"] = below_count\n    feature_parts[\"alignment_mean_abs_gap\"] = mean_abs_gap\n    feature_parts[\"alignment_mean_signed_gap\"] = mean_signed_gap\n\n    return pd.DataFrame(feature_parts, index=raw.index)\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"perceived_observed_alignment\",\n        \"fn\": add_perceived_observed_alignment,\n        \"depends_on\": [],\n        \"description\": \"Measures agreement and disagreement between ordered self-reports and adjacent objective health signals.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1d7f-fa89-7dc2-9a85-6629f9d8372d",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13390,
+        "outputTokens": 2058,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 15448
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13390,
+        "outputTokens": 2058,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 15448
+      }
+    },
+    "turnId": "019f1d7f-fa95-7842-8078-02ed581c4247"
+  },
+  "wall_ms": 39375,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

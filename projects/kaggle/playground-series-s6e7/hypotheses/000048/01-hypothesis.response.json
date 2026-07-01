@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\"title\":\"Sedentary Offset Balance\",\"group_name\":\"sedentary_offset_balance\",\"family\":\"activity_sedentary_context\",\"summary\":\"Represent whether a student's explicit and incidental movement appears sufficient to offset a sedentary waking-day context, treating sedentary exposure as partly independent from exercise volume.\",\"depends_on\":[],\"strategy\":\"Use the physical-activity/sedentary distinction supported by WHO and AHA guidance (https://pmc.ncbi.nlm.nih.gov/articles/PMC7719906/ and https://www.heart.org/en/healthy-living/exercise-and-physical-activity/fitness-basics/aha-recs-for-physical-activity-in-adults): compute estimated waking hours as 24 minus sleep duration clipped to a plausible range, step density as steps per waking hour, exercise sufficiency as exercise duration divided by a 30-minute daily reference and clipped to [0,2], incidental movement sufficiency as step_count divided by 7500 and clipped to [0,2], activity-label support from physical_activity_level mapped sedentary=0, moderate=0.5, active=1, and calorie support from calorie_expenditure train-feature percentile rank clipped to [0,1]. Build a sedentary pressure score from sedentary label, low step density, low calorie support, and long waking time; build an offset score from exercise sufficiency, incidental movement sufficiency, and activity-label support; derive offset gap = sedentary pressure minus offset score, an offset quadrant code for high/low sedentary pressure crossed with high/low offset, and a concentrated-exercise flag when exercise sufficiency is high but incidental movement sufficiency and activity-label support are low. Treat missing components as neutral 0.5 and average only observed terms where possible, with all outputs clipped to stable finite ranges.\",\"expected_signal\":\"Sedentary behavior can remain adverse even when moderate-to-vigorous activity is present (see https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0037696), so this group may help separate fit-like active movers from at-risk students whose exercise is concentrated or insufficient to counter a sedentary daily pattern, improving class balance around the at-risk boundary.\",\"risk\":\"This may overlap with existing activity-composition features, and fixed daily exercise or step references could be unstable if exercise_duration represents a different reporting period or if physical_activity_level already encodes the same sedentary-offset concept.\"}",
+  "usage": {
+    "threadId": "019f1dac-d533-7311-8646-c737ed4bfb65",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 44198,
+        "outputTokens": 6467,
+        "reasoningOutputTokens": 6308,
+        "totalTokens": 50665
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 44198,
+        "outputTokens": 6467,
+        "reasoningOutputTokens": 6308,
+        "totalTokens": 50665
+      }
+    },
+    "turnId": "019f1dac-d541-7020-b9ee-a913b1b16778"
+  },
+  "wall_ms": 265230,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

@@ -1,0 +1,37 @@
+title: Apparent Energy Availability Phase
+group_name: energy_availability_phase
+family: energy_balance_context
+summary: Represent whether a student's exertion demand appears adequately supported
+  by body reserve and recovery context, separating well-supported high-throughput
+  profiles from under-supported exertion and low-throughput surplus states.
+depends_on: []
+strategy: 'Using only training-derived unsupervised medians and percentile cut points,
+  create a clipped activity-demand score as the mean percentile rank of calorie expenditure,
+  steps, and exercise duration; create a recovery-support score from sleep amount
+  closeness to a 7-9 hour band, water intake adequacy, favorable sleep-quality and
+  stress ordinals, and balanced diet status; create body-context margins for low-BMI
+  reserve deficit below 18.5, healthy-BMI band occupancy from 18.5 to 25, and high-BMI
+  surplus above 25, each clipped to [0,1]. Derive coherent phase features: demand-minus-support
+  gap, under-supported exertion pressure = high demand combined with low-BMI margin,
+  weak recovery, and elevated heart-rate percentile; low-throughput surplus pressure
+  = high-BMI margin combined with low demand and weak recovery; supported high-throughput
+  score = high demand combined with healthy-BMI band, strong recovery, and non-elevated
+  heart-rate percentile; and a deterministic phase label from the largest pressure
+  score with a neutral label when all components are weak. Missing numeric values
+  receive neutral median/0.5 percentile treatment for these calculations, missing
+  categorical values receive neutral ordinal scores, all ratios and margins are clipped,
+  and rows with all demand inputs missing are assigned neutral demand.'
+expected_signal: This may improve balanced accuracy by making the fit, at-risk, and
+  unhealthy classes more separable when similar activity levels have different risk
+  meaning depending on recovery and body context; domain background supports activity-adiposity
+  cardiometabolic clustering (https://www.ncbi.nlm.nih.gov/books/NBK201497/) and energy-demand
+  mismatch affecting cardiovascular and metabolic function (https://www.nationaleatingdisorders.org/relative-energy-deficiency-in-sport-red-s/).
+risk: The dataset lacks true calorie intake, height, age, and body composition, so
+  the feature can confuse lean athletic students with energy-deficit risk or high-BMI
+  active students with surplus risk; calorie-expenditure estimates may also be noisy
+  and the group may partly overlap existing activity, recovery, and body-context representations.
+schema_version: 1
+hypothesis_id: '000034'
+revision: 1
+enabled: true
+created_at: '2026-07-01T13:50:17'

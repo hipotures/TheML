@@ -1,0 +1,39 @@
+title: Empirical Tail Stress Constellation
+group_name: empirical_tail_stress_constellation
+family: tail_coexceedance
+summary: Represent each student by whether multiple health and lifestyle signals simultaneously
+  occupy adverse, protective, or mixed empirical extremes, treating rare co-occurring
+  tails as distinct risk-state evidence.
+depends_on: []
+strategy: 'Fit train-only empirical quantile cut points for numeric fields and fixed
+  ordinal maps for ordered categorical fields, then convert each observed signal into
+  an adverse-tail score and a protective-tail score: high heart rate, non-normal BMI
+  distance, low sleep, low steps, low exercise, low calorie expenditure, and low water
+  intake contribute adverse numeric tails, while their healthy/opposite directions
+  contribute protective tails; stress_level maps high/medium/low to adverse 1/0.5/0
+  and protective 0/0.5/1, sleep_quality poor/average/good similarly, physical_activity_level
+  sedentary/moderate/active similarly, smoking_alcohol yes/occasional/no similarly,
+  diet_type gives balanced the strongest protective score with veg intermediate and
+  non-veg lowest, and gender is excluded except for missingness neutrality. For each
+  row, create only tail-constellation summaries: counts of adverse scores beyond the
+  train 75th and 90th percentile equivalents, counts of protective scores beyond those
+  cutoffs, summed exceedance intensity above 75th and 90th cutoffs, strongest single
+  adverse and protective tail, adverse-minus-protective tail balance, and a mixed-extreme
+  flag/intensity when both adverse and protective tails are present. Missing source
+  values contribute no tail score and are tracked by denominator-normalized rates
+  so rows with fewer observed fields remain comparable. Background used: allostatic-load
+  literature describes cumulative high-risk biomarker scoring, often via risk quartiles,
+  and balanced accuracy macro-averages class recall, making minority extreme-state
+  recall valuable: https://pmc.ncbi.nlm.nih.gov/articles/PMC6430278/ and https://scikit-learn.org/stable/modules/model_evaluation.html#balanced-accuracy-score.'
+expected_signal: The minority fit and unhealthy classes are likely concentrated in
+  coherent protective or adverse extremes, while at-risk rows may show mixed tails,
+  so explicit co-exceedance summaries can sharpen recall for all three classes rather
+  than letting the dominant middle class absorb tail patterns.
+risk: This may overlap with prior burden and rarity-style groups, and empirical quantiles
+  can be unstable under train-test distribution shift or when synthetic feature tails
+  encode noise rather than health-relevant extremes.
+schema_version: 1
+hypothesis_id: '000042'
+revision: 1
+enabled: true
+created_at: '2026-07-01T14:20:24'

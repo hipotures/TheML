@@ -1,0 +1,39 @@
+title: External state likelihood
+group_name: external_source_state_likelihood
+family: external_supervised_density
+summary: Represent each student by smoothed health-condition affinity signals implied
+  by matching labeled auxiliary-source lifestyle states, turning source-domain class
+  neighborhoods into compact risk evidence.
+depends_on: []
+strategy: 'Load the auxiliary student_health_dataset_50k file, drop external-only
+  identifier and timestamp fields, and align only the shared project feature columns.
+  Create deterministic state tokens from the external source: numeric features get
+  a missing token plus 8 quantile bins from the external distribution, while sleep
+  duration, BMI, and heart rate also get guideline-style zones using 7-9 sleep hours,
+  BMI cutpoints 18.5/25/30, and resting heart-rate cutpoints 60/100; categorical features
+  use their category or a missing token. From external labels only, build additive-smoothed
+  class-rate tables for each one-way state and for a small set of low-cardinality
+  crossed states: BMI zone x heart-rate zone, sleep zone x sleep-quality x stress
+  level, activity numeric zone x reported activity level, smoking/alcohol x diet type,
+  and hydration zone x activity numeric zone. For each project row, emit the three
+  averaged log smoothed class probabilities, the strongest class-probability margin,
+  the entropy of the averaged class distribution, and matched external support; unseen
+  or missing-heavy states back off from crossed tables to one-way tables and then
+  to global external class priors. Source and method references consulted: https://www.kaggle.com/datasets/ziya07/college-student-health-behavior-dataset,
+  https://developers.google.com/machine-learning/crash-course/numerical-data/binning,
+  https://developers.google.com/machine-learning/crash-course/categorical-data/feature-crosses,
+  https://www.cdc.gov/bmi/adult-calculator/bmi-categories.html, https://www.heart.org/en/health-topics/high-blood-pressure/the-facts-about-high-blood-pressure/all-about-heart-rate-pulse,
+  https://pubmed.ncbi.nlm.nih.gov/29073398/'
+expected_signal: Because the auxiliary source shares the same feature schema and target
+  classes, smoothed state-level class affinities may expose compact patterns for fit
+  and unhealthy cases that are diluted by the dominant at-risk class, improving balanced
+  class recognition without using project target labels.
+risk: The external labels may reflect a different source-generation process, the auxiliary
+  class distribution is very at-risk heavy, and crossed states can become sparse despite
+  smoothing, so the group may overstate source-specific artifacts or overlap partly
+  with the previous external archetype affinity idea.
+schema_version: 1
+hypothesis_id: '000011'
+revision: 1
+enabled: true
+created_at: '2026-07-01T12:41:28'

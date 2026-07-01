@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Behavioral Co-Occurrence Rarity\",\n  \"group_name\": \"behavioral_cooccurrence_rarity\",\n  \"family\": \"unsupervised_profile_density\",\n  \"summary\": \"Represent each student by how familiar or unusual their combined lifestyle, physiology, and self-report pattern is relative to the training population, treating atypical behavior constellations as potential health-risk signals.\",\n  \"depends_on\": [],\n  \"strategy\": \"Fit all reference statistics on training feature columns only, without using health_condition. Convert each numeric feature into 8 equal-frequency bins from nonmissing training values, collapsing duplicate cut points, clipping out-of-range values to the nearest edge bin, and assigning missing values to a dedicated MISSING bin. Convert each categorical feature to normalized string tokens, using MISSING for nulls and UNSEEN for categories not observed in training. For every unordered pair of binned/tokenized original features, compute smoothed training probabilities p(pair) = (pair_count + 1) / (n_train + number_of_observed_pair_values + 1), smoothed marginal probabilities for each side, and pair lift = log(p(pair) / (p(left) * p(right))). For each row, derive one coherent set of profile-rarity columns: mean negative log pair probability, 90th percentile negative log pair probability, maximum negative log pair probability capped at the training 99.9th percentile, count and proportion of pairs whose smoothed probability is below the training 1st percentile for that pair, count of pair values unseen in training before smoothing, and mean absolute pair lift. Keep missing-token pairs in the calculations so absence patterns contribute to profile typicality rather than being discarded.\",\n  \"expected_signal\": \"Public health sources describe diet, physical activity, and sleep as jointly relevant student health behaviors, and a sleep-health clustering study found distinct groups defined by combined sleep, activity, and stress patterns; this group may improve balanced accuracy by exposing rare cross-feature constellations that correspond to minority health states even when individual raw values are not extreme. Sources: https://www.cdc.gov/yrbs/dstr/dietary-physical-sleep-behaviors.html and https://epstem.net/index.php/epstem/article/view/965\",\n  \"risk\": \"The rarity scores may capture sampling quirks, generated-data artifacts, or missingness structure rather than stable health risk, and they can be partly redundant with prior missingness, percentile, and archetype-affinity groups; using only train-fitted bins and frequencies avoids target leakage but may make very sparse pair combinations noisy despite smoothing.\"\n}",
+  "usage": {
+    "threadId": "019f1d3e-a32e-75a2-915b-2f84a0be7e1d",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 28459,
+        "outputTokens": 4367,
+        "reasoningOutputTokens": 3796,
+        "totalTokens": 32826
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 28459,
+        "outputTokens": 4367,
+        "reasoningOutputTokens": 3796,
+        "totalTokens": 32826
+      }
+    },
+    "turnId": "019f1d3e-a339-7fb3-9c13-d5792c1749e9"
+  },
+  "wall_ms": 86282,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

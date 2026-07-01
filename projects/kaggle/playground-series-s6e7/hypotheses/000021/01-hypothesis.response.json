@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"External Source Support Signature\",\n  \"group_name\": \"external_source_support_signature\",\n  \"family\": \"external_unsupervised_domain_support\",\n  \"summary\": \"Represent each row by how well its observed lifestyle and physiology profile is supported by the original auxiliary source distribution, treating source-domain coverage and density as risk-adjacent context without using auxiliary labels.\",\n  \"depends_on\": [],\n  \"strategy\": \"Use only shared feature columns from data/student_health_dataset_50k.csv.gz and ignore health_condition, student_id, and timestamp. For each numeric feature, compute its empirical CDF percentile against the external source, clipped to [0.001, 0.999], plus a two-sided tail support score min(p, 1-p); aggregate numeric support with min, mean, and counts below 0.05 and 0.10. Bin each numeric feature into external-source quintiles. For categoricals, map missing/unseen values to a reserved token and compute Laplace-smoothed log frequencies for each value and for the full categorical tuple. For source-consistency interactions, compute Laplace-smoothed log frequencies for paired states: sleep_quality with sleep_duration quintile, stress_level with heart_rate quintile, physical_activity_level with step_count quintile, physical_activity_level with exercise_duration quintile, diet_type with bmi quintile, smoking_alcohol with heart_rate quintile, and physical_activity_level with calorie_expenditure quintile; also include their mean and minimum log support. Numeric missing values receive neutral percentile 0.5 but zero tail support and a missing-source flag so absence is treated as unsupported rather than extrapolated. This follows the general original-source feature idea discussed for synthetic Playground data at https://developer.nvidia.com/blog/grandmaster-pro-tip-winning-first-place-in-kaggle-competition-with-feature-engineering-using-nvidia-cudf-pandas/ and synthetic-data quantile/category coverage checks described at https://datascience.codata.org/articles/10.5334/dsj-2025-037 and https://ydata.ai/resources/how-to-validate-if-synthetic-data-is-statistically-similar-to-real-data.html.\",\n  \"expected_signal\": \"Rows resembling rare or edge regions of the original source distribution may correspond to minority health_condition classes that balanced accuracy rewards more strongly, while dense source-supported profiles can help separate ordinary at-risk cases from genuinely fit or unhealthy endpoints without target leakage.\",\n  \"risk\": \"The external source has no missing values and may not match the competition generator perfectly, so these features can partly duplicate missingness signals or mark generator artifacts rather than health risk; categorical tuple and pair frequencies need smoothing to avoid brittle sparse-count behavior.\"\n}",
+  "usage": {
+    "threadId": "019f1d59-389d-7763-b615-4794561a0707",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 39565,
+        "outputTokens": 79,
+        "reasoningOutputTokens": 28,
+        "totalTokens": 39644
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 4864,
+        "inputTokens": 78707,
+        "outputTokens": 2193,
+        "reasoningOutputTokens": 2021,
+        "totalTokens": 80900
+      }
+    },
+    "turnId": "019f1d59-38ab-7bb0-a0c0-9fff8916ece4"
+  },
+  "wall_ms": 222139,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}

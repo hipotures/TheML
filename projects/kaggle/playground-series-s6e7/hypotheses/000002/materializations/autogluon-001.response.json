@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\nTRAIN_ID_MAX = 690087\nEPSILON = 1e-12\nHR_PER_STEP_LOW_MAX = 0.0081\nHR_PER_STEP_MEDIUM_MAX = 0.0147\nLOWER_QUANTILE = 0.005\nUPPER_QUANTILE = 0.995\n\n\ndef _numeric(raw, name):\n    if name not in raw.columns:\n        return pd.Series(np.nan, index=raw.index, dtype=\"float64\")\n    return pd.to_numeric(raw[name], errors=\"coerce\")\n\n\ndef _safe_divide(numerator, denominator, scale=1.0):\n    denominator = denominator.where(denominator.abs() > EPSILON)\n    return scale * numerator / denominator\n\n\ndef _train_mask(raw):\n    if \"id\" not in raw.columns:\n        return pd.Series(True, index=raw.index)\n    ids = pd.to_numeric(raw[\"id\"], errors=\"coerce\")\n    mask = ids.le(TRAIN_ID_MAX)\n    if bool(mask.any()):\n        return mask.fillna(False)\n    return pd.Series(True, index=raw.index)\n\n\ndef _robust_z_from_train(values, train_mask):\n    train_values = values.loc[train_mask].dropna()\n    if train_values.empty:\n        return pd.Series(np.nan, index=values.index, dtype=\"float64\")\n\n    lower = train_values.quantile(LOWER_QUANTILE)\n    upper = train_values.quantile(UPPER_QUANTILE)\n    clipped = values.clip(lower=lower, upper=upper)\n    train_clipped = clipped.loc[train_mask].dropna()\n\n    median = train_clipped.median()\n    mad = (train_clipped - median).abs().median()\n    if not np.isfinite(mad) or mad <= EPSILON:\n        scale = train_clipped.std(ddof=0)\n    else:\n        scale = 1.4826 * mad\n\n    if not np.isfinite(scale) or scale <= EPSILON:\n        return pd.Series(0.0, index=values.index, dtype=\"float64\").where(values.notna())\n\n    return (clipped - median) / scale\n\n\ndef add_activity_normalized_cardio_strain(raw, deps, aux):\n    heart_rate = _numeric(raw, \"heart_rate\")\n    step_count = _numeric(raw, \"step_count\")\n    exercise_duration = _numeric(raw, \"exercise_duration\")\n    calorie_expenditure = _numeric(raw, \"calorie_expenditure\")\n\n    exercise_plus_one = exercise_duration + 1.0\n\n    hr_per_1k_steps = _safe_divide(heart_rate, step_count, scale=1000.0)\n    hr_per_exercise_min_plus1 = _safe_divide(heart_rate, exercise_plus_one)\n    calories_per_1k_steps = _safe_divide(calorie_expenditure, step_count, scale=1000.0)\n    calories_per_exercise_min_plus1 = _safe_divide(calorie_expenditure, exercise_plus_one)\n    steps_per_exercise_min_plus1 = _safe_divide(step_count, exercise_plus_one)\n\n    train_mask = _train_mask(raw)\n    hr_step_z = _robust_z_from_train(hr_per_1k_steps, train_mask)\n    calorie_step_z = _robust_z_from_train(calories_per_1k_steps, train_mask)\n    cardio_calorie_step_strain_residual = hr_step_z - calorie_step_z\n\n    hr_per_step = _safe_divide(heart_rate, step_count)\n    hr_per_step_band = pd.Series(\"unknown\", index=raw.index, dtype=\"object\")\n    valid_band = hr_per_step.notna()\n    hr_per_step_band.loc[valid_band & hr_per_step.le(HR_PER_STEP_LOW_MAX)] = \"low\"\n    hr_per_step_band.loc[\n        valid_band\n        & hr_per_step.gt(HR_PER_STEP_LOW_MAX)\n        & hr_per_step.le(HR_PER_STEP_MEDIUM_MAX)\n    ] = \"medium\"\n    hr_per_step_band.loc[valid_band & hr_per_step.gt(HR_PER_STEP_MEDIUM_MAX)] = \"high\"\n\n    return pd.DataFrame(\n        {\n            \"hr_per_1k_steps\": hr_per_1k_steps,\n            \"hr_per_exercise_min_plus1\": hr_per_exercise_min_plus1,\n            \"calories_per_1k_steps\": calories_per_1k_steps,\n            \"calories_per_exercise_min_plus1\": calories_per_exercise_min_plus1,\n            \"steps_per_exercise_min_plus1\": steps_per_exercise_min_plus1,\n            \"cardio_calorie_step_strain_residual\": cardio_calorie_step_strain_residual,\n            \"hr_per_step_band\": hr_per_step_band,\n        },\n        index=raw.index,\n    )\n\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"activity_normalized_cardio_strain\",\n        \"fn\": add_activity_normalized_cardio_strain,\n        \"depends_on\": [],\n        \"description\": \"Activity-normalized cardiovascular and energy strain ratios comparing heart-rate and calorie signals against movement and exercise output.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1d7f-00d7-77f1-b911-c8743a5b514a",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13372,
+        "outputTokens": 1583,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14955
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 13372,
+        "outputTokens": 1583,
+        "reasoningOutputTokens": 516,
+        "totalTokens": 14955
+      }
+    },
+    "turnId": "019f1d7f-00e4-7c32-908c-349d23072bb5"
+  },
+  "wall_ms": 31464,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}

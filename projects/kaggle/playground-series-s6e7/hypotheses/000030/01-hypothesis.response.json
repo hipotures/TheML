@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "{\n  \"title\": \"Auxiliary Recovery-Worsening Trajectory Affinity\",\n  \"group_name\": \"external_transition_phase_affinity\",\n  \"family\": \"external_temporal_supervised\",\n  \"summary\": \"Represent each static student profile by its resemblance to auxiliary-source lifestyle states that appear before or after health-status worsening, recovery, or stability, capturing latent trajectory phase rather than only present-state wellness.\",\n  \"depends_on\": [],\n  \"strategy\": \"Use only data/student_health_dataset_50k.csv.gz as the auxiliary source and never join on student_id or id. Sort auxiliary rows by student_id and timestamp, map fit=0, at-risk=1, unhealthy=2, then assign each row a transition phase from adjacent same-student severity changes: stable_current_class when previous and next observed severities match the current severity, pre_worsen_current_class when the next severity is higher, pre_recover_current_class when the next severity is lower, post_worsen_current_class when the previous severity was lower, and post_recover_current_class when the previous severity was higher. Collapse phase buckets with fewer than 200 rows into direction-only buckets while keeping stable class buckets. Build robust phase centroids over the common train/test feature columns: winsorize numeric auxiliary values at the auxiliary 1st and 99th percentiles, scale by auxiliary median and IQR, encode categoricals with one-hot levels plus an explicit missing token for project rows, and add numeric missing flags for project rows because the auxiliary file has no missing values. For each project row, apply the same transform and emit inverse-distance soft affinities to each retained phase centroid, the best worsening affinity, best recovery affinity, best stable-class affinity, worsening-minus-recovery margin, recovery-minus-stable margin, and severity-weighted mean of phase affinities; rows with all common fields missing receive neutral centroid distances plus missing-flag evidence.\",\n  \"expected_signal\": \"Student-health literature links sleep quality, stress, exercise, activity, BMI, and physiological recovery as coupled risk-and-recovery factors, so transition-phase affinity may separate boundary cases such as fit students drifting toward at-risk from at-risk students resembling recovery or deterioration patterns; background sources used include https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2025.1640974/full, https://www.cdc.gov/pcd/issues/2022/22_0060.htm, https://www.ncbi.nlm.nih.gov/books/NBK566046/, and https://link.springer.com/article/10.1186/s12889-016-3391-4.\",\n  \"risk\": \"The auxiliary timestamps and repeated student records may be synthetic or weakly ordered, so inferred worsening and recovery phases can be noisy; rare transition buckets may be unstable after pooling, and the signal may partially overlap earlier external class-affinity groups even though it emphasizes directional phase rather than static class prototypes.\"\n}",
+  "usage": {
+    "threadId": "019f1d76-4285-7990-a19e-1ceb97051841",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 25527,
+        "outputTokens": 5465,
+        "reasoningOutputTokens": 4823,
+        "totalTokens": 30992
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 25527,
+        "outputTokens": 5465,
+        "reasoningOutputTokens": 4823,
+        "totalTokens": 30992
+      }
+    },
+    "turnId": "019f1d76-4293-7791-8962-e71dc1ea8c6b"
+  },
+  "wall_ms": 108849,
+  "web_search_enabled": true,
+  "web_search_has_results": true
+}
