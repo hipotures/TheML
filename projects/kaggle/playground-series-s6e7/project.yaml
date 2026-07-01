@@ -1,0 +1,26 @@
+schema_version: 1
+project_id: playground-series-s6e7
+kind: kaggle
+kaggle_slug: playground-series-s6e7
+task_file: task.md
+data_dir: data
+runtime:
+  preprocess_timeout: 900
+external:
+  file: student_health_dataset_50k.csv.gz
+  description: docs/external-student-health-dataset.md
+target:
+  id_column: id
+  target_column: health_condition
+  problem_type: multiclass
+  autogluon_metric: balanced_accuracy
+  sklearn_metric: sklearn.metrics.balanced_accuracy_score
+  metric_description: 'Balanced accuracy: compute recall separately for each class
+    and take the unweighted mean across the classes using the predicted class labels
+    versus the observed target labels.'
+  maximize: true
+  submission_kind: labels
+root:
+  target_count: 20
+  active_mode: autogluon
+created_at: '2026-07-01T11:47:08'

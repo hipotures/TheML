@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from tml.core.config import active_mode, active_profile_id, load_project_config, repo_root_for_project
+from tml.core.config import active_mode, active_profile_id, load_project_config, project_preprocess_timeout, repo_root_for_project
 from tml.core.ids import node_id
 from tml.core.profiles import profile_hash
 from tml.db.state import (
@@ -99,7 +99,7 @@ def root_run_plan(
         mode=active_run_mode,
         profile_id=profile_id,
         profile_hash=profile_hash(project_dir, active_run_mode, profile_id),
-        execution_timeout_seconds=_execution_timeout_seconds(profile_overrides),
+        execution_timeout_seconds=_execution_timeout_seconds(config, profile_overrides),
         force=force,
         all_revisions=all_revisions,
         run_id=run_id_value,
@@ -235,7 +235,7 @@ def run_missing(
         result = run_python_script(
             node_dir / "02-code.py",
             node_dir / "work",
-            timeout_seconds=_execution_timeout_seconds(profile_overrides),
+            timeout_seconds=_execution_timeout_seconds(config, profile_overrides),
             cwd=repo_root_for_project(project_dir) if mode == "autogluon" else None,
         )
         write_attempt_result(node_dir, result)
@@ -288,19 +288,16 @@ def run_missing(
     return ran
 
 
-def _execution_timeout_seconds(profile_overrides: dict[str, object] | None) -> int:
+def _execution_timeout_seconds(config: dict[str, object], profile_overrides: dict[str, object] | None) -> int:
     overrides = profile_overrides or {}
     raw_time = overrides.get("time_limit", overrides.get("time"))
-    raw_preprocess = overrides.get("preprocess_timeout", 900)
     try:
         time_limit = int(raw_time) if raw_time is not None else 900
     except (TypeError, ValueError):
         time_limit = 900
-    try:
-        preprocess_timeout = int(raw_preprocess)
-    except (TypeError, ValueError):
-        preprocess_timeout = 900
+    preprocess_timeout = project_preprocess_timeout(config, overrides)
     return max(900, time_limit + preprocess_timeout + 300)
+
 
 def _write_success_markers(
     node_dir: Path,

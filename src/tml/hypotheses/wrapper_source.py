@@ -52,7 +52,7 @@ def main():
     import pandas as pd
     from autogluon.tabular import TabularPredictor
 
-    from tml.core.config import active_profile_id, load_project_config, repo_root_for_project
+    from tml.core.config import active_profile_id, load_project_config, project_preprocess_timeout, repo_root_for_project
     from tml.core.paths import context_path
     from tml.core.profiles import load_profile
     from tml.features.groups import run_feature_groups
@@ -782,6 +782,7 @@ def main():
                 profile_id = explicit_profile_id or active_profile_id(config, "autogluon")
                 profile = load_profile(project_dir, "autogluon", profile_id)
                 profile.update(profile_overrides)
+                preprocess_timeout = project_preprocess_timeout(config, profile_overrides)
                 _force_autogluon_cpu_resources(profile)
 
                 train = pd.read_csv(_data_file("train"))
@@ -798,7 +799,7 @@ def main():
 
                 print("AutoGluon materialization: starting feature groups", flush=True)
                 preprocess_started_at = time.time()
-                with _preprocess_timeout(int(profile.get("preprocess_timeout", 900))):
+                with _preprocess_timeout(preprocess_timeout):
                     transformed = run_feature_groups(
                         combined.copy(),
                         FEATURE_GROUPS,

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from tml.core.config import active_profile_id, load_project_config, repo_root_for_project
+from tml.core.config import active_profile_id, load_project_config, project_preprocess_timeout, repo_root_for_project
 from tml.core.paths import context_path
 from tml.core.profiles import load_profile
 from tml.features.groups import has_feature_groups, run_feature_groups
@@ -132,6 +132,7 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path, profile_
     metric = str(target.get("autogluon_metric") or target.get("metric") or "balanced_accuracy")
     resolved_profile_id = profile_id or active_profile_id(config, "autogluon")
     profile = _load_profile(project_dir, resolved_profile_id)
+    preprocess_timeout = project_preprocess_timeout(config)
     runtime_options = _autogluon_runtime_options(project_dir)
     _print_autogluon_runtime_options(runtime_options)
 
@@ -151,7 +152,7 @@ def _run_tabular(*, code_path: Path, project_dir: Path, work_dir: Path, profile_
 
     train_features = train.drop(columns=[target_col])
     combined = pd.concat([train_features, test], ignore_index=True, sort=False)
-    with _preprocess_timeout(int(profile.get("preprocess_timeout", 900))):
+    with _preprocess_timeout(preprocess_timeout):
         if has_feature_groups(module):
             transformed = run_feature_groups(
                 combined.copy(),

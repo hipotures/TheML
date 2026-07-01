@@ -6,6 +6,8 @@ from typing import Any
 from tml.core.paths import context_path
 from tml.utils.yaml_io import read_yaml
 
+DEFAULT_PREPROCESS_TIMEOUT_SECONDS = 900
+
 
 def load_project_config(project_dir: Path) -> dict[str, Any]:
     config = read_yaml(project_dir / "project.yaml")
@@ -32,6 +34,14 @@ def active_branch_algorithm_id(config: dict[str, Any]) -> str:
     project_branch = config.get("branch") if isinstance(config.get("branch"), dict) else {}
     global_algorithm = _global_active_branch_algorithm_id(config)
     return str(project_branch.get("active_algorithm") or global_algorithm or "default")
+
+
+def project_preprocess_timeout(config: dict[str, Any], overrides: dict[str, object] | None = None) -> int:
+    override_value = (overrides or {}).get("preprocess_timeout")
+    if override_value is not None:
+        return _int_or_default(override_value, DEFAULT_PREPROCESS_TIMEOUT_SECONDS)
+    runtime = config.get("runtime") if isinstance(config.get("runtime"), dict) else {}
+    return _int_or_default(runtime.get("preprocess_timeout"), DEFAULT_PREPROCESS_TIMEOUT_SECONDS)
 
 
 def rerun_profile_id(project_dir: Path, mode: str) -> str:
@@ -93,3 +103,10 @@ def repo_models_for_project(project_dir: Path) -> dict[str, object]:
         return {}
     models = root_config.get("models")
     return models if isinstance(models, dict) else {}
+
+
+def _int_or_default(value: object, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default

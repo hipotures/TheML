@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from tml.core.config import DEFAULT_PREPROCESS_TIMEOUT_SECONDS
 from tml.core.gitignore import ensure_project_gitignore, ensure_root_gitignore
 from tml.core.paths import ProjectRef, context_path, find_project
 from tml.core.metadata import detect_project_metadata, metadata_task_markdown
@@ -288,6 +289,7 @@ def _ensure_project_config(
     target = _merge_target_metadata(inferred_target, metadata)
     current_target = existing.get("target") if isinstance(existing.get("target"), dict) else {}
     current_root = existing.get("root") if isinstance(existing.get("root"), dict) else {}
+    current_runtime = existing.get("runtime") if isinstance(existing.get("runtime"), dict) else {}
     active_profiles = current_root.get("active_profiles") if isinstance(current_root.get("active_profiles"), dict) else {}
 
     merged = {
@@ -298,6 +300,10 @@ def _ensure_project_config(
         "kaggle_slug": existing.get("kaggle_slug") or (slug if kind == "kaggle" else None),
         "task_file": existing.get("task_file") or "task.md",
         "data_dir": existing.get("data_dir") or "data",
+        "runtime": {
+            **current_runtime,
+            "preprocess_timeout": current_runtime.get("preprocess_timeout", DEFAULT_PREPROCESS_TIMEOUT_SECONDS),
+        },
         "target": {**target, **current_target},
         "root": {
             **current_root,
