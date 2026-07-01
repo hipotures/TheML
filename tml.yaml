@@ -12,7 +12,7 @@ autogluon:
     enabled: false
     fraction: 0.1
   feature_importance:
-    enabled: yes
+    enabled: false
     subsample_size: 0.1
     num_shuffle_sets: 10
     include_confidence_band: true

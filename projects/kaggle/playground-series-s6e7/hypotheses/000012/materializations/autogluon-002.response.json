@@ -1,0 +1,34 @@
+{
+  "backend": "codex",
+  "error": null,
+  "model": "gpt-5.5",
+  "provider": "codex",
+  "provider_kind": "codex_app_server",
+  "reasoning_effort": "xhigh",
+  "status": "completed",
+  "text": "import numpy as np\nimport pandas as pd\n\nSUBSTANCE_BURDEN_MAP = {\n    \"no\": 0,\n    \"occasional\": 1,\n    \"yes\": 2,\n}\n\ndef _column(raw, name):\n    if name in raw.columns:\n        return raw[name]\n    return pd.Series(pd.NA, index=raw.index)\n\ndef _normalized_text(raw, name):\n    return _column(raw, name).astype(\"string\").str.strip().str.lower()\n\ndef _int8_flag(mask):\n    return mask.fillna(False).astype(\"int8\")\n\ndef add_substance_use_context_buffer(raw, deps, aux):\n    index = raw.index\n\n    smoking_alcohol = _normalized_text(raw, \"smoking_alcohol\")\n    diet_type = _normalized_text(raw, \"diet_type\")\n    stress_level = _normalized_text(raw, \"stress_level\")\n    sleep_quality = _normalized_text(raw, \"sleep_quality\")\n    physical_activity_level = _normalized_text(raw, \"physical_activity_level\")\n\n    sleep_duration = pd.to_numeric(_column(raw, \"sleep_duration\"), errors=\"coerce\")\n    heart_rate = pd.to_numeric(_column(raw, \"heart_rate\"), errors=\"coerce\")\n    bmi = pd.to_numeric(_column(raw, \"bmi\"), errors=\"coerce\")\n    step_count = pd.to_numeric(_column(raw, \"step_count\"), errors=\"coerce\")\n    exercise_duration = pd.to_numeric(_column(raw, \"exercise_duration\"), errors=\"coerce\")\n\n    substance_burden = smoking_alcohol.map(SUBSTANCE_BURDEN_MAP).fillna(-1).astype(\"int8\")\n\n    protective_context_score = (\n        _int8_flag(diet_type.isin((\"balanced\", \"veg\")))\n        + _int8_flag(physical_activity_level.isin((\"moderate\", \"active\")))\n        + _int8_flag(sleep_quality.eq(\"good\"))\n        + _int8_flag(stress_level.eq(\"low\"))\n        + _int8_flag(sleep_duration.between(7.0, 9.0, inclusive=\"both\"))\n        + _int8_flag(step_count.ge(8000.0))\n        + _int8_flag(exercise_duration.ge(30.0))\n        + _int8_flag(bmi.ge(18.5) & bmi.lt(25.0))\n    ).astype(\"int8\")\n\n    adverse_context_score = (\n        _int8_flag(stress_level.eq(\"high\"))\n        + _int8_flag(sleep_quality.eq(\"poor\"))\n        + _int8_flag(physical_activity_level.eq(\"sedentary\"))\n        + _int8_flag(diet_type.eq(\"non-veg\"))\n        + _int8_flag(sleep_duration.lt(6.0) | sleep_duration.gt(9.5))\n        + _int8_flag(step_count.lt(5000.0))\n        + _int8_flag(exercise_duration.lt(10.0))\n        + _int8_flag(bmi.lt(18.5) | bmi.ge(30.0))\n        + _int8_flag(heart_rate.ge(90.0))\n    ).astype(\"int8\")\n\n    has_substance_value = substance_burden.ge(0)\n    uses_substance = substance_burden.ge(1)\n    no_substance = substance_burden.eq(0)\n\n    substance_buffer_gap = pd.Series(np.nan, index=index, dtype=\"float32\")\n    substance_buffer_gap.loc[has_substance_value] = (\n        adverse_context_score.loc[has_substance_value].astype(\"float32\")\n        + substance_burden.loc[has_substance_value].astype(\"float32\")\n        - protective_context_score.loc[has_substance_value].astype(\"float32\")\n    )\n\n    substance_amplification = pd.Series(np.nan, index=index, dtype=\"float32\")\n    substance_amplification.loc[has_substance_value] = (\n        substance_burden.loc[has_substance_value].astype(\"float32\")\n        * adverse_context_score.loc[has_substance_value].astype(\"float32\")\n    )\n\n    substance_buffering = pd.Series(np.nan, index=index, dtype=\"float32\")\n    substance_buffering.loc[has_substance_value] = (\n        substance_burden.loc[has_substance_value].astype(\"float32\")\n        * protective_context_score.loc[has_substance_value].astype(\"float32\")\n    )\n\n    context_bucket = pd.Series(\"mixed_context\", index=index, dtype=\"object\")\n    context_bucket.loc[~has_substance_value] = \"missing_substance\"\n    context_bucket.loc[\n        no_substance & protective_context_score.ge(5) & adverse_context_score.le(1)\n    ] = \"clean_supported\"\n    context_bucket.loc[\n        no_substance & adverse_context_score.ge(4)\n    ] = \"non_substance_lifestyle_risk\"\n    context_bucket.loc[\n        uses_substance & protective_context_score.ge(4) & adverse_context_score.le(2)\n    ] = \"buffered_use\"\n    context_bucket.loc[\n        uses_substance & adverse_context_score.ge(4)\n    ] = \"compounding_use\"\n\n    return pd.DataFrame(\n        {\n            \"substance_burden\": substance_burden,\n            \"protective_context_score\": protective_context_score,\n            \"adverse_context_score\": adverse_context_score,\n            \"substance_buffer_gap\": substance_buffer_gap,\n            \"substance_amplification\": substance_amplification,\n            \"substance_buffering\": substance_buffering,\n            \"context_bucket\": context_bucket,\n        },\n        index=index,\n    )\n\nFEATURE_GROUPS = [\n    {\n        \"name\": \"substance_use_context_buffer\",\n        \"fn\": add_substance_use_context_buffer,\n        \"depends_on\": [],\n        \"description\": \"Encodes whether smoking and alcohol burden is buffered or amplified by protective and adverse lifestyle context.\",\n    }\n]",
+  "usage": {
+    "threadId": "019f1e7a-d6ec-75a1-bb4e-844d582ed4fe",
+    "tokenUsage": {
+      "last": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 15872,
+        "outputTokens": 2309,
+        "reasoningOutputTokens": 1034,
+        "totalTokens": 18181
+      },
+      "modelContextWindow": 258400,
+      "total": {
+        "cachedInputTokens": 2432,
+        "inputTokens": 15872,
+        "outputTokens": 2309,
+        "reasoningOutputTokens": 1034,
+        "totalTokens": 18181
+      }
+    },
+    "turnId": "019f1e7a-d705-72e2-9ae8-ce0016eba6be"
+  },
+  "wall_ms": 45197,
+  "web_search_enabled": true,
+  "web_search_has_results": false
+}
